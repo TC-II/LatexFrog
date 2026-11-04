@@ -26,7 +26,7 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 
 ### M2. Project features
 - [ ] Project-wide Outline next to Files, from `Symbols.sections`, with jump to section.
-- [ ] Profiles, parts, variables, current file, live progress.
+- [x] Profiles, parts, variables, current file, live progress.
 - [ ] SyncTeX through the engine in the viewer and the editor.
 
 ### M3. Delivery and diagnostics

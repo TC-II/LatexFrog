@@ -9,7 +9,9 @@
 	const progress = $derived(lvProject.progress);
 	const label = $derived.by(() => {
 		if (!progress) return '';
-		const step = progress.tool ? m.lv_progress_pass({ tool: progress.tool, pass: progress.pass }) : m.lv_progress_compiling({ profile: progress.profile });
+		const id = progress.profile;
+		const name = lvProject.view?.config?.profiles.find((p) => p.id === id)?.label ?? id;
+		const step = progress.tool ? m.lv_progress_pass({ tool: progress.tool, pass: progress.pass }) : m.lv_progress_compiling({ profile: name });
 		const elapsed = formatSeconds(Math.max(0, now - progress.startedAt));
 		const typical = lvProject.typical[progress.profile];
 		return `${step} · ${typical ? m.lv_progress_typical({ elapsed, typical: formatSeconds(typical.ms) }) : elapsed}`;
