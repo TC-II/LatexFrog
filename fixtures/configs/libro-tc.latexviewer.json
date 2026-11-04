@@ -1,0 +1,76 @@
+{
+  "root": "Funciones de Aproximación.tex",
+  "engine": "pdflatex",
+  "parts": {
+    "commands": [
+      "include",
+      "Capitulo"
+    ]
+  },
+  "flags": {
+    "partial": [
+      "CompilacionReducida"
+    ],
+    "externalize": [
+      "TikzExternalizar"
+    ],
+    "figureList": [
+      "TikzListaYMake"
+    ]
+  },
+  "figureCache": {
+    "mode": "project",
+    "dir": "figuras-cache",
+    "stampFiles": [
+      "estilo_figuras.tex"
+    ],
+    "onlyInFigureEnv": true,
+    "parallelJobs": "auto"
+  },
+  "variables": {
+    "OpcionPie": {
+      "label": "Pie de página",
+      "choices": [
+        "completo",
+        "autor",
+        "ninguno"
+      ],
+      "default": "completo"
+    }
+  },
+  "profiles": {
+    "parcial": {
+      "label": "Partes elegidas",
+      "partial": true,
+      "externalize": true,
+      "parts": "selection"
+    },
+    "rapido": {
+      "label": "Libro rápido",
+      "partial": true,
+      "externalize": true,
+      "parts": "all"
+    },
+    "completo": {
+      "label": "Libro completo (revisión, con cache)",
+      "externalize": true,
+      "cacheOnly": true,
+      "autoCompile": false
+    },
+    "entrega": {
+      "label": "Entrega (sin cache)",
+      "cleanBefore": true,
+      "autoCompile": false
+    }
+  },
+  "publish": {
+    "dir": "../PDF",
+    "names": {
+      "entrega": "Funciones de Aproximación.pdf"
+    }
+  },
+  "export": {
+    "dir": "../PDF/Capítulos",
+    "pattern": "{num:02} - {name}.pdf"
+  }
+}

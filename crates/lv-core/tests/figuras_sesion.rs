@@ -1,0 +1,735 @@
+//! La cocción de figuras dentro de la sesión (F6), con un latexmk y un pdflatex falsos de PowerShell: no hace falta TeX.
+//! Orden de los trabajos, disparo automático, ceder el paso a un build, cancelar, estado y limpieza. Con TeX de verdad, en
+//! `tests/figuras_rotas.rs` y `tests/figuras_tex.rs` (`--features tex`).
+#![cfg(windows)]
+
+mod comun;
+
+use comun::Recolector;
+use lv_core::build::{BuildEvent, Builder};
+use lv_core::cocinero::Cocinero;
+use lv_core::figcache;
+use lv_core::session::{BuildAck, Session};
+use std::ffi::OsString;
+use std::fs;
+use std::path::Path;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tempfile::TempDir;
+
+const CONFIG: &str = r#"{
+  "root": "main.tex",
+  "parts": { "commands": ["include"] },
+  "flags": { "partial": ["CompilacionReducida"], "externalize": ["TikzExternalizar"], "figureList": ["TikzListaYMake"] },
+  "figureCache": { "mode": "project", "dir": "figuras-cache", "stampFiles": ["estilo.tex"], "parallelJobs": 2 },
+  "profiles": {
+    "parcial":  { "partial": true, "externalize": true, "parts": "selection" },
+    "rapido":   { "partial": true, "externalize": true, "parts": "all" },
+    "completo": { "cleanBefore": true, "autoCompile": false },
+    "revision": { "externalize": true, "cacheOnly": true, "autoCompile": false }
+  }
+}"#;
+
+/// Un latexmk que cuenta una pasada y deja el PDF del perfil.
+const OK: &str = "$p = $env:LV_PERFIL\n$d = \".lv/build/$p\"\nNew-Item -ItemType Directory -Force $d | Out-Null\n\"Run number 1 of rule 'pdflatex'\"\nSet-Content \"$d/lv-$p.pdf\" 'x'\n";
+
+/// Un "pdflatex" falso. Con `-output-directory` es el listado: escribe la figlist con 4 figuras del sello que dice `sello.txt`
+/// (2 de `uno` y 2 de `dos`, los slugs de `\FigurasDe` de los capítulos) y el `.md5` de cada una (que cambia con `version.txt`).
+/// Si el driver tiene `\includeonly` lista sólo las de las partes que nombra. Con `-jobname=` es una subcompilación que tarda lo
+/// que diga `demora.txt` (ms) y deja el PDF y el log. Todo lo que lanza queda anotado en `lanzadas/`.
+const MOTOR_FALSO: &str = r##"$job = $null; $out = $null; $driver = $null
+foreach ($a in $args) {
+  if ($a -like '-jobname=*') { $job = $a.Substring(9) }
+  if ($a -like '-output-directory=*') { $out = $a.Substring(18) }
+  if ($a -like '*.tex') { $driver = $a }
+}
+# Un archivo por anotación (con las ticks por delante para ordenarlas): con dos procesos a la vez, `Add-Content` a un mismo archivo pierde líneas.
+function Anotar($texto) {
+  New-Item -ItemType Directory -Force 'lanzadas' | Out-Null
+  Set-Content ("lanzadas/{0}-{1}.txt" -f [DateTime]::UtcNow.Ticks, [guid]::NewGuid().ToString('N').Substring(0, 6)) $texto
+}
+$sello = (Get-Content 'sello.txt' -Raw).Trim()
+$version = if (Test-Path 'version.txt') { (Get-Content 'version.txt' -Raw).Trim() } else { '1' }
+if ($out) {
+  $texto = Get-Content $driver -Raw
+  Anotar "LISTADO $driver"
+  New-Item -ItemType Directory -Force "$out/figuras-cache" | Out-Null
+  $nombres = @()
+  if ($texto -notmatch 'includeonly' -or $texto -match 'Secciones/Uno') { $nombres += "figuras-cache/$sello-uno-0", "figuras-cache/$sello-uno-1" }
+  if ($texto -notmatch 'includeonly' -or $texto -match 'Secciones/Dos') { $nombres += "figuras-cache/$sello-dos-0", "figuras-cache/$sello-dos-1" }
+  Set-Content "$out/lv-cocina.figlist" $nombres
+  foreach ($n in $nombres) { Set-Content "$out/$n.md5" "$n-v$version" }
+  exit 0
+}
+Anotar "FIGURA $job"
+$demora = if (Test-Path 'demora.txt') { [int](Get-Content 'demora.txt' -Raw).Trim() } else { 50 }
+Start-Sleep -Milliseconds $demora
+Set-Content "$job.pdf" "%PDF-1.5`n%%EOF"
+Set-Content "$job.log" 'This is pdfTeX'
+"##;
+
+fn script(contenido: &str) -> std::path::PathBuf {
+    let fuera = TempDir::new().unwrap();
+    let ruta = fuera.path().join("falso.ps1");
+    fs::write(&ruta, contenido).unwrap();
+    std::mem::forget(fuera);
+    ruta
+}
+
+fn args_de(s: &Path) -> Vec<OsString> {
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"].iter().map(OsString::from).chain([s.as_os_str().to_owned()]).collect()
+}
+
+struct Caso {
+    d: TempDir,
+    s: Arc<Session>,
+    r: Recolector,
+}
+
+fn caso() -> Caso {
+    caso_con_motor(MOTOR_FALSO)
+}
+
+/// Lo mismo con otro "pdflatex" (por ejemplo uno cuyo listado termina con error).
+fn caso_con_motor(motor_falso: &str) -> Caso {
+    let d = TempDir::new().unwrap();
+    let e = |rel: &str, t: &str| {
+        let p = d.path().join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, t).unwrap();
+    };
+    e("main.tex", "\\documentclass{book}\n\\begin{document}\n\\include{Secciones/Uno}\n\\include{Secciones/Dos}\n\\end{document}\n");
+    e("Secciones/Uno.tex", "\\FigurasDe{uno}\nuno\n");
+    e("Secciones/Dos.tex", "\\FigurasDe{dos}\ndos\n");
+    e("estilo.tex", "estilo 1\n");
+    e("latexviewer.json", CONFIG);
+    let sello = figcache::sello(d.path(), &["estilo.tex".to_string()]).unwrap();
+    e("sello.txt", &sello);
+    let r = Recolector::nuevo();
+    let latexmk = Builder::con_programa("powershell", args_de(&script(OK)));
+    let motor = Cocinero::con_programa("powershell", args_de(&script(motor_falso)));
+    let s = Session::open_with_cocinero(d.path(), r.sink.clone(), latexmk, motor).unwrap();
+    Caso { d, s, r }
+}
+
+impl Caso {
+    fn sello(&self) -> String {
+        fs::read_to_string(self.d.path().join("sello.txt")).unwrap().trim().to_string()
+    }
+
+    fn escribir(&self, rel: &str, t: &str) {
+        fs::write(self.d.path().join(rel), t).unwrap();
+    }
+
+    /// Cambia el archivo de estilo (y el sello con el que el motor falso nombra las figuras).
+    fn cambiar_estilo(&self, n: u32) {
+        self.escribir("estilo.tex", &format!("estilo {n}\n"));
+        let sello = figcache::sello(self.d.path(), &["estilo.tex".to_string()]).unwrap();
+        self.escribir("sello.txt", &sello);
+    }
+
+    fn eventos(&self) -> Vec<BuildEvent> {
+        self.r.eventos.lock().unwrap().clone()
+    }
+
+    /// Una etiqueta corta por evento que importa, en orden, para comparar secuencias.
+    fn secuencia(&self) -> Vec<String> {
+        self.eventos()
+            .iter()
+            .filter_map(|e| match e {
+                BuildEvent::BakeListing { fase, .. } => Some(format!("listando({fase})")),
+                BuildEvent::BakeStarted { total, .. } => Some(format!("cocinar({total})")),
+                BuildEvent::BakeFinished { ok, cancelled, ceded, .. } => Some(format!("cocido(ok={ok},canc={cancelled},cedio={ceded})")),
+                BuildEvent::Started { perfil, .. } => Some(format!("build({perfil})")),
+                BuildEvent::Finished { perfil, .. } => Some(format!("fin({perfil})")),
+                BuildEvent::Queued { perfil } => Some(format!("espera({perfil})")),
+                BuildEvent::BakeQueued => Some("espera(figuras)".into()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn esperar(&self, que: &str, seg: u64, cond: impl Fn(&Caso) -> bool) {
+        let t = Instant::now();
+        while !cond(self) {
+            assert!(t.elapsed() < Duration::from_secs(seg), "tiempo agotado esperando {que}; pasó: {:?}", self.secuencia());
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    }
+
+    /// Nada corriendo ni esperando.
+    fn ocioso(&self) -> bool {
+        !self.s.is_building()
+    }
+
+    /// Lo que lanzó el motor falso, en orden de lanzamiento.
+    fn lanzadas(&self) -> Vec<String> {
+        let mut v: Vec<(String, String)> = fs::read_dir(self.d.path().join("lanzadas"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| (e.file_name().to_string_lossy().to_string(), fs::read_to_string(e.path()).unwrap_or_default().trim().to_string()))
+            .collect();
+        v.sort();
+        v.into_iter().map(|(_, t)| t).collect()
+    }
+
+    fn figura(&self, corto: &str, ext: &str) -> std::path::PathBuf {
+        self.d.path().join(format!("figuras-cache/{}-{corto}.{ext}", self.sello()))
+    }
+}
+
+#[test]
+fn la_coccion_manual_lista_cocina_instala_los_md5_y_deja_el_estado_al_dia() {
+    let c = caso();
+    assert!(matches!(c.s.request_bake().unwrap(), BuildAck::Started { .. }));
+    c.esperar("que termine la cocción", 60, |c| c.secuencia().iter().any(|e| e.starts_with("cocido(")) && c.ocioso());
+    assert_eq!(c.secuencia(), ["listando(todo)", "cocinar(4)", "cocido(ok=true,canc=false,cedio=false)"]);
+    let sello = c.sello();
+    for n in ["uno-0", "uno-1", "dos-0", "dos-1"] {
+        assert!(c.figura(n, "pdf").is_file(), "{n}.pdf");
+        assert_eq!(fs::read_to_string(c.figura(n, "md5")).unwrap().trim(), format!("figuras-cache/{sello}-{n}-v1"), "se instala el md5 del listado, recién verificada la figura");
+    }
+    // El listado usó el driver de cocina con todas las partes y los tres flags.
+    let driver = fs::read_to_string(c.d.path().join(".lv/drivers/lv-cocina.tex")).unwrap();
+    assert!(driver.contains("\\def\\CompilacionReducida{}") && driver.contains("\\def\\TikzExternalizar{}") && driver.contains("\\def\\TikzListaYMake{}"), "{driver}");
+    // Con la lista COMPLETA de partes (no sin `\includeonly`): una raíz con el suyo propio (`cap_actual.tex`) no la recorta (S6).
+    assert!(driver.contains("\\includeonly{Secciones/Uno,Secciones/Dos}"), "el listado de todo el documento lleva todas las partes: {driver}");
+    let st = c.s.figures_status().unwrap();
+    assert_eq!((st.actuales, st.pendientes, st.fallidas), (4, 0, 0));
+    assert_eq!(st.sello.as_deref(), Some(sello.as_str()));
+    assert!(st.figlist.as_ref().is_some_and(|f| f.completa && f.del_sello_de_hoy && f.total == 4));
+    assert!(st.figuras.iter().all(|f| f.estado == "aldia"));
+    let por_archivo: Vec<(String, String)> = st.figuras.iter().map(|f| (f.slug.clone().unwrap(), f.archivo.clone().unwrap())).collect();
+    assert_eq!(por_archivo[0], ("uno".to_string(), "Secciones/Uno.tex".to_string()));
+    assert_eq!(por_archivo[3], ("dos".to_string(), "Secciones/Dos.tex".to_string()));
+}
+
+#[test]
+fn una_segunda_coccion_sin_cambios_no_lanza_ninguna_subcompilacion() {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la primera cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    let n = c.lanzadas().iter().filter(|l| l.starts_with("FIGURA")).count();
+    assert_eq!(n, 4);
+    c.s.request_bake().unwrap();
+    c.esperar("la segunda cocción", 60, |c| c.ocioso() && c.secuencia().len() == 6);
+    assert_eq!(c.lanzadas().iter().filter(|l| l.starts_with("FIGURA")).count(), 4, "al día: pendiente es sólo lo que falta o cambió");
+    assert_eq!(c.secuencia()[4], "cocinar(0)");
+    // Cambia el código de una figura (su md5 del listado): sólo esa se recocina... el motor falso cambia todos con la versión.
+    c.escribir("version.txt", "2");
+    c.s.request_bake().unwrap();
+    c.esperar("la tercera cocción", 60, |c| c.ocioso() && c.secuencia().len() == 9);
+    assert_eq!(c.secuencia()[7], "cocinar(4)", "el md5 del listado difiere en contenido del compartido: pendiente");
+}
+
+#[test]
+fn un_cambio_de_estilo_cocina_primero_las_figuras_del_perfil_despues_el_build_y_despues_el_resto() {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la primera cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    // Parcial con la selección por defecto: sólo la parte Uno.
+    c.cambiar_estilo(2);
+    assert!(matches!(c.s.request_build(Some("parcial")).unwrap(), BuildAck::Started { .. }));
+    c.esperar("todo el ciclo", 90, |c| c.ocioso() && c.secuencia().len() >= 10);
+    assert_eq!(
+        c.secuencia()[3..],
+        [
+            "listando(perfil parcial)",
+            "cocinar(2)",
+            "cocido(ok=true,canc=false,cedio=false)",
+            "build(parcial)",
+            "fin(parcial)",
+            "listando(todo)",
+            "cocinar(2)",
+            "cocido(ok=true,canc=false,cedio=false)",
+        ],
+        "primero las 2 figuras de Uno, después el build, y recién después las 2 de Dos"
+    );
+    // La cocción del perfil no tocó Dos mientras el build esperaba: el orden de las subcompilaciones lo dice.
+    let figuras: Vec<String> = c.lanzadas().into_iter().filter(|l| l.starts_with("FIGURA")).skip(4).collect();
+    assert_eq!(figuras.len(), 4);
+    assert!(figuras[0].contains("uno") && figuras[1].contains("uno") && figuras[2].contains("dos") && figuras[3].contains("dos"), "{figuras:?}");
+    let parcial = fs::read_to_string(c.d.path().join(".lv/drivers/lv-cocina.tex")).unwrap();
+    assert!(parcial.contains("\\includeonly{Secciones/Uno,Secciones/Dos}"), "el último listado fue el de todo el documento: {parcial}");
+    let st = c.s.figures_status().unwrap();
+    assert_eq!((st.actuales, st.viejas), (4, 4), "las 4 del sello nuevo y las 4 viejas, todavía sin limpiar");
+}
+
+#[test]
+fn un_perfil_de_todas_las_partes_no_pide_un_segundo_listado_del_resto() {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la primera cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    c.cambiar_estilo(2);
+    assert!(matches!(c.s.request_build(Some("rapido")).unwrap(), BuildAck::Started { .. }));
+    c.esperar("el ciclo", 90, |c| c.ocioso() && c.secuencia().len() >= 8);
+    std::thread::sleep(Duration::from_millis(400));
+    assert_eq!(
+        c.secuencia()[3..],
+        ["listando(perfil rapido)", "cocinar(4)", "cocido(ok=true,canc=false,cedio=false)", "build(rapido)", "fin(rapido)"],
+        "el listado del perfil ya fue el del documento entero: no hay resto"
+    );
+    assert!(c.s.figures_status().unwrap().figlist.is_some_and(|f| f.completa), "y esa lista autoriza a limpiar, como la de todo");
+}
+
+#[test]
+fn un_perfil_que_solo_consume_el_cache_cocina_antes_y_saltea_el_listado_mientras_nada_cambie() {
+    let c = caso();
+    let secuencia = |c: &Caso| c.secuencia();
+    // La primera vez no hay lista: lista, cocina todo y después compila.
+    assert!(matches!(c.s.request_build(Some("revision")).unwrap(), BuildAck::Started { .. }));
+    c.esperar("el primer ciclo", 60, |c| c.ocioso() && secuencia(c).len() >= 5);
+    assert_eq!(secuencia(&c), ["listando(todo)", "cocinar(4)", "cocido(ok=true,canc=false,cedio=false)", "build(revision)", "fin(revision)"]);
+    let driver = lv_core::build::driver_completo(c.d.path(), "revision").unwrap();
+    assert!(driver.contains("external/mode=graphics if exists"), "{driver}");
+
+    // Sin cambios, y con un cambio de texto en un capítulo: ni listado ni cocción, sólo el build.
+    c.s.request_build(Some("revision")).unwrap();
+    c.esperar("el build sin cambios", 60, |c| c.ocioso() && secuencia(c).len() >= 7);
+    c.escribir("Secciones/Uno.tex", "\\FigurasDe{uno}\nuno, con una palabra más\n");
+    c.s.request_build(Some("revision")).unwrap();
+    c.esperar("el build con un cambio de texto", 60, |c| c.ocioso() && secuencia(c).len() >= 9);
+    assert_eq!(secuencia(&c)[5..], ["build(revision)", "fin(revision)", "build(revision)", "fin(revision)"]);
+    assert_eq!(c.lanzadas().iter().filter(|l| l.starts_with("LISTADO")).count(), 1, "un solo listado en todo el recorrido");
+
+    // Una figura nueva (o editada) en un capítulo cambia la huella: vuelve a listar antes de compilar.
+    c.escribir("Secciones/Uno.tex", "\\FigurasDe{uno}\n\\begin{figure}\\begin{tikzpicture}\\draw (0,0)--(1,1);\\end{tikzpicture}\\end{figure}\n");
+    c.s.request_build(Some("revision")).unwrap();
+    c.esperar("el ciclo con la figura", 60, |c| c.ocioso() && secuencia(c).len() >= 14);
+    assert_eq!(secuencia(&c)[9..], ["listando(todo)", "cocinar(0)", "cocido(ok=true,canc=false,cedio=false)", "build(revision)", "fin(revision)"]);
+    // Y con la lista otra vez cocida del todo, se saltea de nuevo.
+    c.s.request_build(Some("revision")).unwrap();
+    c.esperar("el build que sigue", 60, |c| c.ocioso() && secuencia(c).len() >= 16);
+    assert_eq!(secuencia(&c)[14..], ["build(revision)", "fin(revision)"]);
+
+    // Un cambio de estilo cambia el sello: lista de nuevo. Un PDF borrado del cache, también.
+    c.cambiar_estilo(2);
+    c.s.request_build(Some("revision")).unwrap();
+    c.esperar("el ciclo del estilo", 90, |c| c.ocioso() && secuencia(c).len() >= 21);
+    assert_eq!(secuencia(&c)[16], "listando(todo)");
+    c.s.request_build(Some("revision")).unwrap();
+    c.esperar("el build sin cambios", 60, |c| c.ocioso() && secuencia(c).len() >= 23);
+    fs::remove_file(c.figura("uno-0", "pdf")).unwrap();
+    c.s.request_build(Some("revision")).unwrap();
+    c.esperar("el ciclo con el PDF borrado", 90, |c| c.ocioso() && secuencia(c).len() >= 28);
+    assert_eq!(secuencia(&c)[23..], ["listando(todo)", "cocinar(1)", "cocido(ok=true,canc=false,cedio=false)", "build(revision)", "fin(revision)"]);
+    assert!(c.figura("uno-0", "pdf").is_file());
+}
+
+#[test]
+fn el_historial_tiene_una_linea_por_trabajo_de_la_cola_con_su_motivo_y_sus_pistas() {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la primera cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    c.cambiar_estilo(2);
+    assert!(matches!(c.s.request_build_por(Some("parcial"), "guardado: Secciones/Uno.tex").unwrap(), BuildAck::Started { .. }));
+    c.esperar("el ciclo del estilo", 90, |c| c.ocioso() && c.secuencia().len() >= 11);
+    std::thread::sleep(Duration::from_millis(400));
+    let h = c.s.history(20);
+    let resumen: Vec<(String, String)> = h.iter().map(|e| (e.entrada.tipo.clone(), e.entrada.motivo.clone())).collect();
+    assert_eq!(
+        resumen,
+        [
+            ("bake".to_string(), "el resto".to_string()),
+            ("build".to_string(), "guardado: Secciones/Uno.tex".to_string()),
+            ("bake".to_string(), "antes del build de parcial".to_string()),
+            ("bake".to_string(), "manual".to_string()),
+        ],
+        "una línea por trabajo, la más nueva primero: {h:#?}"
+    );
+    let antes = &h[2].entrada;
+    assert_eq!((antes.fase.as_deref(), antes.a_cocinar, antes.cocidas, antes.trabajos), (Some("perfil parcial"), 2, 2, 2));
+    assert!(h[2].pistas.iter().any(|p| p.contains("se cocinó antes de compilar «parcial»")), "{:?}", h[2].pistas);
+    let build = &h[1].entrada;
+    assert_eq!((build.perfil.as_deref(), build.ok, build.pasadas), (Some("parcial"), true, 1));
+    assert_eq!(build.herramientas.iter().map(|x| x.nombre.as_str()).collect::<Vec<_>>(), ["pdflatex"], "la herramienta sale de `Run number 1 of rule 'pdflatex'`");
+    assert!(build.aux_faltantes.contains(&"fdb_latexmk".to_string()), "el primer build del perfil no tenía .fdb_latexmk");
+    assert!(h[1].pistas.iter().any(|p| p.contains("faltaba el .fdb_latexmk")) && h[1].pistas.iter().any(|p| p.contains("lo disparó guardar Secciones/Uno.tex")), "{:?}", h[1].pistas);
+    assert!(h[0].pistas.iter().any(|p| p.contains("es el resto de las figuras")), "{:?}", h[0].pistas);
+    // Y un pedido sin motivo es manual.
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("otro build", 60, |c| c.ocioso() && c.s.history(20).len() == 5);
+    assert_eq!(c.s.history(1)[0].entrada.motivo, "manual");
+}
+
+#[test]
+fn un_perfil_que_consume_el_cache_deja_en_el_historial_si_se_salteo_el_listado_y_por_que_no() {
+    let c = caso();
+    c.s.request_build(Some("revision")).unwrap();
+    c.esperar("el primero", 60, |c| c.ocioso() && c.s.history(10).iter().any(|e| e.entrada.tipo == "build"));
+    std::thread::sleep(Duration::from_millis(300));
+    c.s.request_build(Some("revision")).unwrap();
+    c.esperar("el segundo", 60, |c| c.ocioso() && c.s.history(10).iter().filter(|e| e.entrada.tipo == "build").count() == 2);
+    let h = c.s.history(10);
+    let builds: Vec<&lv_core::historial::Entrada> = h.iter().filter(|e| e.entrada.tipo == "build").map(|e| &e.entrada).collect();
+    let l1 = builds[1].listado.as_ref().expect("el primero decidió sobre el listado");
+    assert!(!l1.salteado && l1.motivo.contains("todavía no había una lista"), "{l1:?}");
+    let l2 = builds[0].listado.as_ref().expect("el segundo también");
+    assert!(l2.salteado && l2.motivo.contains("nada cambió"), "{l2:?}");
+    assert!(h[0].pistas.iter().any(|p| p.contains("se salteó el listado de las figuras")), "{:?}", h[0].pistas);
+    // El de un perfil que no consume el cache no decide nada.
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("el parcial", 60, |c| c.ocioso() && c.s.history(10).iter().filter(|e| e.entrada.tipo == "build").count() == 3);
+    assert!(c.s.history(1)[0].entrada.listado.is_none());
+}
+
+#[test]
+fn un_perfil_que_consume_el_cache_no_publica() {
+    let c = caso();
+    c.escribir("latexviewer.json", &CONFIG.replace("\"parallelJobs\": 2 }", "\"parallelJobs\": 2 },\n  \"publish\": { \"dir\": \"PDF\" }"));
+    let s = Session::open_with_cocinero(
+        c.d.path(),
+        c.r.sink.clone(),
+        Builder::con_programa("powershell", args_de(&script(OK))),
+        Cocinero::con_programa("powershell", args_de(&script(MOTOR_FALSO))),
+    )
+    .unwrap();
+    let e = s.publish("revision").unwrap_err().to_string();
+    assert!(e.contains("no publica"), "{e}");
+}
+
+#[test]
+fn el_listado_del_perfil_lleva_el_includeonly_de_su_seleccion() {
+    let c = caso();
+    c.cambiar_estilo(2);
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("el listado del perfil", 60, |c| c.lanzadas().iter().any(|l| l.starts_with("LISTADO")));
+    let t = Instant::now();
+    // El driver de cocina del listado parcial, antes de que el listado de todo lo pise.
+    let mut visto = String::new();
+    while t.elapsed() < Duration::from_secs(20) && !visto.contains("includeonly") {
+        visto = fs::read_to_string(c.d.path().join(".lv/drivers/lv-cocina.tex")).unwrap_or_default();
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(visto.contains("\\includeonly{Secciones/Uno}"), "{visto}");
+    c.esperar("el final", 90, |c| c.ocioso() && c.secuencia().len() >= 7);
+}
+
+#[test]
+fn sin_cambio_de_estilo_el_build_no_lleva_cocina_antes() {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("el build", 60, |c| c.ocioso() && c.secuencia().len() == 5);
+    assert_eq!(c.secuencia()[3..], ["build(parcial)", "fin(parcial)"], "hay figuras de este sello: no hace falta cocinar antes");
+}
+
+/// Lo de F8b (robustez, inspo): la figlist guarda raíz y partes, un perfil de todas las partes lleva la lista completa y a un perfil
+/// al que le faltan PDFs de sus partes se los cocina en paralelo antes, no de a una dentro de la pasada.
+fn figlist_json(c: &Caso) -> serde_json::Value {
+    serde_json::from_slice(&fs::read(c.d.path().join(".lv/figlist.json")).unwrap()).unwrap()
+}
+
+fn escribir_figlist_json(c: &Caso, v: &serde_json::Value) {
+    fs::write(c.d.path().join(".lv/figlist.json"), serde_json::to_string_pretty(v).unwrap()).unwrap();
+}
+
+/// Cocina todo, y borra los PDF (y md5, log, dpth) de las figuras de `uno`: lo que le pasaba al cache de inspo con `butter`.
+fn caso_con_faltantes_de_uno() -> Caso {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción de todo", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    for n in ["uno-0", "uno-1"] {
+        for ext in ["pdf", "md5", "log"] {
+            fs::remove_file(c.figura(n, ext)).unwrap();
+        }
+    }
+    c
+}
+
+#[test]
+fn la_figlist_guarda_la_raiz_y_las_partes_con_que_se_armo() {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    let v = figlist_json(&c);
+    assert_eq!(v["raiz"], "main.tex");
+    assert_eq!(v["partes"], serde_json::json!(["Secciones/Uno", "Secciones/Dos"]));
+    assert!(c.s.figures_status().unwrap().figlist.is_some_and(|f| f.completa && f.vale));
+}
+
+#[test]
+fn a_un_parcial_al_que_le_faltan_pdfs_de_sus_partes_se_los_cocina_antes_en_paralelo() {
+    let c = caso_con_faltantes_de_uno();
+    let figuras_antes = c.lanzadas().iter().filter(|l| l.starts_with("FIGURA")).count();
+    assert!(matches!(c.s.request_build_por(Some("parcial"), "manual").unwrap(), BuildAck::Started { .. }));
+    c.esperar("el ciclo", 90, |c| c.ocioso() && c.secuencia().len() >= 11);
+    assert_eq!(
+        c.secuencia()[3..8],
+        ["listando(perfil parcial)", "cocinar(2)", "cocido(ok=true,canc=false,cedio=false)", "build(parcial)", "fin(parcial)"],
+        "mismo sello, pero faltan PDFs de la parte del perfil: se cocinan antes del build"
+    );
+    let figuras: Vec<String> = c.lanzadas().into_iter().filter(|l| l.starts_with("FIGURA")).skip(figuras_antes).collect();
+    assert_eq!(figuras.len(), 2, "sólo las 2 de Uno: {figuras:?}");
+    assert!(figuras.iter().all(|f| f.contains("uno")));
+    assert!(c.figura("uno-0", "pdf").is_file() && c.figura("uno-1", "pdf").is_file());
+    // El historial dice por qué se cocinó antes de compilar.
+    let h = c.s.history(20);
+    let build = h.iter().find(|e| e.entrada.tipo == "build").unwrap();
+    assert!(build.entrada.listado.as_ref().is_some_and(|l| !l.salteado && l.motivo.contains("faltan 2 figuras de las partes del perfil")), "{:?}", build.entrada.listado);
+}
+
+#[test]
+fn a_un_perfil_al_que_no_le_falta_nada_de_sus_partes_no_se_le_cocina_antes_aunque_falten_figuras_de_otras() {
+    let c = caso_con_faltantes_de_uno();
+    // El parcial es de Dos (la selección por defecto es Uno): sus figuras están, las de Uno no importan.
+    c.s.set_state(lv_core::config::StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("el build", 60, |c| c.ocioso() && c.secuencia().len() == 5);
+    assert_eq!(c.secuencia()[3..], ["build(parcial)", "fin(parcial)"], "{:?}", c.secuencia());
+}
+
+#[test]
+fn sin_una_lista_que_valga_el_primer_build_la_establece_y_los_siguientes_no() {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    fs::remove_file(c.d.path().join(".lv/figlist.json")).unwrap();
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("el ciclo", 90, |c| c.ocioso() && c.secuencia().len() >= 11);
+    assert_eq!(c.secuencia()[3..5], ["listando(perfil parcial)", "cocinar(0)"], "sin lista no se sabe qué necesita el perfil: se lista (no hay nada que cocinar)");
+    let build = c.s.history(20).into_iter().find(|e| e.entrada.tipo == "build").unwrap();
+    assert!(build.entrada.listado.as_ref().is_some_and(|l| l.motivo.contains("todavía no se sabe")), "{:?}", build.entrada.listado);
+    // El resto completó la lista: el build que sigue ya no cocina nada antes.
+    let n = c.secuencia().len();
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("el build que sigue", 60, |c| c.ocioso() && c.secuencia().len() == n + 2);
+    assert_eq!(c.secuencia()[n..], ["build(parcial)", "fin(parcial)"]);
+}
+
+#[test]
+fn una_lista_de_otra_raiz_o_sin_raiz_no_vale_ni_para_limpiar() {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    assert!(c.s.figures_clean_preview().is_ok());
+    // Como la de inspo: armada con `cap_actual.tex` como raíz.
+    let mut v = figlist_json(&c);
+    v["raiz"] = "cap_actual.tex".into();
+    escribir_figlist_json(&c, &v);
+    let e = c.s.figures_clean_preview().unwrap_err().to_string();
+    assert!(e.contains("otra raíz"), "{e}");
+    assert!(c.s.figures_status().unwrap().figlist.is_some_and(|f| f.completa && !f.vale));
+    // Una lista de antes de F8b (sin raíz ni partes) tampoco vale.
+    let mut v = figlist_json(&c);
+    v.as_object_mut().unwrap().remove("raiz");
+    v.as_object_mut().unwrap().remove("partes");
+    escribir_figlist_json(&c, &v);
+    assert!(c.s.figures_clean_preview().is_err());
+    // Y una armada con menos partes de las que tienen figuras (la de 46 figuras, sólo `desnorm`).
+    let mut v = figlist_json(&c);
+    v["raiz"] = "main.tex".into();
+    v["partes"] = serde_json::json!(["Secciones/Uno"]);
+    escribir_figlist_json(&c, &v);
+    assert!(c.s.figures_clean_preview().unwrap_err().to_string().contains("otras partes"));
+}
+
+#[test]
+fn una_raiz_con_su_propio_includeonly_no_recorta_el_listado_de_todo_ni_la_lista() {
+    let c = caso();
+    // Como `cap_actual.tex`: la raíz recorta a un capítulo.
+    c.escribir("main.tex", "\\documentclass{book}\n\\includeonly{Secciones/Uno}\n\\begin{document}\n\\include{Secciones/Uno}\n\\include{Secciones/Dos}\n\\end{document}\n");
+    c.s.refresh().unwrap();
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    assert_eq!(c.secuencia()[1], "cocinar(4)", "las figuras de las dos partes");
+    let driver = fs::read_to_string(c.d.path().join(".lv/drivers/lv-cocina.tex")).unwrap();
+    assert!(driver.contains("\\includeonly{Secciones/Uno,Secciones/Dos}"), "el driver pone la lista completa, que gana a la de la raíz (S6): {driver}");
+    assert_eq!(figlist_json(&c)["partes"], serde_json::json!(["Secciones/Uno", "Secciones/Dos"]));
+    assert!(c.s.figures_clean_preview().is_ok());
+    // Y el driver de un perfil de todas las partes también.
+    c.s.request_build(Some("rapido")).unwrap();
+    c.esperar("el build", 60, |c| c.ocioso() && c.secuencia().len() == 5);
+    let rapido = lv_core::build::driver_completo(c.d.path(), "rapido").unwrap();
+    assert!(rapido.contains("\\includeonly{Secciones/Uno,Secciones/Dos}"), "{rapido}");
+}
+
+#[test]
+fn un_perfil_de_partes_elegidas_que_cubre_todas_las_que_tienen_figuras_deja_una_lista_completa_y_sin_resto() {
+    let c = caso();
+    c.s.set_state(lv_core::config::StatePatch { selection: Some(vec!["Secciones/Uno".into(), "Secciones/Dos".into()]), ..Default::default() }).unwrap();
+    c.cambiar_estilo(2);
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("el ciclo", 90, |c| c.ocioso() && c.secuencia().len() >= 5);
+    std::thread::sleep(Duration::from_millis(400));
+    assert_eq!(
+        c.secuencia(),
+        ["listando(perfil parcial)", "cocinar(4)", "cocido(ok=true,canc=false,cedio=false)", "build(parcial)", "fin(parcial)"],
+        "el listado del perfil ya cubrió todas las partes con figuras: no hay resto"
+    );
+    assert!(c.s.figures_status().unwrap().figlist.is_some_and(|f| f.completa && f.vale));
+}
+
+#[test]
+fn un_build_que_llega_durante_la_coccion_del_resto_la_hace_ceder_y_despues_la_retoma() {
+    let c = caso();
+    c.escribir("demora.txt", "600");
+    // jobs=2 en la config: 4 figuras de 600 ms son dos tandas. El build llega en la primera.
+    c.s.request_bake().unwrap();
+    c.esperar("el comienzo de la cocción", 30, |c| c.secuencia().iter().any(|e| e.starts_with("cocinar(")));
+    assert!(matches!(c.s.request_build(Some("rapido")).unwrap(), BuildAck::Queued));
+    c.esperar("todo el ciclo", 90, |c| c.ocioso() && c.secuencia().iter().filter(|e| e.starts_with("cocido(")).count() == 2);
+    assert_eq!(
+        c.secuencia(),
+        [
+            "listando(todo)",
+            "cocinar(4)",
+            "espera(rapido)",
+            "cocido(ok=true,canc=false,cedio=true)",
+            "build(rapido)",
+            "fin(rapido)",
+            "listando(todo)",
+            "cocinar(2)",
+            "cocido(ok=true,canc=false,cedio=false)",
+        ],
+        "cede el paso (espera las que estaban en vuelo), corre el build y retoma sólo lo que faltaba"
+    );
+    for n in ["uno-0", "uno-1", "dos-0", "dos-1"] {
+        assert!(c.figura(n, "pdf").is_file(), "{n}: entre las dos tandas se cocinaron todas");
+    }
+}
+
+#[test]
+fn cancelar_mata_la_coccion_no_deja_pendientes_y_no_corre_el_build_que_esperaba() {
+    let c = caso();
+    c.escribir("demora.txt", "5000");
+    c.s.request_bake().unwrap();
+    c.esperar("que arranque la cocción", 30, |c| c.secuencia().iter().any(|e| e.starts_with("cocinar(")));
+    c.esperar("que lance figuras", 30, |c| c.lanzadas().iter().any(|l| l.starts_with("FIGURA")));
+    assert!(matches!(c.s.request_build(Some("rapido")).unwrap(), BuildAck::Queued));
+    let t = Instant::now();
+    assert!(c.s.cancel());
+    c.esperar("el final de la cocción cancelada", 30, |c| c.ocioso());
+    assert!(t.elapsed() < Duration::from_secs(4), "cancelar no espera a las subcompilaciones: {:?}", t.elapsed());
+    std::thread::sleep(Duration::from_millis(500));
+    let seq = c.secuencia();
+    assert_eq!(seq.last().map(String::as_str), Some("cocido(ok=false,canc=true,cedio=false)"), "{seq:?}");
+    assert!(!seq.iter().any(|e| e.starts_with("build(")), "cancelar descarta lo pendiente: {seq:?}");
+    assert!(std::fs::read_dir(c.d.path().join("figuras-cache")).unwrap().flatten().all(|e| !e.file_name().to_string_lossy().ends_with(".md5")), "ningún md5 de figuras canceladas");
+}
+
+#[test]
+fn la_limpieza_borra_los_sellos_viejos_con_vista_previa_y_se_niega_sin_lista_completa_o_con_trabajo_en_curso() {
+    let c = caso();
+    assert!(c.s.figures_clean_preview().is_err(), "sin listado todavía");
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    // Quedan de un sello anterior.
+    fs::write(c.d.path().join("figuras-cache/AAAAAA-uno-0.pdf"), "viejo").unwrap();
+    fs::write(c.d.path().join("figuras-cache/AAAAAA-uno-0.md5"), "viejo").unwrap();
+    let p = c.s.figures_clean_preview().unwrap();
+    assert_eq!((p.archivos.len(), p.figuras), (2, 1));
+    assert!(c.figura("uno-0", "pdf").is_file(), "la vista previa no borra");
+    // Con un trabajo en curso se niega.
+    c.escribir("demora.txt", "3000");
+    c.cambiar_estilo(2);
+    c.s.request_bake().unwrap();
+    assert!(c.s.figures_clean().is_err(), "ocupado");
+    c.s.cancel();
+    c.esperar("el final", 30, |c| c.ocioso());
+    c.cambiar_estilo(1);
+    c.escribir("demora.txt", "50");
+    let h = c.s.figures_clean().unwrap();
+    assert_eq!(h.archivos.len(), 2, "{h:?}");
+    assert!(!c.d.path().join("figuras-cache/AAAAAA-uno-0.pdf").exists());
+    assert!(c.figura("dos-1", "pdf").is_file());
+}
+
+#[test]
+fn la_limpieza_con_el_parcial_activo_no_borra_las_figuras_de_las_partes_que_no_incluye() {
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción de todo", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    // Un cambio de estilo y un build del parcial: la lista que queda es completa y del sello nuevo, no la del parcial.
+    c.cambiar_estilo(2);
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("el ciclo completo", 90, |c| c.ocioso() && c.secuencia().len() >= 10);
+    let h = c.s.figures_clean().unwrap();
+    assert_eq!(h.figuras, 4, "se van las 4 del sello viejo y se quedan las 4 nuevas (las de Uno y las de Dos): {h:?}");
+    assert!(c.figura("dos-0", "pdf").is_file() && c.figura("uno-0", "pdf").is_file());
+}
+
+#[test]
+fn con_el_cache_apagado_no_hay_coccion() {
+    let c = caso();
+    let cfg = CONFIG.replace("\"mode\": \"project\"", "\"mode\": \"off\"");
+    c.escribir("latexviewer.json", &cfg);
+    let r = Recolector::nuevo();
+    let latexmk = Builder::con_programa("powershell", args_de(&script(OK)));
+    let s = Session::open_with_cocinero(c.d.path(), r.sink.clone(), latexmk, Cocinero::new()).unwrap();
+    let e = s.request_bake().unwrap_err().to_string();
+    assert!(e.contains("apagado"), "{e}");
+}
+
+#[test]
+fn el_listado_de_la_cocina_es_sospechoso_hasta_que_sale_bien() {
+    // Sale bien: sin marcador.
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    assert!(!c.d.path().join(".lv/build/cocina/.sospechoso").exists(), "el listado salió bien: sus .aux valen de último recurso");
+    // Con errores (código distinto de 0) aunque haya llegado a escribir la lista: sigue sospechoso y no se siembra de ahí.
+    let mal = caso_con_motor(&MOTOR_FALSO.replacen("exit 0", "exit 1", 1));
+    mal.s.request_bake().unwrap();
+    mal.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().iter().any(|e| e.starts_with("cocido(")));
+    assert!(mal.d.path().join(".lv/build/cocina/.sospechoso").exists(), "un listado con errores deja el marcador");
+}
+
+#[test]
+fn un_parcial_en_frio_siembra_de_la_cocina_cuando_ningun_perfil_tiene_el_aux_y_no_si_la_cocina_es_sospechosa() {
+    let aux_uno = |c: &Caso| c.d.path().join(".lv/build/parcial/Secciones/Uno.aux");
+    let c = caso();
+    c.s.request_bake().unwrap();
+    c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    // La cocina compiló todas las partes y dejó su .aux (el motor falso no lo escribe: se lo ponemos).
+    fs::create_dir_all(c.d.path().join(".lv/build/cocina/Secciones")).unwrap();
+    c.escribir(".lv/build/cocina/Secciones/Uno.aux", "\\relax\n\\@setckpt{Secciones/Uno}{\\setcounter{chapter}{8}}\n");
+    c.s.set_state(lv_core::config::StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
+    // Puede quedar en cola si algo de la cocción todavía no terminó: lo que importa es que el parcial llegue a correr.
+    c.s.request_build(Some("parcial")).unwrap();
+    c.esperar("el parcial", 60, |c| c.ocioso() && c.secuencia().iter().any(|e| e == "fin(parcial)"));
+    let diag = || {
+        let mut v = Vec::new();
+        for e in walk(&c.d.path().join(".lv/build")) { v.push(e); }
+        format!("secuencia {:?}; sospechoso cocina: {}; archivos: {:?}; driver: {}", c.secuencia(), c.d.path().join(".lv/build/cocina/.sospechoso").exists(), v, fs::read_to_string(c.d.path().join(".lv/drivers/lv-parcial.tex")).unwrap_or_default())
+    };
+    assert!(aux_uno(&c).is_file(), "ni el rápido ni el completo existen: la cocina es el último recurso; {}", diag());
+    assert!(fs::read_to_string(aux_uno(&c)).unwrap().contains("setcounter{chapter}{8}"));
+
+    // Con la cocina sospechosa no se siembra.
+    let s = caso();
+    s.s.request_bake().unwrap();
+    s.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    fs::create_dir_all(s.d.path().join(".lv/build/cocina/Secciones")).unwrap();
+    s.escribir(".lv/build/cocina/Secciones/Uno.aux", "truncado");
+    s.escribir(".lv/build/cocina/.sospechoso", "x");
+    s.s.set_state(lv_core::config::StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
+    s.s.request_build(Some("parcial")).unwrap();
+    s.esperar("el parcial", 60, |c| c.ocioso() && c.secuencia().iter().any(|e| e == "fin(parcial)"));
+    assert!(!aux_uno(&s).exists(), "una cocina sospechosa no siembra");
+
+    // Un perfil normal con la parte tiene prioridad sobre la cocina.
+    let n = caso();
+    n.s.request_bake().unwrap();
+    n.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
+    fs::create_dir_all(n.d.path().join(".lv/build/cocina/Secciones")).unwrap();
+    fs::create_dir_all(n.d.path().join(".lv/build/rapido/Secciones")).unwrap();
+    n.escribir(".lv/build/rapido/Secciones/Uno.aux", "del rapido");
+    std::thread::sleep(Duration::from_millis(50));
+    n.escribir(".lv/build/cocina/Secciones/Uno.aux", "de la cocina, mas nueva");
+    n.s.set_state(lv_core::config::StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
+    n.s.request_build(Some("parcial")).unwrap();
+    n.esperar("el parcial", 60, |c| c.ocioso() && c.secuencia().iter().any(|e| e == "fin(parcial)"));
+    assert_eq!(fs::read_to_string(aux_uno(&n)).unwrap(), "del rapido");
+}
+
+fn walk(d: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    for e in fs::read_dir(d).into_iter().flatten().flatten() {
+        let p = e.path();
+        if p.is_dir() { out.extend(walk(&p)); } else { out.push(p.display().to_string().replace(&d.display().to_string(), "")); }
+    }
+    out
+}

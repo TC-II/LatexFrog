@@ -1,0 +1,11 @@
+[0] Config.pm:328> INFO - This is Biber 2.21
+[0] Config.pm:331> INFO - Logfile is '.lv/build/completo/lv-completo.blg'
+[63] biber-MSWIN64:342> INFO - === 
+[86] Biber.pm:421> INFO - Reading '.lv/build/completo/lv-completo.bcf'
+[147] Biber.pm:1002> INFO - Found 2 citekeys in bib section 0
+[156] Biber.pm:4487> INFO - Processing section 0
+[163] Biber.pm:4678> INFO - Looking for bibtex file 'refs.bib' for section 0
+[196] bibtex.pm:1713> INFO - LaTeX decoding ...
+[207] bibtex.pm:1519> INFO - Found BibTeX data source 'refs.bib'
+[226] Utils.pm:479> ERROR - BibTeX subsystem: C:\Users\dev\AppData\Local\Temp\biber_tmp_wAXV\8fe4c9854184545302f21ebf0d47516c_25436.utf8, line 10, syntax error: found "title", expected end of entry ("}" or ")") (skipping to next "@")
+[227] Biber.pm:137> INFO - ERRORS: 1

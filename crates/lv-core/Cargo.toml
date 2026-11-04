@@ -1,0 +1,27 @@
+[package]
+name = "lv-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core de Latex Frog: archivos, proyecto y compilación. Sin dependencias de Tauri."
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+md-5 = "0.10"
+dunce = "1"
+indexmap = { version = "2", features = ["serde"] }
+regex = "1"
+flate2 = "1"
+notify = "8"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Diagnostics_Debug"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+# Tests de integración que necesitan TeX instalado (latexmk, pdflatex): `cargo test -p lv-core --features tex`.
+tex = []
+# Tests con TeXpresso de verdad en WSL (`tests/texpresso_wsl.rs`): `cargo test -p lv-core --features texpresso --test texpresso_wsl`.
+texpresso = []

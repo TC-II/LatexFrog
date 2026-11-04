@@ -1,0 +1,13 @@
+# LatexFrog's compile engine. The app itself is the pnpm workspace; this builds the sidecar it ships.
+[workspace]
+resolver = "2"
+members = ["crates/lv-core", "crates/lv-sidecar"]
+
+[profile.release]
+debug = false
+
+[profile.dev.package.lv-core]
+opt-level = 3
+
+[profile.dev.package."*"]
+opt-level = 2

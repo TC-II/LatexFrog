@@ -6,3 +6,6 @@ build/license.txt -text
 
 # generated package data (see the dir's README.md)
 apps/texpile-editor/src/lib/languages/latex/intellisense/data/packages/*.json linguist-generated
+
+# fixtures are byte-exact: tests check that CRLF and BOM survive
+fixtures/** -text

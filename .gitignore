@@ -39,3 +39,8 @@ roundtrip-diff/
 **/test-results/
 apps/texpile-editor/tests/integration/report/
 apps/texpile-editor/tests/integration/results/
+
+# LatexFrog engine
+/target
+!fixtures/logs/*.log
+!fixtures/**/*.log
