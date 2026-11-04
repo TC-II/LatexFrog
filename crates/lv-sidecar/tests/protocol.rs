@@ -177,7 +177,7 @@ fn outline_and_variables_and_config() {
     assert_eq!(s.ok(json!({ "cmd": "config-read" }), &mut ev), CONFIG);
     assert!(s.ok(json!({ "cmd": "config-validate", "text": "{" }), &mut ev).to_string().contains('{'));
     assert_eq!(s.ok(json!({ "cmd": "history" }), &mut ev), json!([]));
-    assert!(s.ok(json!({ "cmd": "figures-clean-preview" }), &mut ev).is_object());
+    assert!(s.ok(json!({ "cmd": "figures-status" }), &mut ev).is_object());
 }
 
 #[test]
