@@ -42,6 +42,9 @@ asarUnpack:
 afterPack: scripts/after-pack.cjs
 
 extraResources:
+  # the compile engine; built by `cargo build --release -p lv-sidecar` before packaging
+  - from: target/release/lv-sidecar.exe
+    to: lv-sidecar.exe
   - from: apps/texpile-editor/dist
     to: app-dist
     filter:

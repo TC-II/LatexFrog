@@ -154,7 +154,7 @@ impl Session {
                     // top of the fragment, on its first line so its line numbers hold: anything before \begin{document} is skipped under the format,
                     // and in the body LaTeX has already disabled \newlabel, hence the local definition.
                     let auxes: String = plan.seed.iter().flat_map(|s| s.0.iter()).map(|p| format!("\\@input{{{p}.aux}}")).collect();
-                    plan.fragmento = plan.fragmento.take().map(|f| format!("\\begingroup\\makeatletter\\let\\@setckpt\\@gobbletwo\\let\\@writefile\\@gobbletwo\\def\\newlabel##1##2{{\\global\\@namedef{{r@##1}}{{##2}}}}{auxes}\\endgroup {f}"));
+                    plan.fragmento = plan.fragmento.take().map(|f| format!("\\begingroup\\makeatletter\\let\\@setckpt\\@gobbletwo\\let\\@writefile\\@gobbletwo\\def\\newlabel#1#2{{\\global\\@namedef{{r@#1}}{{#2}}}}{auxes}\\endgroup {f}"));
                     plan.spec.driver = crate::formato::CUERPO.to_string();
                     plan.spec.formato = Some(fmt);
                 }

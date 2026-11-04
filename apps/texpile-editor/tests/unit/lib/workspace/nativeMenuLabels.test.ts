@@ -76,7 +76,8 @@ describe('native menu labels', () => {
 
 describe('locale coverage', () => {
 	const en = messages('en');
-	const keys = Object.keys(en).filter((k) => !k.startsWith('$'));
+	// lv_* is LatexFrog's own text, English only by decision
+	const keys = Object.keys(en).filter((k) => !k.startsWith('$') && !k.startsWith('lv_'));
 
 	// only the locales kept current in-house; a contributed locale may lag behind en.json and shows
 	// English for whatever is missing

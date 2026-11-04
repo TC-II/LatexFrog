@@ -242,4 +242,4 @@ class LvProject {
 
 export const lvProject = new LvProject();
 
-window.lvEngine?.onEvent((event) => lvProject.handle(event as EngineEvent));
+if (typeof window !== 'undefined') window.lvEngine?.onEvent((event) => lvProject.handle(event as EngineEvent));
