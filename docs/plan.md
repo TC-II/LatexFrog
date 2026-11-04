@@ -45,6 +45,10 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 - Manage the TeX installation from the app. Low priority.
 - Linux.
 
+## Measured
+
+Book copy through `lv-sidecar`, part selection, 2026-11-04: first build 9.1 s, one-pass rebuild 2.0 s after a chapter edit, outline 50 ms for 199 sections. Compiling right after a build waits about 4 s more: the background figure listing runs first and only cedes when it ends. To fix.
+
 ## Known issue accepted
 
 Typing after a chip in a paragraph made only of chips rewrites that paragraph: line ends can become spaces, and once a typed word fused with the command before it. Prose showed no difference in 75 edits.
