@@ -1,5 +1,9 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"lv_outline_title": "Project outline",
+	"lv_outline_loading": "Reading the project...",
+	"lv_outline_empty": "No chapters or sections in the project's files.",
+	"lv_outline_untitled": "(untitled)",
 	"modal_close_aria": "关闭",
 	"start_heading": "开始",
 	"start_open_folder": "打开文件夹…",

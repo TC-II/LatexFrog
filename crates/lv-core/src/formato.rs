@@ -103,16 +103,18 @@ pub fn asegurar_con_nombre(root: &Path, dir: &str, pre: &str, driver: &str, huel
 /// Para un build de un perfil: el archivo que abre el documento (`\begin{document}`) y lo que viene después de esa línea, que es lo que
 /// se compila con el formato cargado. `None` si no hay `\begin{document}` en los archivos del preámbulo o su `\end{document}` está en
 /// otro archivo (entonces el build va sin formato). `copia` da el archivo que se lee de verdad (el de `.latexfrog/piezas` si hay sustitución).
-pub fn cuerpo_del_documento(root: &Path, archivos: &BTreeSet<String>, copia: impl Fn(&str) -> String) -> Option<String> {
+/// Returns the file that opens the document and its body. The body keeps its line numbers (blank lines stand for the preamble): SyncTeX
+/// and the log name lines of this copy, and they have to be the lines of the real file.
+pub fn cuerpo_del_documento(root: &Path, archivos: &BTreeSet<String>, copia: impl Fn(&str) -> String) -> Option<(String, String)> {
     for a in archivos {
         let efectivo = copia(a);
         let Ok(texto) = std::fs::read_to_string(root.join(&efectivo)) else { continue };
         let mut pos = 0;
-        for linea in texto.split_inclusive('\n') {
+        for (n, linea) in texto.split_inclusive('\n').enumerate() {
             let sin_coment = linea.split('%').next().unwrap_or("");
             if let Some(i) = sin_coment.find("\\begin{document}") {
                 let resto = &texto[pos + i + "\\begin{document}".len()..];
-                return resto.contains("\\end{document}").then(|| resto.to_string());
+                return resto.contains("\\end{document}").then(|| (a.clone(), format!("{}{resto}", "\n".repeat(n))));
             }
             pos += linea.len();
         }

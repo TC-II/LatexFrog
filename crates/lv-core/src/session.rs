@@ -788,10 +788,12 @@ impl Session {
         }
         let raiz_copia = sustituidos.get(&plan.spec.root_rel).cloned();
         let copia = |a: &str| sustituidos.get(a).cloned().or_else(|| (a == plan.spec.root_rel).then(|| raiz_copia.clone()).flatten()).unwrap_or_else(|| a.to_string());
-        let Some(resto) = crate::formato::cuerpo_del_documento(&self.root, &archivos, copia) else { return };
+        let Some((origen, resto)) = crate::formato::cuerpo_del_documento(&self.root, &archivos, copia) else { return };
         let dir = format!(".latexfrog/build/{perfil}");
         let rel_resto = format!("{dir}/lv-{perfil}-resto.tex");
-        if crate::build::write_if_changed(&self.root.join(&rel_resto), &resto).is_err() {
+        if crate::build::write_if_changed(&self.root.join(&rel_resto), &resto).is_err()
+            || crate::build::write_if_changed(&self.root.join(format!("{dir}/lv-{perfil}-resto.origin")), &origen).is_err()
+        {
             return;
         }
         let huella = crate::formato::huella(&self.root, &plan.spec.driver, &archivos);
@@ -1109,12 +1111,19 @@ impl Session {
     }
 
     /// Del cursor al PDF. `Ok(None)` si el archivo no figura en el SyncTeX del PDF elegido (todavía no se compiló con él).
+    /// With the precompiled preamble the file that opens the document is compiled from a copy, and SyncTeX names the copy.
+    fn origen_del_resto(&self, perfil: &str) -> Option<String> {
+        std::fs::read_to_string(self.root.join(format!(".latexfrog/build/{perfil}/lv-{perfil}-resto.origin"))).ok()
+    }
+
     pub fn synctex_forward(&self, rel: &str, line: u32) -> Result<Option<SyncForward>> {
         let Some(perfil) = self.elegir_pdf(rel)? else {
             return Err(otro("No hay ningún PDF con SyncTeX para este archivo: compilá antes."));
         };
         let sx = self.cargar_synctex(&perfil)?;
-        let Some(tag) = sx.tag_of(&self.root, rel) else { return Ok(None) };
+        let copia = format!(".latexfrog/build/{perfil}/lv-{perfil}-resto.tex");
+        let tag = sx.tag_of(&self.root, rel).or_else(|| (self.origen_del_resto(&perfil).as_deref() == Some(rel)).then(|| sx.tag_of(&self.root, &copia)).flatten());
+        let Some(tag) = tag else { return Ok(None) };
         Ok(sx.forward(tag, line).map(|f| SyncForward {
             pdf: crate::build::pdf_rel(&perfil),
             page: f.rects[0].page,
@@ -1130,7 +1139,11 @@ impl Session {
             return Err(otro(format!("no existe el perfil {perfil:?}")));
         }
         let sx = self.cargar_synctex(perfil)?;
-        Ok(sx.inverse(page, x, y).map(|i| SyncInverse { file: sx.rel_of_tag(&self.root, i.tag), line: i.line, inside: i.inside }))
+        let copia = sx.tag_of(&self.root, &format!(".latexfrog/build/{perfil}/lv-{perfil}-resto.tex"));
+        Ok(sx.inverse(page, x, y).map(|i| {
+            let file = if Some(i.tag) == copia { self.origen_del_resto(perfil) } else { sx.rel_of_tag(&self.root, i.tag) };
+            SyncInverse { file, line: i.line, inside: i.inside }
+        }))
     }
 
     // --- publicar ---------------------------------------------------------------------------------------------------------

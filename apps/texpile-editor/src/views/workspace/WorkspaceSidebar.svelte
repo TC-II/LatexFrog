@@ -9,6 +9,8 @@
 	import type { ReplaceSpec } from '$lib/search/replaceInFiles';
 	import SourceControlPanel from '$lib/workspace/scm/ui/SourceControlPanel.svelte';
 	import TableOfContents from './TableOfContents.svelte';
+	import LvOutline from '$lib/lv/LvOutline.svelte';
+	import { lvProject } from '$lib/lv/lvEngine.svelte';
 	import SidebarIconButton from './SidebarIconButton.svelte';
 	import { isBuildArtifact } from '$lib/workspace/buildArtifacts';
 	import { workspaceRoot, fileTree, activeFilePath, mainFile } from '$lib/workspace/workspaceStore';
@@ -41,12 +43,12 @@
 	import { combo } from '$lib/chrome/shortcutText';
 	import { canKeepLocalHistory } from '$lib/workspace/localHistory/localHistory.svelte';
 	import { Popover, Portal } from '@skeletonlabs/skeleton-svelte';
-	import { FilePlus, FolderPlus, RefreshCw, GitBranch, Search, MoreHorizontal } from '@lucide/svelte';
+	import { FilePlus, FolderPlus, RefreshCw, GitBranch, Search, MoreHorizontal, ListTree } from '@lucide/svelte';
 
 	type Props = {
 		width: number;
 		guest: boolean;
-		view: 'explorer' | 'scm' | 'search';
+		view: 'explorer' | 'scm' | 'search' | 'outline';
 		scmBusy: boolean;
 		/** what the Contents pane under the tree lists */
 		toc: TocList;
@@ -200,6 +202,17 @@
 		guest
 			? []
 			: [
+					...(lvProject.active
+						? [
+								{
+									key: 'outline',
+									icon: ListTree,
+									label: m.lv_outline_title(),
+									active: view === 'outline',
+									run: () => (view = view === 'outline' ? 'explorer' : 'outline')
+								}
+							]
+						: []),
 					{
 						key: 'scm',
 						icon: GitBranch,
@@ -345,6 +358,8 @@
 			onClose={onCloseGlobalSearch}
 			onReplace={onReplaceInFolder}
 		/>
+	{:else if view === 'outline'}
+		<LvOutline {onOpenFileAt} />
 	{:else if view === 'scm'}
 		<!-- the panel owns its own scrolling: it is two regions with a splitter between them, each
 		     scrolling on its own, and an outer scroller here would fight both -->

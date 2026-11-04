@@ -12,6 +12,7 @@ import { compileConfig } from './projectConfigSync.svelte';
 import { sourceCmView } from '$lib/stores/editorStore';
 import { toaster } from '$lib/modals/toaster-svelte';
 import { m } from '$lib/paraglide/messages';
+import { lvProject } from '$lib/lv/lvEngine.svelte';
 import { programNotFound } from './toolMissing';
 import { askForProgram } from '$lib/modals/window/missingProgram/missingProgram.svelte';
 
@@ -53,6 +54,19 @@ export class SyncTexNav {
 			d.scrollPdfTo(res.page, res.x, res.y, res.w ?? 0, res.h ?? 0);
 			return;
 		}
+		if (lvProject.active) {
+			const path = d.getLoadedPath();
+			if (!path || !d.isTex()) return;
+			try {
+				const res = await lvProject.syncForward(path, line);
+				if (!res) return void toaster.error({ title: 'SyncTeX', description: m.wsview_toast_synctex_no_match() });
+				d.setPdfPaneOpen(true);
+				d.scrollPdfTo(res.page, res.h, res.v, res.width, res.height);
+			} catch (e) {
+				toaster.error({ title: 'SyncTeX', description: e instanceof Error ? e.message : String(e) });
+			}
+			return;
+		}
 		const live = compileConfig.current.latex.liveMode;
 		const pdf = live ? d.getDraftRoot() + '/_draft/draft.pdf' : d.expectedPdfPath();
 		const path = d.getLoadedPath();
@@ -86,6 +100,11 @@ export class SyncTexNav {
 		if (d.isGuest()) {
 			const res = await collabGuest.syncInverse(page, x, y);
 			if (res && res.line >= 1) d.openFileAtLine(res.file, res.line, res.selectText ?? selectText);
+			return;
+		}
+		if (lvProject.active) {
+			const res = await lvProject.syncInverse(page, x, y).catch(() => null);
+			if (res) d.openFileAtLine(normSyncPath(res.file), res.line, selectText);
 			return;
 		}
 		const pdf = d.expectedPdfPath();
