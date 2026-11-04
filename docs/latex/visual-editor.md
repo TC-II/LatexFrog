@@ -1,11 +1,11 @@
 ---
-description: Edit a LaTeX document as formatted text. Texpile writes the LaTeX and keeps the parts you do not touch as they were.
+description: Edit a LaTeX document as formatted text. LatexFrog writes the LaTeX and keeps the parts you do not touch as they were.
 order: 1
 ---
 
 # Visual editor
 
-Edit the document as formatted text. Texpile writes the LaTeX, and the parts you leave alone stay exactly as they were.
+Edit the document as formatted text. LatexFrog writes the LaTeX, and the parts you leave alone stay exactly as they were.
 
 ![The visual editor on a LaTeX paper, with three parts marked](../../landing/src/lib/assets/showcase/docs/latex/visual-editor.png)
 
@@ -43,7 +43,7 @@ Any other command stays in the file as LaTeX and shows as a chip you can edit. T
 
 ## Paste
 
-Paste from Word, a spreadsheet, a web page or a screenshot, and Texpile keeps what it can. See [Paste and drop](../paste.md).
+Paste from Word, a spreadsheet, a web page or a screenshot, and LatexFrog keeps what it can. See [Paste and drop](../paste.md).
 
 ## Keyboard shortcuts
 

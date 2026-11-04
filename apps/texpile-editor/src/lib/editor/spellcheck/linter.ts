@@ -12,7 +12,7 @@ let linterPromise: Promise<WorkerLinter> | null = null;
 
 let lastLoadedDictionary: string[] = [];
 
-export const BASE_WORDS = ['Texpile', 'LaTeX', 'WYSIWYM', 'CTRL', 'CMD', 'ProseMirror', 'WebAssembly', 'TypeScript', 'JavaScript'];
+export const BASE_WORDS = ['LatexFrog', 'LaTeX', 'WYSIWYM', 'CTRL', 'CMD', 'ProseMirror', 'WebAssembly', 'TypeScript', 'JavaScript'];
 
 /** the app's own words and the custom dictionary, into a checker that has none */
 async function loadWords(linter: WorkerLinter): Promise<void> {

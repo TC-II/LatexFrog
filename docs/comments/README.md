@@ -24,13 +24,13 @@ Every comment in the project is listed in the **Comments** tab of the bottom pan
 
 ## When a comment loses its place
 
-Texpile follows edits made in Texpile only. A comment whose words go missing gets a badge in the Comments tab.
+LatexFrog follows edits made in LatexFrog only. A comment whose words go missing gets a badge in the Comments tab.
 
 ![The Comments tab with a File deleted thread and an open Detached thread](../../landing/src/lib/assets/showcase/docs/review/comment-placement-detached.png)
 
 | You see              | Fix                                                                                                                    |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | **Detached**         | The words changed, often in another program. Select the right text, open the thread and click **Attach to Selection**. |
-| **File deleted**     | Restore the file. Renaming or moving a file in Texpile keeps its comments.                                             |
+| **File deleted**     | Restore the file. Renaming or moving a file in LatexFrog keeps its comments.                                             |
 | **Not in this view** | The comment is fine. Its text is outside the visual editor, such as in the preamble. Switch to **Source**.             |
 | **Check placement**  | The sentence appears more than once. Check which copy the comment is on.                                               |

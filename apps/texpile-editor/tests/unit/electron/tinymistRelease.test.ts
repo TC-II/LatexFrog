@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { linuxLibc, tinymistAssetFor, TINYMIST_VERSION } from '../../../../../electron/src/tinymist/tinymistRelease';
 import { tarCommand } from '../../../../../electron/src/tinymist/tinymistArchive';
 
-// Texpile's signed copy, laid out as the release is
-const RELEASE = `https://dl.texpile.com/vendor/tinymist/${TINYMIST_VERSION}/`;
+const RELEASE = `https://github.com/Myriad-Dreamin/tinymist/releases/download/v${TINYMIST_VERSION}/`;
 
 describe('tinymistAssetFor', () => {
 	// the archive names as the release publishes them (dist-manifest.json of the pinned version)

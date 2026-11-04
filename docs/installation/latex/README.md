@@ -1,6 +1,6 @@
 ---
 nav: LaTeX
-description: Install a TeX distribution so Texpile can compile LaTeX: TeX Live or MiKTeX on Windows, MacTeX or BasicTeX on macOS, and TeX Live on Linux.
+description: Install a TeX distribution so LatexFrog can compile LaTeX: TeX Live or MiKTeX on Windows, MacTeX or BasicTeX on macOS, and TeX Live on Linux.
 blurb: A TeX distribution: TeX Live, MacTeX, or MiKTeX.
 icon: sigma
 order: 1
@@ -8,7 +8,7 @@ order: 1
 
 # LaTeX
 
-Texpile recommends using TeX Live and MacTeX. However, other distros such as MiKTeX will work fine.
+LatexFrog recommends using TeX Live and MacTeX. However, other distros such as MiKTeX will work fine.
 
 Install a full TeX distribution to compile LaTeX:
 

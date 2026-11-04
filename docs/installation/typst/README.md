@@ -1,14 +1,14 @@
 ---
 nav: Typst
-description: Install tinymist so Texpile can compile Typst, in one click from inside Texpile, or yourself with winget on Windows, Homebrew on macOS, and the installer script on Linux.
-blurb: tinymist. Texpile can install it for you.
+description: Install tinymist so LatexFrog can compile Typst, in one click from inside LatexFrog, or yourself with winget on Windows, Homebrew on macOS, and the installer script on Linux.
+blurb: tinymist. LatexFrog can install it for you.
 icon: type
 order: 2
 ---
 
 # Typst
 
-## From Texpile (recommended)
+## From LatexFrog (recommended)
 
 1. Open any folder with a .typ file.
 2. Open the .typ file.

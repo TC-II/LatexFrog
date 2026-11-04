@@ -5,7 +5,7 @@ order: 7
 
 # Compiling
 
-Press **Compile**, or Ctrl Alt Enter, to build the PDF from the main file. Texpile saves your files first, and the PDF opens beside the editor.
+Press **Compile**, or Ctrl Alt Enter, to build the PDF from the main file. LatexFrog saves your files first, and the PDF opens beside the editor.
 
 ## Problems
 
@@ -40,7 +40,7 @@ The settings are saved for the folder.
 
 ## Shell escape
 
-Packages such as `minted` need `-shell-escape` in the command. Texpile refuses it while you host a shared session.
+Packages such as `minted` need `-shell-escape` in the command. LatexFrog refuses it while you host a shared session.
 
 ## A project with its own command
 

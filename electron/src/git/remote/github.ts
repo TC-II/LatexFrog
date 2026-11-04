@@ -57,7 +57,7 @@ export async function createGithubRepo(
 				Accept: 'application/vnd.github+json',
 				Authorization: `Bearer ${token}`,
 				'Content-Type': 'application/json',
-				'User-Agent': 'Texpile',
+				'User-Agent': 'LatexFrog',
 				'X-GitHub-Api-Version': '2022-11-28'
 			},
 			// private unless told otherwise: a missing flag would drop out of the JSON and GitHub's default is public

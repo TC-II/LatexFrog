@@ -1,3 +1,0 @@
-# wrangler dev state (local test buckets, logs) and local secrets
-.wrangler/
-.dev.vars

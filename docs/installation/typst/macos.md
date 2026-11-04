@@ -1,6 +1,6 @@
 ---
 nav: macOS
-description: Install tinymist on macOS with Homebrew or the standalone installer, so Texpile can compile Typst documents.
+description: Install tinymist on macOS with Homebrew or the standalone installer, so LatexFrog can compile Typst documents.
 blurb: Homebrew, or the standalone installer.
 icon: apple
 order: 2
@@ -18,4 +18,4 @@ Or use the installer script:
 curl -LsSf https://github.com/Myriad-Dreamin/tinymist/releases/latest/download/tinymist-installer.sh | sh
 ```
 
-Restart Texpile if it is open.
+Restart LatexFrog if it is open.

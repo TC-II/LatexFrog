@@ -34,5 +34,5 @@ export function packageFilePath(layer: 'project' | 'global', name: string, root:
 }
 
 export function snippetDocsUrl(kind: 'snippets' | 'package'): string {
-	return `https://texpile.com/docs/${kind === 'package' ? 'package-files' : 'snippets'}`;
+	return `https://github.com/TC-II/LatexFrog/blob/main/docs/${kind === 'package' ? 'package-files' : 'snippets'}.md`;
 }

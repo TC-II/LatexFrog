@@ -1,6 +1,6 @@
 ---
 nav: Formats
-description: Which file types Texpile opens, what each one opens in, and which features differ between LaTeX, Typst and Markdown.
+description: Which file types LatexFrog opens, what each one opens in, and which features differ between LaTeX, Typst and Markdown.
 blurb: What opens where, and which features work in LaTeX, Typst and Markdown.
 order: 4
 ---

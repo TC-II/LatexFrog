@@ -115,15 +115,15 @@
 </script>
 
 <svelte:window onkeydown={onKeydown} />
-<svelte:head><title>Texpile</title></svelte:head>
+<svelte:head><title>LatexFrog</title></svelte:head>
 
 <!-- my-auto rather than centering the container: a tall list on a short window would otherwise
      push the top above the scroll origin, where it can't be reached -->
 <AppFrame>
 	<div class="flex min-h-full shrink-0 justify-center px-6 py-12">
 		<div class="my-auto w-full max-w-md" use:fit.attach>
-			<img src={logoOnLight} alt="Texpile" class="mx-auto mb-8 h-9 w-auto dark:hidden" />
-			<img src={logoOnDark} alt="Texpile" class="mx-auto mb-8 hidden h-9 w-auto dark:block" />
+			<img src={logoOnLight} alt="LatexFrog" class="mx-auto mb-8 h-9 w-auto dark:hidden" />
+			<img src={logoOnDark} alt="LatexFrog" class="mx-auto mb-8 hidden h-9 w-auto dark:block" />
 
 			<div class="mb-1 flex items-center gap-3">
 				<span class="text-muted shrink-0 text-xs font-semibold tracking-wider uppercase">{m.start_heading()}</span>
@@ -190,6 +190,7 @@
 				</div>
 			{/if}
 
+			<p class="text-muted mt-8 px-2 text-center text-xs">{m.about_credits()}</p>
 			<!-- release notes belong next to the version, not competing with the actions above -->
 			<div class="border-surface-200-800 text-muted mt-8 flex items-center justify-between gap-2 border-t px-2 pt-3 text-xs">
 				<span>{m.menubar_version_footer({ version: appVersion })}</span>

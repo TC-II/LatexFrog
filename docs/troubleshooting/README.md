@@ -1,7 +1,7 @@
 ---
 nav: Troubleshooting
 overview: General
-description: Fixes for messages and problems in Texpile, from missing programs to editing, citations, AI and updates.
+description: Fixes for messages and problems in LatexFrog, from missing programs to editing, citations, AI and updates.
 blurb: Find the message you see and what to do.
 icon: life-buoy
 order: 37
@@ -17,7 +17,7 @@ Find the message you see. [LaTeX](latex.md), [Typst](typst.md), [Git](git.md) an
 | You see                                                  | Fix                                                                         |
 | -------------------------------------------------------- | --------------------------------------------------------------------------- |
 | A program shows **Not found** in Preferences › Toolchain | Click **Locate** and pick the program's file, or add its folder in Folders. |
-| **Found, does not run**                                  | Texpile found the program, but it fails to start. Reinstall it.             |
+| **Found, does not run**                                  | LatexFrog found the program, but it fails to start. Reinstall it.             |
 | "No main file is set."                                   | Click **Set Main File**.                                                    |
 | Git features are missing                                 | [Install git](../installation/git.md).                                      |
 

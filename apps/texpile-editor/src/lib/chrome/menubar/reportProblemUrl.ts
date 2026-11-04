@@ -1,7 +1,7 @@
 // a new issue on the bug report form, with the version and OS boxes filled in (the form's field ids)
 import { isMac, isWindows } from '$lib/platform';
 
-const ISSUES = 'https://github.com/texpile/texpile/issues/new';
+const ISSUES = 'https://github.com/TC-II/LatexFrog/issues/new';
 
 export function reportProblemUrl(version: string): string {
 	const os = isWindows ? 'Windows' : isMac ? 'macOS' : 'Linux';

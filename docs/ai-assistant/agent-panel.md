@@ -8,7 +8,7 @@ order: 1
 
 Chat with an AI agent that reads and edits files in the open folder and runs commands there. Pick an agent from the menu at the right end of the bottom panel's tabs.
 
-> [!REQUIRES] an [AI agent](README.md#set-up-an-agent) installed outside Texpile
+> [!REQUIRES] an [AI agent](README.md#set-up-an-agent) installed outside LatexFrog
 
 ![The Agent tab before an agent is chosen, with Open Preferences, Disable All AI and the agent menu open](../../landing/src/lib/assets/showcase/docs/review/agent-tab-choose.png)
 

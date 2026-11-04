@@ -10,9 +10,9 @@ order: 4
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | "That code does not look right."                                        | Paste the whole join link instead.                                                                          |
 | "No session found for this code."                                       | The session ended or the code is wrong. Check with the host, and use the same **Relay Server** as the host. |
-| "…cannot share a session with this version", "needs Texpile … or newer" | Whoever is on the older version updates Texpile. The browser version is always current.                     |
-| "If Texpile did not open"                                               | Click **Continue in Browser**. In the portable version, enter the code on its start screen instead.         |
-| **Shared Session** is grayed out                                        | Open the folder as a project. Only Texpile Desktop can host.                                                |
+| "…cannot share a session with this version", "needs LatexFrog … or newer" | Whoever is on the older version updates LatexFrog. The browser version is always current.                     |
+| "If LatexFrog did not open"                                               | Click **Continue in Browser**. In the portable version, enter the code on its start screen instead.         |
+| **Shared Session** is grayed out                                        | Open the folder as a project. Only LatexFrog Desktop can host.                                                |
 | "Too large to co-edit, shared view-only"                                | Files over 2 MiB are shared for reading only.                                                               |
 | A file does not appear for guests                                       | See [what is shared](../collaboration/README.md#what-is-shared).                                            |
 | A guest's compile request does nothing                                  | A compile is running. Ask again after it ends.                                                              |
@@ -20,5 +20,5 @@ order: 4
 | "The connection to the session was lost."                               | Click **Back to Home** and join again with the code.                                                        |
 | "No compiled PDF yet."                                                  | Click **Request Compile**. No PDF is shared while the host uses the Typst live preview.                     |
 | "The host is editing this file in visual mode."                         | Ask the host to switch to the source editor or another file. Until then the file is read-only for you.      |
-| No Editing and Suggesting picker                                        | Ask the host to update Texpile.                                                                             |
+| No Editing and Suggesting picker                                        | Ask the host to update LatexFrog.                                                                             |
 | A rename or new folder did nothing                                      | The name is already taken. Use another name.                                                                |

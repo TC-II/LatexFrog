@@ -108,7 +108,7 @@ export class AcpSession {
 			const init = await this.connection.agent.request(acp.methods.agent.initialize, {
 				protocolVersion: acp.PROTOCOL_VERSION,
 				clientCapabilities: { session: { compaction: {} } },
-				clientInfo: { name: 'texpile', title: 'Texpile', version: this.o.version }
+				clientInfo: { name: 'texpile', title: 'LatexFrog', version: this.o.version }
 			});
 			const mcp = init.agentCapabilities?.mcpCapabilities?.http ? this.o.mcp : null;
 			this.mcpServers = mcp

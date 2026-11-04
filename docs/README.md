@@ -1,10 +1,10 @@
 ---
-description: Texpile documentation: install Texpile, write in LaTeX, Typst or Markdown, and work with files, Git, collaborators and AI.
+description: LatexFrog documentation: install LatexFrog, write in LaTeX, Typst or Markdown, and work with files, Git, collaborators and AI.
 ---
 
 # Documentation
 
-Texpile is a desktop editor for LaTeX, Typst and Markdown, with a visual and a source editor for each.
+LatexFrog is a desktop editor for LaTeX, Typst and Markdown, with a visual and a source editor for each.
 
 ## Get started
 

@@ -1,5 +1,5 @@
 ---
-description: A tour of the Texpile window: the menus, the sidebar, tabs, the editor, the PDF, the bottom panel, and the layout.
+description: A tour of the LatexFrog window: the menus, the sidebar, tabs, the editor, the PDF, the bottom panel, and the layout.
 blurb: The window, part by part: menus, sidebar, tabs, editor, preview, and bottom panel.
 icon: layers
 order: 3
@@ -10,9 +10,9 @@ section: Get started
 
 A LaTeX project, with the PDF and the bottom panel open.
 
-![The Texpile window with nine parts marked](../landing/src/lib/assets/showcase/docs/app/tour-window.png)
+![The LatexFrog window with nine parts marked](../landing/src/lib/assets/showcase/docs/app/tour-window.png)
 
-1. **Menus.** On macOS they are in the system menu bar, with a Texpile menu added.
+1. **Menus.** On macOS they are in the system menu bar, with a LatexFrog menu added.
 2. **Window title.** Click it, or press Ctrl K, for the [command palette](command-palette.md).
 3. **Files.** The project folder. The star marks the main file.
 4. **Contents.** The headings of the paper the open file belongs to. Click one to go there.

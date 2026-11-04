@@ -351,8 +351,8 @@
 <svelte:head
 	><title
 		>{workspaceRoot.current
-			? `${doc.path ? `${basename(doc.path)} - ` : ''}${basename(workspaceRoot.current)} - Texpile`
-			: 'Texpile'}</title
+			? `${doc.path ? `${basename(doc.path)} - ` : ''}${basename(workspaceRoot.current)} - LatexFrog`
+			: 'LatexFrog'}</title
 	></svelte:head
 >
 

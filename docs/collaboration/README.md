@@ -1,6 +1,6 @@
 ---
-description: Share a folder in Texpile and edit it with other people at the same time, with a code, no account, and end to end encryption.
-blurb: Edit a folder with other people in real time. Guests join with a code, in Texpile or in a browser.
+description: Share a folder in LatexFrog and edit it with other people at the same time, with a code, no account, and end to end encryption.
+blurb: Edit a folder with other people in real time. Guests join with a code, in LatexFrog or in a browser.
 icon: users
 order: 31
 section: Review and collaboration
@@ -8,7 +8,7 @@ section: Review and collaboration
 
 # Real-time collaboration
 
-Edit a folder with other people at the same time. Guests join with only a code, in Texpile or in a browser.
+Edit a folder with other people at the same time. Guests join with only a code, in LatexFrog or in a browser.
 
 > [!REQUIRES] an internet connection
 
@@ -26,17 +26,17 @@ Open a folder in the desktop app, choose `File › Shared Session`, click **Star
 
 ## Join a session
 
-On the start screen, click **Join Session** and enter the code (or the whole link) and your name. A link opened in a browser offers **Open in the Texpile App**, or **Join Here** to join in the browser with nothing to install.
+On the start screen, click **Join Session** and enter the code (or the whole link) and your name. A link opened in a browser offers **Open in the LatexFrog App**, or **Join Here** to join in the browser with nothing to install.
 
 ![The Join a Shared Session form with Session code and Your name](../../landing/src/lib/assets/showcase/docs/review/join-session-dialog.png)
 
-Session links open the installed version of Texpile. In the portable version, enter the code on its start screen.
+Session links open the installed version of LatexFrog. In the portable version, enter the code on its start screen.
 
-If your connection drops, Texpile keeps trying and merges your edits, including offline edits, when it is back. **Collaborating** › **Leave** in the title bar keeps the session running for the others.
+If your connection drops, LatexFrog keeps trying and merges your edits, including offline edits, when it is back. **Collaborating** › **Leave** in the title bar keeps the session running for the others.
 
 ## What is shared
 
-Guests see the compiled PDF, the compile problems, the comments, and every file up to 100 MB except those whose names start with a dot, such as `.git` and `.texpile`. Text files over 2 MB are view only. A session holds up to 8 guests, all on Texpile 1.2.0 or newer.
+Guests see the compiled PDF, the compile problems, the comments, and every file up to 100 MB except those whose names start with a dot, such as `.git` and `.texpile`. Text files over 2 MB are view only. A session holds up to 8 guests, all on LatexFrog 1.2.0 or newer.
 
 ## What guests cannot do
 
@@ -47,4 +47,4 @@ Only the host compiles and saves. A guest asks for a compile with **Request Comp
 - Anyone with the code or the link can open and edit every shared file. Joining takes no account, password or approval, and every guest has edit access.
 - To remove someone, end the session for everyone and start a new one, which gets a new code.
 - Guests name themselves, and comments carry whatever name a guest typed.
-- Sessions are end to end encrypted. Texpile's server sees that a session exists, how many guests are in it, when messages are sent and how big they are, and network addresses. It cannot read files, names, cursors or comments.
+- Sessions are end to end encrypted. LatexFrog's server sees that a session exists, how many guests are in it, when messages are sent and how big they are, and network addresses. It cannot read files, names, cursors or comments.

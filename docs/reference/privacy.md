@@ -1,31 +1,31 @@
 ---
 nav: Privacy
-description: What stays on your computer, and every case where Texpile goes online or sends data.
+description: What stays on your computer, and every case where LatexFrog goes online or sends data.
 order: 3
 ---
 
 # Privacy
 
-Texpile works offline and has no account. Your files, compiling, previews, spell and grammar check, comments, version history and settings stay on your computer. Texpile talks to Zotero on your computer only.
+LatexFrog works offline and has no account. Your files, compiling, previews, spell and grammar check, comments, version history and settings stay on your computer. LatexFrog talks to Zotero on your computer only.
 
-## When Texpile goes online
+## When LatexFrog goes online
 
 | What                        | When                                           | What is sent, and where                                                                                                                                                     | To avoid it                                                                     |
 | --------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Update check                | On launch, and on `Help › Check for Updates`   | A request to updates.texpile.com, which counts the check. The download, from dl.texpile.com, starts only when you click **Download Update**.                                | Turn off `Preferences › Startup › Check for updates on launch`.                 |
+| Update check                | On launch, and on `Help › Check for Updates`   | A request to github.com, which counts the check. The download, from github.com, starts only when you click **Download Update**.                                | Turn off `Preferences › Startup › Check for updates on launch`.                 |
 | Autofetch                   | Every 3 minutes while a Git repository is open | A fetch from the repository's default remote.                                                                                                                               | Turn off `Preferences › Version Control › Git › Autofetch`.                     |
 | Git remotes                 | When you Sync, Clone or Publish                | Your commits, to the remote you chose, such as GitHub or Overleaf.                                                                                                          | Do not use those buttons.                                                       |
 | Sign in with GitHub         | When you sign in or publish to GitHub          | Requests to github.com and api.github.com.                                                                                                                                  | Do not sign in.                                                                 |
-| Shared sessions             | When you host or join                          | Your edits, encrypted, through a relay server (default wss://collab.texpile.com). Browser guests join at join.texpile.com. Anyone with the code can edit every shared file. | Do not host or join. See [Real-time collaboration](../collaboration/README.md). |
-| Find and cite papers online | When you look up a title or ID                 | What you typed, to doi.org, Crossref, DataCite, Open Library or PubMed, with Texpile's name and version.                                                                    | Turn off `Preferences › Integrations › Find and cite papers online`.            |
-| Install tinymist            | When you click **Install tinymist**            | A download from dl.texpile.com, checked against a checksum.                                                                                                                 | Install tinymist yourself.                                                      |
+| Shared sessions             | When you host or join                          | Your edits, encrypted, through a relay server you configure; LatexFrog has no hosted relay. Anyone with the code can edit every shared file. | Do not host or join. See [Real-time collaboration](../collaboration/README.md). |
+| Find and cite papers online | When you look up a title or ID                 | What you typed, to doi.org, Crossref, DataCite, Open Library or PubMed, with LatexFrog's name and version.                                                                    | Turn off `Preferences › Integrations › Find and cite papers online`.            |
+| Install tinymist            | When you click **Install tinymist**            | A download from github.com, checked against a checksum.                                                                                                                 | Install tinymist yourself.                                                      |
 | Typst templates             | When you open the Typst Templates gallery      | A request to packages.typst.org for the template list and pictures.                                                                                                         | Use a built-in template.                                                        |
 
 These requests follow your system's proxy settings.
 
 ## AI features
 
-Texpile holds no AI keys. Agents run on your computer, and what they send online depends on the agent.
+LatexFrog holds no AI keys. Agents run on your computer, and what they send online depends on the agent.
 
 | Feature    | What the agent sees                                                                                                                                                                                                    |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

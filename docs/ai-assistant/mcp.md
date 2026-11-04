@@ -1,6 +1,6 @@
 ---
 nav: MCP server
-description: Turn on Texpile's local MCP server so an AI assistant such as Claude Code can read your editor, see compile errors, work with comments and suggest edits.
+description: Turn on LatexFrog's local MCP server so an AI assistant such as Claude Code can read your editor, see compile errors, work with comments and suggest edits.
 order: 4
 ---
 
@@ -21,4 +21,4 @@ The assistant changes your text only through [suggestions](../comments/suggestin
 
 ## Change the port
 
-"Not running: …" means another program uses port 7317. Quit Texpile, set `"mcpPort": 7400` (or another free port) in `settings.json` in Texpile's app data folder, start Texpile, and give your assistant the new instructions.
+"Not running: …" means another program uses port 7317. Quit LatexFrog, set `"mcpPort": 7400` (or another free port) in `settings.json` in LatexFrog's app data folder, start LatexFrog, and give your assistant the new instructions.

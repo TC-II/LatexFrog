@@ -72,7 +72,7 @@ function codexConversation(version: string): Conversation {
 	});
 	return {
 		args: ['app-server', '--listen', 'stdio://'],
-		opening: [{ id: 'init', method: 'initialize', params: { clientInfo: { name: 'texpile', title: 'Texpile', version } } }],
+		opening: [{ id: 'init', method: 'initialize', params: { clientInfo: { name: 'texpile', title: 'LatexFrog', version } } }],
 		reply(msg, write) {
 			if (msg.error) return { ok: false, error: text((msg.error as { message?: unknown }).message) || 'the app server refused' };
 			if (msg.id === 'init') {

@@ -1,104 +1,25 @@
-<div align="center">
+<p align="center"><img alt="LatexFrog" src="branding/Logo-icon.svg" width="140" /></p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="branding/Logo-light.svg" />
-  <img alt="Texpile" src="branding/Logo-dark.svg" width="320" />
-</picture>
+# LatexFrog
 
-&nbsp;
+A fast desktop LaTeX editor for large projects: books with many chapters, heavy TikZ figures and partial builds. Windows first, Linux soon after.
 
-A modern, desktop editor for LaTeX, Typst, and Markdown. For Windows, macOS, and Linux. Edit visually, or in source with advanced intellisense. 100% offline, no account.
+LatexFrog adds a Rust compile engine to a visual and source editor: compile profiles and partial builds, a figure cache, instant SyncTeX, exports with the printed numbering, and project diagnostics. See [docs/plan.md](docs/plan.md) for the current state.
 
-[![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdl.texpile.com%2Flatest.json&query=%24.version&label=version&prefix=v&color=blue)](https://texpile.com/download)
-[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-green)](https://texpile.com/download)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.com/invite/7wanVzCBWf)
+## Build from source
 
-</div>
+```bash
+npx --yes pnpm@10.14.0 install --config.engine-strict=false
+pnpm app:build
+pnpm exec electron-builder --dir
+```
 
----
+You need Node, Rust (`cargo build --release -p lv-sidecar`) and a TeX distribution such as MiKTeX or TeX Live.
 
-![Texpile editing a LaTeX paper: an equation, a citation, the source, a Git commit and a shared session](docs/images/overview.gif)
+## Credits and license
 
-## Why Texpile
+- LatexFrog is derived from [Texpile](https://github.com/texpile/texpile) and is not published or endorsed by the Texpile project. "Texpile" and its logo are trademarks of that project; see [TRADEMARK.md](TRADEMARK.md).
+- The compile engine in `crates/` is by Juan Sbruzzi, under the MIT License ([crates/LICENSE-MIT](crates/LICENSE-MIT)).
+- Third-party notices are in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
 
-### Visual editor
-
-Texpile has the most complete visual editor coverage for LaTeX and Typst.
-
-- Supports custom macros, multiline equations, commands, cell-merging tables and images.
-- Uses Knuth-Plass line breaking.
-- Opens .tex, .typ and .md files directly and stores them in those file formats.
-
-<table>
-  <tr>
-    <th>Visual</th>
-    <th>Source</th>
-  </tr>
-  <tr>
-    <td><img alt="A LaTeX paper in the visual editor" src="landing/src/lib/assets/showcase/editor-latex-visual.webp" /></td>
-    <td><img alt="The same paper in the source editor" src="landing/src/lib/assets/showcase/editor-latex-source.webp" /></td>
-  </tr>
-</table>
-
-### IntelliSense
-
-- Texpile's LaTeX IntelliSense data covers ~95% of the LaTeX packages on CTAN (over 5,700 packages and 680 classes), and can suggest and detect certain errors instantly.
-- It is project aware: it parses LaTeX aux files and covers refactoring, custom macro detection and more.
-- For Typst, Texpile uses tinymist for IntelliSense.
-
-### Live preview
-
-- Texpile hooks onto your LuaLaTeX engine directly and can often render LaTeX document changes in under 40ms.
-- Texpile supports Typst's instant live preview.
-
-![The live preview typesetting a paragraph as it is typed](docs/images/live-preview.gif)
-
-### Shared sessions (real time collaboration)
-
-Texpile supports real time collaboration (like VS Code Live Share), tuned specifically for LaTeX and Typst workflows, with end to end encryption. No account is needed. Start a session from File › Shared Session.
-
-### Comments and suggestions
-
-You can add visual comments and suggestions in Texpile, like in a word processor.
-
-> [!NOTE]
-> This list covers what sets Texpile apart from other LaTeX and Typst editors. See [texpile.com](https://texpile.com) for every feature, including AI integrations.
-
-## Installation
-
-Download the installer for your platform from [texpile.com/download](https://texpile.com/download), then install a compiler for the format you write in:
-
-- [LaTeX](https://texpile.com/docs/installation/latex) — a TeX distribution: TeX Live, MacTeX, or MiKTeX
-- [Typst](https://texpile.com/docs/installation/typst) — one program, tinymist, which Texpile can install for you in one click (Preferences › Toolchain)
-
-Editing works out of the box; the compiler is only needed to produce a PDF. Markdown needs neither.
-
-## Privacy
-
-Texpile works fully offline. Its only connections to Texpile are the update check and real time collaboration, which is end to end encrypted. Texpile physically cannot see your documents, even if we wanted to.
-
-You can also self host your own real time collaboration relay.
-
-## Community
-
-Questions or feedback? Join the [Discord](https://discord.com/invite/7wanVzCBWf). Found a bug? [Open an issue](https://github.com/texpile/texpile/issues/new/choose).
-
-For security issues, please email [support@texpile.com](mailto:support@texpile.com) directly.
-
-## Contributing
-
-Texpile would not be possible without our contributors and sponsors. See [CONTRIBUTING.md](CONTRIBUTING.md). To help translate the app, see [Translation.md](Translation.md).
-
-## Acknowledgements
-
-Texpile builds on other open-source projects.; see [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
-
-## License
-
-[AGPL-3.0](LICENSE)
-
-The Texpile name and logo are trademarks of the Texpile project and are not covered by the code
-license; see [TRADEMARK.md](TRADEMARK.md).
-
-We also ask that unofficial Texpile builds do not use our hosted relay at collab.texpile.com for real time collaboration.
+LatexFrog as a whole is licensed under the [AGPL-3.0](LICENSE).

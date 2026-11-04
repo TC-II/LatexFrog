@@ -1,6 +1,6 @@
 ---
 nav: Markdown
-description: Markdown in Texpile: notes and READMEs in a visual or a source editor, saved as plain Markdown.
+description: Markdown in LatexFrog: notes and READMEs in a visual or a source editor, saved as plain Markdown.
 blurb: Notes and READMEs, edited visually or as source.
 icon: file-text
 order: 22
@@ -9,7 +9,7 @@ section: Markdown
 
 # Markdown
 
-Texpile edits `.md` files visually or as source, and saves them as plain Markdown. The visual editor is the preview, in place of a PDF.
+LatexFrog edits `.md` files visually or as source, and saves them as plain Markdown. The visual editor is the preview, in place of a PDF.
 
 ![A Markdown file in the visual editor, with three parts marked](../../landing/src/lib/assets/showcase/docs/markdown/overview.png)
 

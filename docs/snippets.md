@@ -1,6 +1,6 @@
 ---
 nav: Snippets
-description: Write your own snippets for LaTeX, Typst and Markdown in Texpile, and expand them as you type in math or text.
+description: Write your own snippets for LaTeX, Typst and Markdown in LatexFrog, and expand them as you type in math or text.
 blurb: Type at the speed of light (almost).
 icon: code
 order: 36.5
@@ -12,7 +12,7 @@ moved: package-files package-files, math-typing-helpers typing#math-typing-helpe
 
 Type at the speed of light (almost).
 
-A snippet is a macro that automatically fills in text based on a trigger. For instance, you can type `dint` and Texpile will automatically fill in `\int_{0}^{1} \, \mathrm{d}x`, or however it is defined. Snippets work in the source editor, and only in the equations in the visual editor.
+A snippet is a macro that automatically fills in text based on a trigger. For instance, you can type `dint` and LatexFrog will automatically fill in `\int_{0}^{1} \, \mathrm{d}x`, or however it is defined. Snippets work in the source editor, and only in the equations in the visual editor.
 
 > [!WARNING]
 > Prerequisite: JSON knowledge.
@@ -20,9 +20,9 @@ A snippet is a macro that automatically fills in text based on a trigger. For in
 | Where to find it          | Path                                                                      | Note                                                |
 | ------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------- |
 | This folder's snippets    | Command palette › Edit Project Snippets, or Preferences › Snippets › Edit | Opens `.texpile/snippets.json`, created if missing. |
-| Snippets for every folder | Command palette › Edit Global Snippets, or Preferences › Snippets › Edit  | Opens `snippets.json` in Texpile's own data folder. |
+| Snippets for every folder | Command palette › Edit Global Snippets, or Preferences › Snippets › Edit  | Opens `snippets.json` in LatexFrog's own data folder. |
 
-Folder snippets are stored in the `.texpile` folder and are shared with collaborators through Git and real-time collaboration. Global snippets store your own snippets, which are not shared with anyone. If there are conflicts, Texpile follows the order of folder > global > built-in snippets. If you are a guest, you can turn off snippets via Preferences › Snippets.
+Folder snippets are stored in the `.texpile` folder and are shared with collaborators through Git and real-time collaboration. Global snippets store your own snippets, which are not shared with anyone. If there are conflicts, LatexFrog follows the order of folder > global > built-in snippets. If you are a guest, you can turn off snippets via Preferences › Snippets.
 
 ![Preferences, Snippets, with a switch and an Edit button for this folder's snippets and for snippets for every folder](../landing/src/lib/assets/showcase/docs/app/preferences-snippets.png)
 
@@ -45,7 +45,7 @@ Folder snippets are stored in the `.texpile` folder and are shared with collabor
 }
 ```
 
-Texpile extends upon VS Code's snippet system and is compatible with VS Code's snippets.
+LatexFrog extends upon VS Code's snippet system and is compatible with VS Code's snippets.
 
 ### The file
 
@@ -78,7 +78,7 @@ One item in `snippets`.
 
 ### Syntax and variables
 
-Every rule and variable Texpile reads. All of them go in a snippet's `body`, except the one marked for a regex `prefix`.
+Every rule and variable LatexFrog reads. All of them go in a snippet's `body`, except the one marked for a regex `prefix`.
 
 | Syntax                          | Result                                                                                                                                                             |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -165,7 +165,7 @@ Auto snippets will trigger in visual editor math. Pressing Ctrl Space will open 
 
 ## Built-in snippets
 
-Texpile has some built-in snippets:
+LatexFrog has some built-in snippets:
 
 | Trigger | LaTeX              | Typst            |
 | ------- | ------------------ | ---------------- |
@@ -248,13 +248,13 @@ You can turn them off by adding `"disabled": true`:
 
 ## Errors
 
-Texpile skips broken entries and loads the rest of the file.
+LatexFrog skips broken entries and loads the rest of the file.
 
 | Message                                                                                                       | Fix                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The file is not valid JSON: line 5, column 24 (…)                                                             | Fix the JSON near that line and column, usually a missing comma or quotation mark. Until then, Texpile keeps using the last version that loaded. |
+| The file is not valid JSON: line 5, column 24 (…)                                                             | Fix the JSON near that line and column, usually a missing comma or quotation mark. Until then, LatexFrog keeps using the last version that loaded. |
 | The file needs to start with { and end with }.                                                                | Put the entries inside one pair of braces.                                                                                                       |
-| Unsupported file version ("v": 2).                                                                            | A newer Texpile wrote the file. Update Texpile, or set `"v": 1`.                                                                                 |
+| Unsupported file version ("v": 2).                                                                            | A newer LatexFrog wrote the file. Update LatexFrog, or set `"v": 1`.                                                                                 |
 | Each entry needs to be in { }, like "Name": { "prefix": "ff", "body": "text" }.                               | Write the entry as a name followed by its fields in braces.                                                                                      |
 | Has no "body", the text it inserts.                                                                           | Add a `body`.                                                                                                                                    |
 | "body" needs to be text in quotes, or one text each for "latex", "typst" and "markdown".                      | Write `body` as a string, or as an object of strings.                                                                                            |

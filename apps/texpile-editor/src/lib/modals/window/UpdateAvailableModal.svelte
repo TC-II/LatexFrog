@@ -28,7 +28,7 @@
 	}
 	function openDownloadPage() {
 		close();
-		window.open('https://texpile.com/download', '_blank', 'noopener,noreferrer');
+		window.open('https://github.com/TC-II/LatexFrog/releases', '_blank', 'noopener,noreferrer');
 	}
 	function mb(n: number): string {
 		return (n / 1048576).toFixed(1);

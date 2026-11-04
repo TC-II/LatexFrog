@@ -1,13 +1,13 @@
 {
-	"name": "texpile-desktop",
+	"name": "latexfrog-desktop",
 	"version": "1.6.2",
 	"private": true,
-	"description": "Texpile",
+	"description": "LatexFrog",
 	"author": {
-		"name": "Texpile",
-		"email": "support@texpile.com"
+		"name": "TC-II",
+		"email": "7356712+javierpetrucci@users.noreply.github.com"
 	},
-	"homepage": "https://texpile.com",
+	"homepage": "https://github.com/TC-II/LatexFrog",
 	"main": "electron/dist/main.js",
 	"scripts": {
 		"build": "pnpm -r --if-present run build",

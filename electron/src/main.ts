@@ -199,7 +199,7 @@ app.whenReady().then(() => {
 	registerProtocolHandlers();
 	// installed builds only; a dev run registers the electron binary instead, and a portable copy
 	// would register a folder that may move or be deleted
-	if (!portable) app.setAsDefaultProtocolClient('texpile');
+	if (!portable) app.setAsDefaultProtocolClient('latexfrog');
 	if (!initialOpenPath) initialOpenPath = fileFromArgv(process.argv);
 	if (!initialJoinLink) initialJoinLink = linkFromArgv(process.argv);
 	const argvFolder = folderFromArgv(process.argv) ?? initialOpenFolder;

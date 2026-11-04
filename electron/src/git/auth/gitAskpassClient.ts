@@ -78,7 +78,7 @@ export function describePrompt(kind: 'https' | 'ssh', prompt: string, promptType
 // binary's stdout does not reliably reach git on Windows, a file does.
 function shellScript(kind: 'https' | 'ssh'): string {
 	return `#!/bin/sh
-# Texpile ${kind === 'https' ? 'GIT_ASKPASS' : 'SSH_ASKPASS'}: hands the question to the Texpile window that started the operation
+# LatexFrog ${kind === 'https' ? 'GIT_ASKPASS' : 'SSH_ASKPASS'}: hands the question to the LatexFrog window that started the operation
 TEXPILE_ASKPASS_OUT=\`mktemp\`
 ELECTRON_RUN_AS_NODE=1 ELECTRON_NO_ATTACH_CONSOLE=1 TEXPILE_ASKPASS_KIND=${kind} TEXPILE_ASKPASS_OUT="$TEXPILE_ASKPASS_OUT" "$TEXPILE_ASKPASS_NODE" "$TEXPILE_ASKPASS_MAIN" "$@"
 code=$?

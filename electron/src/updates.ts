@@ -10,6 +10,8 @@ import * as path from 'node:path';
 import { autoUpdater } from 'electron-updater';
 import { portable } from './appIdentity';
 
+const UPDATE_FEED = false as boolean;
+
 export type CheckResult =
 	| {
 			status: 'update';
@@ -70,11 +72,12 @@ function wire(): void {
 }
 
 export async function check(manual: boolean): Promise<CheckResult> {
-	if (!app.isPackaged) return { status: 'unsupported' };
+	// no feed yet: Texpile's is not ours to read. Set publish in electron-builder.yml and flip UPDATE_FEED.
+	if (!UPDATE_FEED || !app.isPackaged) return { status: 'unsupported' };
 	wire();
 	autoUpdater.requestHeaders = {
-		'x-texpile-version': app.getVersion(),
-		...(manual ? { 'x-texpile-check': 'manual' } : {})
+		'x-latexfrog-version': app.getVersion(),
+		...(manual ? { 'x-latexfrog-check': 'manual' } : {})
 	};
 	try {
 		const res = await autoUpdater.checkForUpdates();

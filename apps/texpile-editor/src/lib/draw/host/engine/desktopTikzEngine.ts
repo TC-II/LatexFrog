@@ -21,7 +21,7 @@ export function desktopTikzEngine(where: { root: () => string; preamble: () => P
 	return {
 		render: async (job) => {
 			const draw = nativeBridge()?.drawRender;
-			if (!draw) throw new Error('Figures need Texpile Desktop.');
+			if (!draw) throw new Error('Figures need LatexFrog Desktop.');
 			const root = where.root();
 			const preamble = await settledPreamble();
 			if (last && last.root === root && last.preamble === preamble && last.job === job) return last.drawn;

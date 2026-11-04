@@ -12,7 +12,7 @@ describe('codeFromJoinLink', () => {
 		expect(codeFromJoinLink('join.texpile.com/#' + CODE)).toBe(RAW);
 		expect(codeFromJoinLink('http://127.0.0.1:5174/#' + CODE)).toBe(RAW);
 		// the desktop scheme uses a path, not a fragment: some OS handoffs drop everything after #
-		expect(codeFromJoinLink('texpile://join/' + CODE)).toBe(RAW);
+		expect(codeFromJoinLink('latexfrog://join/' + CODE)).toBe(RAW);
 	});
 
 	// anything it does not recognise has to fall through, or typing a code by hand breaks

@@ -191,7 +191,7 @@
 		<!-- the app installs nothing: the page says how, for each system -->
 		<a
 			class="anchor text-sm @max-[11rem]:text-xs"
-			href="https://texpile.com/docs/installation/git"
+			href="https://github.com/TC-II/LatexFrog/tree/main/docs/installation/git"
 			target="_blank"
 			rel="noopener noreferrer">{m.vcs_git_install()}</a
 		>

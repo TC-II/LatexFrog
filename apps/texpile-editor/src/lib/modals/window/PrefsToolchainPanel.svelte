@@ -30,7 +30,7 @@
 		{m.prefs_toolchain_intro()}
 		<!-- always shown, not only when something is missing: one place to go, stated up front -->
 		{m.prefs_toolchain_docs_hint()}
-		<a class="anchor" href="https://texpile.com/docs/installation" target="_blank" rel="noopener noreferrer"
+		<a class="anchor" href="https://github.com/TC-II/LatexFrog/tree/main/docs/installation" target="_blank" rel="noopener noreferrer"
 			>{m.prefs_toolchain_install_guide()}</a
 		>
 	</p>

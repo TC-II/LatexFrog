@@ -1,5 +1,5 @@
 ---
-description: Start Texpile for the first time: open a folder, start a LaTeX, Typst, or Markdown document from a template, and compile it to a PDF.
+description: Start LatexFrog for the first time: open a folder, start a LaTeX, Typst, or Markdown document from a template, and compile it to a PDF.
 blurb: Open a folder, start a document, and produce a PDF.
 icon: rocket
 order: 2
@@ -8,7 +8,7 @@ section: Get started
 
 # Getting started
 
-Different from many online LaTeX or Typst editors, Texpile requires you to open a folder.
+Different from many online LaTeX or Typst editors, LatexFrog requires you to open a folder.
 
 ## Open a folder
 
@@ -16,11 +16,11 @@ Click **Open Folder…** on the start screen. If you have no existing projects, 
 
 ![The start screen](../landing/src/lib/assets/showcase/docs/app/start-screen-open.png)
 
-Texpile reopens your folders at the next launch, each on its last file.
+LatexFrog reopens your folders at the next launch, each on its last file.
 
 ## Start a document
 
-In an empty folder, **Start a New Document** offers LaTeX and Typst templates. Click one and Texpile copies its files into the folder.
+In an empty folder, **Start a New Document** offers LaTeX and Typst templates. Click one and LatexFrog copies its files into the folder.
 
 ![Start a New Document with the LaTeX templates](../landing/src/lib/assets/showcase/docs/app/starter-latex.png)
 
@@ -32,4 +32,4 @@ For Markdown, choose File › New › Markdown File. Markdown has no compile ste
 
 Press Ctrl Alt Enter, or **Compile** at the top of the PDF (**Show PDF** in the title bar opens it). The PDF and build files go into an `output` folder next to the main file.
 
-With several documents and no main file set, Texpile asks once which one to compile. To change it, right-click a file and choose **Set as Main File**.
+With several documents and no main file set, LatexFrog asks once which one to compile. To change it, right-click a file and choose **Set as Main File**.

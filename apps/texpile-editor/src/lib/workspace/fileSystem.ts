@@ -243,7 +243,7 @@ export function nativeBridge(): TexpileNative | undefined {
 /** the Electron bridge, or a clear error outside the desktop shell (the message can reach a toast). */
 function requireNative(): TexpileNative {
 	const n = nativeBridge();
-	if (!n) throw new Error('File access requires the Texpile desktop app.');
+	if (!n) throw new Error('File access requires the LatexFrog desktop app.');
 	return n;
 }
 

@@ -1,6 +1,6 @@
 ---
 nav: Preferences
-description: Open Preferences in Texpile and find the settings whose effect is not obvious from their label.
+description: Open Preferences in LatexFrog and find the settings whose effect is not obvious from their label.
 blurb: The settings that need more than their label.
 icon: settings
 order: 34
@@ -9,7 +9,7 @@ section: Customize
 
 # Preferences
 
-Preferences holds the settings for the whole app. Open it with Ctrl , (Cmd , on macOS) or File › Preferences… (Texpile › Preferences… on macOS).
+Preferences holds the settings for the whole app. Open it with Ctrl , (Cmd , on macOS) or File › Preferences… (LatexFrog › Preferences… on macOS).
 
 ![The Appearance tab of Preferences, with the list of tabs on the left](../landing/src/lib/assets/showcase/docs/app/preferences-appearance.png)
 
@@ -28,12 +28,12 @@ Preferences holds the settings for the whole app. Open it with Ctrl , (Cmd , on 
 | Version Control › Git Identity                           | Read-only. Change it with `git config` in a terminal.                                                                                |
 | Version Control › Keep version history                   | Keeps a copy of each save for 30 days.                                                                                               |
 | Collaboration › Display name                             | Shown in shared sessions and on your comments. Left empty, you show as Host or Guest.                                                |
-| Toolchain › Folders                                      | Texpile looks here first for every program it runs, including your compile command. See [Toolchain](build-and-preview/toolchain.md). |
+| Toolchain › Folders                                      | LatexFrog looks here first for every program it runs, including your compile command. See [Toolchain](build-and-preview/toolchain.md). |
 | Toolchain › Distribution                                 | Which TeX distribution, and which tinymist, to use when more than one is found.                                                      |
 | Integrations › Find and cite papers online               | Looks papers up through Crossref, DataCite, doi.org, Open Library, and PubMed.                                                       |
-| AI Assistant › Disable all AI integrations in Texpile    | Turns off Refine, the Agent tab and the MCP server. Your choices below it stay as they were.                                         |
+| AI Assistant › Disable all AI integrations in LatexFrog    | Turns off Refine, the Agent tab and the MCP server. Your choices below it stay as they were.                                         |
 | AI Assistant › MCP server                                | Lets an AI assistant such as Claude Code see your open files. See [MCP server](ai-assistant/mcp.md).                                 |
-| AI Assistant › Refine with                               | Only agents Texpile finds can be picked. To add another, add its folder under Toolchain › Folders.                                   |
+| AI Assistant › Refine with                               | Only agents LatexFrog finds can be picked. To add another, add its folder under Toolchain › Folders.                                   |
 | AI Assistant › Agent tab                                 | Untick every agent to remove the tab.                                                                                                |
 
 ## Not in Preferences

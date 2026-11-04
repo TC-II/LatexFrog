@@ -1,23 +1,21 @@
 // the one tinymist release Texpile installs itself, and which of its archives fits this machine
 export const TINYMIST_VERSION = '0.15.8';
 
-// Texpile's own copy of the release, its Windows and macOS programs signed by Texpile LLC (the
-// vendor-tinymist workflow; vendor/README.md): an unsigned program in Texpile's folder is what a
-// virus scanner flags, and the warning would name Texpile
-const RELEASE_URL = `https://dl.texpile.com/vendor/tinymist/${TINYMIST_VERSION}/`;
+// tinymist's own release. Its Windows and macOS programs are unsigned, so a virus scanner may flag them.
+const RELEASE_URL = `https://github.com/Myriad-Dreamin/tinymist/releases/download/v${TINYMIST_VERSION}/`;
 
 // the gnu builds link glibc 2.28 (tinymist builds them in a manylinux_2_28 container)
 const GNU_MIN_GLIBC = [2, 28];
 
-// Copied from that copy's SHA256SUMS; the Linux archives are tinymist's own and keep its hashes.
+// Copied from the release's .sha256 files.
 // Pinned here rather than fetched next to the archive: a checksum from the same place as the
-// download only proves the two agree, not that the archive is the one this version of Texpile was
+// download only proves the two agree, not that the archive is the one this version was
 // tested with. A version bump replaces TINYMIST_VERSION and every line below together.
 const SHA256_BY_TARGET: Record<string, string> = {
-	'x86_64-pc-windows-msvc': '8f4dfbab02a1dbbc4fa6952aaf5a91dc74f9077c540cb37fa060cf926422e590',
-	'aarch64-pc-windows-msvc': '24ce22811709f46c9bc8fcd152230a866a4f517a2071379fea86ec049f8a4e81',
-	'aarch64-apple-darwin': '6f2b494ce9fe9b9dc5ea0ec53141cdaa032743abe0c338433d5911b84cc9fb6a',
-	'x86_64-apple-darwin': '955cb99fd3aaab0c38625083bb23b070e155341ea2ffe58461172632cbfa1632',
+	'x86_64-pc-windows-msvc': 'b36c3e2926b2fe870e377b27aeebcb6265dd6a19fdca148a9a3ac4fdf57ee8a5',
+	'aarch64-pc-windows-msvc': '9c9a48bc73a4ead1260c202ea0d590d16ffac1465ea9e1a4f0a1c1850638351f',
+	'aarch64-apple-darwin': 'c3e8673fe4b7d8d21ad6d90e3c0684317191e1350758f7eaa02b5bde84339885',
+	'x86_64-apple-darwin': '0ca702f40c5028d5937e081799a2c07d30c3f8f2ce3e40ce469471856cd6cef1',
 	'x86_64-unknown-linux-gnu': '2428932e8d8b593ebc1ac4eed41fb9d3584166e1044bbcdef740b7296c348295',
 	'x86_64-unknown-linux-musl': '816d33895ae343f934403dbd73f687a531368464450451510f3c108b0c04bcfd',
 	'aarch64-unknown-linux-gnu': 'ec78300e89b34e0958b615b1d42c275fd11bf91d2d27401bbef07150e477f199',

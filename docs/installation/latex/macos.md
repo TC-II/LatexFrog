@@ -1,6 +1,6 @@
 ---
 nav: macOS
-description: Install MacTeX or BasicTeX on macOS so Texpile can compile LaTeX documents.
+description: Install MacTeX or BasicTeX on macOS so LatexFrog can compile LaTeX documents.
 blurb: MacTeX, or BasicTeX for a smaller install.
 icon: apple
 order: 2
@@ -10,4 +10,4 @@ order: 2
 
 Install [MacTeX](https://www.tug.org/mactex/mactex-download.html).
 
-After the install finishes, restart Texpile by long pressing the Texpile icon in the Dock and then pressing Quit. Then start it again.
+After the install finishes, restart LatexFrog by long pressing the LatexFrog icon in the Dock and then pressing Quit. Then start it again.

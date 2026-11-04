@@ -1,6 +1,6 @@
 ---
 nav: What's new
-description: What changed in each Texpile release, newest first.
+description: What changed in each LatexFrog release, newest first.
 order: 5
 ---
 

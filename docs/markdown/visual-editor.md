@@ -5,7 +5,7 @@ order: 1
 
 # Visual editor
 
-The visual editor shows the file as formatted text. Texpile writes the Markdown for your edits and keeps every other part as you wrote it.
+The visual editor shows the file as formatted text. LatexFrog writes the Markdown for your edits and keeps every other part as you wrote it.
 
 Things that work differently from a word processor:
 

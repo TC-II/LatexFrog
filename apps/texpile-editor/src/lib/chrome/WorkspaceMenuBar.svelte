@@ -159,8 +159,7 @@
 	function helpSelect(value: string) {
 		if (value === 'shortcuts') shortcutsOpen.current = true;
 		else if (value === 'whatsnew') whatsNewOpen.current = true;
-		else if (value === 'docs') window.open('https://texpile.com/docs', '_blank', 'noopener,noreferrer');
-		else if (value === 'discord') window.open('https://discord.gg/7wanVzCBWf', '_blank', 'noopener,noreferrer');
+		else if (value === 'docs') window.open('https://github.com/TC-II/LatexFrog/tree/main/docs', '_blank', 'noopener,noreferrer');
 		else if (value === 'report') window.open(reportProblemUrl(__APP_VERSION__), '_blank', 'noopener,noreferrer');
 		else if (value === 'updates') void checkUpdates();
 	}

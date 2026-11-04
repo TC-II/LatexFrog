@@ -1,6 +1,6 @@
 ---
 nav: Typst
-description: Fixes for Typst problems in Texpile: tinymist missing or not running, a blank preview, jumps that do nothing, export errors, and templates that will not download.
+description: Fixes for Typst problems in LatexFrog: tinymist missing or not running, a blank preview, jumps that do nothing, export errors, and templates that will not download.
 blurb: Messages you may see with Typst, and what to do.
 order: 2
 ---
@@ -11,7 +11,7 @@ order: 2
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | "tinymist is not installed."                                | Click **Set Up Typst**, or [install it yourself](../installation/typst/README.md).              |
 | tinymist shows **Found, does not run**                      | Preferences › Toolchain › **Reinstall**.                                                        |
-| The preview says Connecting or Reconnecting for a long time | Restart Texpile.                                                                                |
+| The preview says Connecting or Reconnecting for a long time | Restart LatexFrog.                                                                                |
 | "Nothing to preview yet."                                   | The document has an error. Fix it in Problems.                                                  |
 | The preview shows another file than the one open            | The preview shows the main file. Right-click the open file › **Set as Main File**.              |
 | Clicking the PDF does not jump to the source                | Only the preview jumps back. Turn on **Preview** in Configure Compile Command….                 |

@@ -4,7 +4,7 @@ import { lookupDoi } from '../cite/doiLookup';
 import { lookupIsbn, lookupPmid, searchWorks } from '../cite/citeSearch';
 
 export function registerDoiIpc(): void {
-	const userAgent = `Texpile/${app.getVersion()} (https://texpile.com)`;
+	const userAgent = `LatexFrog/${app.getVersion()} (https://github.com/TC-II/LatexFrog)`;
 	function fetch(url: string, init: RequestInit): Promise<Response> {
 		return net.fetch(url, init);
 	}
