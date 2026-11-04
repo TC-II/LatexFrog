@@ -25,11 +25,15 @@ import { registerWindowGlassIpc } from './windowGlass';
 import { registerNativeAppearanceIpc } from './nativeAppearance';
 import { registerSurfacesIpc } from './ipc/surfacesIpc';
 import { registerDeferredIpc, shutdownDeferred } from './ipc/deferredIpc';
+import { registerLvSidecarIpc } from './lv/lvSidecar';
 import { registerWindowChrome } from './windowChrome';
 
 applyAppIdentity();
 stopCwdProgramLookup();
 registerPrivilegedSchemes();
+
+// not deferred: the window opens its project in the engine while it boots, and a Compile that follows must find it open
+registerLvSidecarIpc();
 
 // only what a window needs before it can paint; the rest is in deferredIpc
 registerSettingsIpc();
