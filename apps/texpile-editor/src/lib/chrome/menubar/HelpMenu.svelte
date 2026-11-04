@@ -34,7 +34,6 @@
 				{/if}
 				<Menu.Separator class={separatorClass} />
 				<Menu.Item value="docs" class={menuBarItemClass}><Menu.ItemText>{m.menubar_documentation()}</Menu.ItemText></Menu.Item>
-				<Menu.Item value="discord" class={menuBarItemClass}><Menu.ItemText>{m.menubar_join_discord()}</Menu.ItemText></Menu.Item>
 				<Menu.Item value="report" class={menuBarItemClass}><Menu.ItemText>{m.menubar_report_problem()}</Menu.ItemText></Menu.Item>
 				<!-- a web page updates by reloading; there is no installer to offer -->
 				{#if !__WEB__}
@@ -50,6 +49,7 @@
 				<!-- Dev Tools used to ride this line; it lives in the command palette now (search
 				     "dev"), so the menu every writer opens carries no debugger furniture -->
 				<div class="text-muted px-2.5 py-1 text-xs">{m.menubar_version_footer({ version: appVersion })}</div>
+				<div class="text-muted max-w-56 px-2.5 pb-1 text-xs">{m.about_credits()}</div>
 			</Menu.Content>
 		</Menu.Positioner>
 	</Portal>

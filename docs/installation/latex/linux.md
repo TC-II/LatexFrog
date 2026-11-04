@@ -1,6 +1,6 @@
 ---
 nav: Linux
-description: Install TeX Live on Linux with apt or from upstream so Texpile can compile LaTeX documents.
+description: Install TeX Live on Linux with apt or from upstream so LatexFrog can compile LaTeX documents.
 blurb: TeX Live from apt, or from upstream.
 icon: linux
 order: 3

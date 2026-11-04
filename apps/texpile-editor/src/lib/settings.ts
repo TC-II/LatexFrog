@@ -32,7 +32,7 @@ export type AppSettings = {
 	completionByMode: boolean;
 	/** a command shows the arguments it takes as you type */
 	argumentHints: boolean;
-	/** check the update feed (updates.texpile.com) for a newer version on launch; downloads stay click-only. */
+	/** check an update feed, none is configured yet, for a newer version on launch; downloads stay click-only. */
 	checkForUpdates: boolean;
 	/** let an MCP client (Claude Code, Claude Desktop) read what the editor is showing. Off by
 	 * default: connecting also needs a config snippet pasted into the client, so defaulting this on
@@ -128,7 +128,7 @@ export const DEFAULT_COMPILE_COMMAND =
 	'latexmk -cd -lualatex -interaction=nonstopmode -file-line-error -synctex=1 -output-directory=output {main}';
 
 /** the hosted blind relay; users can point at their own, and the share/join dialogs reset to this */
-export const DEFAULT_COLLAB_RELAY_URL = 'wss://collab.texpile.com';
+export const DEFAULT_COLLAB_RELAY_URL = ''; // no hosted relay: Texpile asks forks not to use theirs
 
 const DEFAULTS: AppSettings = {
 	v: 1,
@@ -140,7 +140,7 @@ const DEFAULTS: AppSettings = {
 	latexChecks: {},
 	completionByMode: true,
 	argumentHints: true,
-	checkForUpdates: true,
+	checkForUpdates: false,
 	mcpEnabled: false,
 	uiZoom: 1,
 	transparentWindow: false,

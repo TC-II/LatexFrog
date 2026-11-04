@@ -1,6 +1,6 @@
 ---
 nav: Limits
-description: The size and count limits you can meet while writing in Texpile.
+description: The size and count limits you can meet while writing in LatexFrog.
 order: 2
 ---
 

@@ -16,7 +16,7 @@ Completion covers commands (your own `\newcommand` macros too), environments, pa
 
 Commands and environments come from the class, packages and libraries your project loads. Common packages outside your preamble offer theirs too, last in the list with the package name beside them. Choosing one offers to add its `\usepackage`.
 
-A file with no `\documentclass` or `\usepackage` in a folder with no main file has no packages Texpile can read. Completion then offers the commands of common packages under the heading "No main file found. Some IntelliSense features are degraded." and offers no `\usepackage`.
+A file with no `\documentclass` or `\usepackage` in a folder with no main file has no packages LatexFrog can read. Completion then offers the commands of common packages under the heading "No main file found. Some IntelliSense features are degraded." and offers no `\usepackage`.
 
 ## Go to definition and hover
 
@@ -26,7 +26,7 @@ Hovering shows the citation's entry, the image of an `\includegraphics`, or the 
 
 ## Rename
 
-F2 on a label, a citation key or a glossary entry asks for a new name. Texpile renames its definition and every use in the document. A citation key also changes in every document that shares its `.bib` file.
+F2 on a label, a citation key or a glossary entry asks for a new name. LatexFrog renames its definition and every use in the document. A citation key also changes in every document that shares its `.bib` file.
 
 Comments and commented-out code follow the rename. Text in `verbatim`, `lstlisting` or `minted` and in `\verb` or `\lstinline` keeps its words. In a shared session only the host renames a name that other files use.
 

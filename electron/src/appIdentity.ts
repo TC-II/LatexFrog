@@ -34,10 +34,10 @@ function packagedFlag(name: string): boolean {
  * pinned BEFORE the rename can move them.
  */
 export function applyAppIdentity(): void {
-	const dataDirName = devChannel ? 'texpile-desktop-dev' : 'texpile-desktop';
+	const dataDirName = devChannel ? 'latexfrog-dev' : 'latexfrog';
 	app.setPath('userData', path.join(app.getPath('appData'), dataDirName));
 	app.setPath('sessionData', path.join(app.getPath('appData'), dataDirName));
-	app.setName(devChannel ? 'Texpile Dev' : 'Texpile');
+	app.setName(devChannel ? 'LatexFrog Dev' : 'LatexFrog');
 
 	// a portable copy keeps settings, caches and the instance lock beside the exe, so the folder can
 	// move and it runs beside an installed Texpile; a read-only folder keeps the dirs above

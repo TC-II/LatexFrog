@@ -21,7 +21,7 @@ section: Workflow
 
 - Files the build makes, such as `.aux` and `.log`, are listed under **Build** and left out of commits. **Add to .gitignore** on the group tells git to ignore them for good. The group leaves out your PDF.
 - A file you untick stays out of commits, across restarts, until it matches the last commit again.
-- Files under `.texpile/` show **Managed by Texpile**. Leave them to Texpile, except `snippets.json`, which is yours to edit.
+- Files under `.texpile/` show **Managed by LatexFrog**. Leave them to LatexFrog, except `snippets.json`, which is yours to edit.
 - If git has no name and email yet, the first commit asks for them and saves them for every project on this computer.
 - **Discard Changes** keeps a copy in Version History first and offers **Undo**. A new, uncommitted file goes to the Trash.
 
@@ -29,7 +29,7 @@ section: Workflow
 
 **Sync** brings in the commits made elsewhere, then sends yours. If uncommitted changes block it, **Commit & Sync** commits them first. Switching branches with **Checkout to…** in the [command palette](../command-palette.md) offers **Commit & Checkout** the same way.
 
-While the window is in front, Texpile checks for new commits every 3 minutes, without asking you to sign in.
+While the window is in front, LatexFrog checks for new commits every 3 minutes, without asking you to sign in.
 
 When both sides changed the same lines, see [Merge conflicts](conflicts.md).
 

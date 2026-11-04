@@ -35,7 +35,7 @@ When something fails, **Show Command Output** shows what git said.
 | "The branch "…" has no remote branch."              | Choose **Publish Branch**.                                                                                                   |
 | **HEAD detached at …** and Sync is off              | Pick a branch with Checkout to… in the [command palette](../command-palette.md).                                             |
 | "Failed to authenticate to git remote"              | Sign in again. See [GitHub](../version-control/github.md).                                                                   |
-| "…rejected because the branch is protected."        | Texpile cannot create branches. Push to another branch from the terminal, or ask the owner for access.                       |
+| "…rejected because the branch is protected."        | LatexFrog cannot create branches. Push to another branch from the terminal, or ask the owner for access.                       |
 | "…push protection found secrets in…"                | Remove the secret from the commit as well as the file. If GitHub flagged something harmless, **Open on GitHub** to allow it. |
 | Autofetch stopped                                   | Sync or Fetch once and sign in.                                                                                              |
 
@@ -46,14 +46,14 @@ When something fails, **Show Command Output** shows what git said.
 | "The GitHub token is missing the "repo" scope…"                       | Make a token with the `repo` scope. A fine-grained token needs the Administration permission. |
 | "The "…" repository was created on GitHub, but the push to it failed" | Choose **Publish Branch** again and pick that remote.                                         |
 | "Clone succeeded, but checkout failed"                                | A file has a name your system forbids, or a Git LFS file failed to download.                  |
-| "A submodule could not be cloned"                                     | The rest was cloned. Texpile does not manage submodules.                                      |
+| "A submodule could not be cloned"                                     | The rest was cloned. LatexFrog does not manage submodules.                                      |
 
 ## Branches
 
 | You see                                                | Fix                                                            |
 | ------------------------------------------------------ | -------------------------------------------------------------- |
 | "Your local changes would be overwritten by checkout." | Choose **Commit & Checkout**.                                  |
-| "No other branches"                                    | Texpile cannot create a branch. Make one in the terminal.      |
+| "No other branches"                                    | LatexFrog cannot create a branch. Make one in the terminal.      |
 | "Could not read the Git history"                       | Click Refresh. If it stays, run a git command in the terminal. |
 
 ## Version History

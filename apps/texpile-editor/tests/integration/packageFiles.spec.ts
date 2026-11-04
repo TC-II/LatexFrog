@@ -241,7 +241,7 @@ test('the bar names a folder package file as in this folder', async () => {
 	await openPackageFile(source, 'Edit Package File for inhousemacros');
 	const notice = bar(page, 'Commands for the inhousemacros package in this folder');
 	await expect(notice).toBeVisible();
-	await expect(notice.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', 'https://texpile.com/docs/package-files');
+	await expect(notice.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', 'https://github.com/TC-II/LatexFrog/blob/main/docs/package-files.md');
 	await expect(notice.getByRole('button', { name: 'Show all' })).toHaveCount(0);
 });
 

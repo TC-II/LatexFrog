@@ -12,7 +12,7 @@ body:
 
         1. Set a main file in the file explorer: right-click a .tex file and click "Set as main file"
         2. Check your compile command (Terminal > Configure compile command)
-        3. Can you compile the document in the Texpile terminal? Paste your compile command directly into the terminal and run it
+        3. Can you compile the document in the LatexFrog terminal? Paste your compile command directly into the terminal and run it
         4. Is your document itself broken? Open a native terminal (PowerShell, bash, etc.) and check whether it compiles there
         5. If possible, attach the compile log, in full or at least the part with the error
 
@@ -50,7 +50,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Texpile version
+      label: LatexFrog version
       description: Shown at the bottom of the Help menu
   - type: input
     id: os

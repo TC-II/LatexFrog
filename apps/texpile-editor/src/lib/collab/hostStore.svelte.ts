@@ -2,6 +2,7 @@
 // relay connection while it is shared, and exposes the reactive bits WorkspaceView needs. One shared
 // session per window, host role.
 
+import { m } from '$lib/paraglide/messages';
 import type * as Y from 'yjs';
 import { generateShareCode } from './e2e/shareCode';
 import { deriveSessionKeys, sha256Hex } from './e2e/keys';
@@ -169,6 +170,7 @@ class HostCollabController {
 			const keys = await deriveSessionKeys(code);
 			const hostKey = generateShareCode(); // second random secret; the relay only ever stores its hash
 			const relayUrl = settings.current.collabRelayUrl.trim();
+			if (!relayUrl) throw new Error(m.session_no_relay());
 			await createRelaySession(relayUrl, {
 				room: keys.roomId,
 				proofHash: await sha256Hex(keys.joinProof),

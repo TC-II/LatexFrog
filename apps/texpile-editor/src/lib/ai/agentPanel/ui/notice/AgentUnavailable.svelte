@@ -28,7 +28,7 @@
 	<p class="text-sm font-semibold">{title}</p>
 	<p class="text-muted max-w-md text-xs leading-relaxed">{note}</p>
 	{#if props.reason === 'desktop'}
-		<a class="btn btn-sm preset-filled-primary-500 mt-2" href="https://texpile.com/download" target="_blank" rel="noopener noreferrer"
+		<a class="btn btn-sm preset-filled-primary-500 mt-2" href="https://github.com/TC-II/LatexFrog/releases" target="_blank" rel="noopener noreferrer"
 			>{m.session_download()}</a
 		>
 	{:else if props.reason === 'folder' && activeFilePath.current}

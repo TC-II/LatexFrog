@@ -7,7 +7,7 @@ export function desktopCetzEngine(where: { root: () => string; path: string }): 
 	return {
 		render: async (job) => {
 			const draw = nativeBridge()?.drawCetz;
-			if (!draw) throw new Error('Figures need Texpile Desktop.');
+			if (!draw) throw new Error('Figures need LatexFrog Desktop.');
 			if (last?.job === job) return last.drawn;
 			const drawn = draw({ root: where.root(), path: where.path, job }).catch((e: unknown) => {
 				throw explainDrawError(e);

@@ -58,7 +58,7 @@
 
 	// only offered on the default relay: the public join page cannot reach a session on someone
 	// else's relay, and a link that quietly fails is worse than no link
-	const linkable = $derived(settings.current.collabRelayUrl.trim().replace(/\/+$/, '') === DEFAULT_COLLAB_RELAY_URL);
+	const linkable = false; // no public join page
 
 	async function copyLink() {
 		try {

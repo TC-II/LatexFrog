@@ -45,10 +45,10 @@ To change how a document shows an image and keep the file as it is, see [Crop an
 
 ## Restore original
 
-Before the first change Texpile keeps a copy of the image. **Restore original** puts it back after asking.
+Before the first change LatexFrog keeps a copy of the image. **Restore original** puts it back after asking.
 
 - The copy is kept for 30 days.
-- The copy follows the image when it is renamed or moved in Texpile.
+- The copy follows the image when it is renamed or moved in LatexFrog.
 - Restoring deletes the copy.
 
 ## In the visual editor

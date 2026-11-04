@@ -62,7 +62,7 @@
 				class="block h-6 cursor-default select-none"
 				style:transform="rotate({logoSpin.angle}deg)"
 				onclick={logoSpin.kick}
-				aria-label="Texpile"
+				aria-label="LatexFrog"
 			>
 				<img src={logoOnLight} alt="" class="h-6 w-auto dark:hidden" />
 				<img src={logoOnDark} alt="" class="hidden h-6 w-auto dark:block" />

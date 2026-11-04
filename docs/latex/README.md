@@ -11,9 +11,9 @@ section: LaTeX
 
 Write LaTeX in the visual editor or as source, and compile it to a PDF.
 
-![A LaTeX project in Texpile: the file tree, the visual editor, the Compile button, and the compiled PDF](../../landing/src/lib/assets/showcase/docs/latex/overview.png)
+![A LaTeX project in LatexFrog: the file tree, the visual editor, the Compile button, and the compiled PDF](../../landing/src/lib/assets/showcase/docs/latex/overview.png)
 
-1. **Main file.** The star marks the file Texpile compiles.
+1. **Main file.** The star marks the file LatexFrog compiles.
 2. **Visual / Source.** Switch editors at any time. Both edit the same file.
 3. **Compile.** Builds the PDF.
 4. **PDF.** The compiled PDF. The bar on the right edge of the editor shows and hides it.
@@ -21,8 +21,8 @@ Write LaTeX in the visual editor or as source, and compile it to a PDF.
 
 ## The main file
 
-The main file is the one with `\documentclass` and `\begin{document}`. In a folder with several `.tex` files, Texpile asks once which one it is. To change it, right-click a file and choose **Set as Main File**.
+The main file is the one with `\documentclass` and `\begin{document}`. In a folder with several `.tex` files, LatexFrog asks once which one it is. To change it, right-click a file and choose **Set as Main File**.
 
-## Folders Texpile adds
+## Folders LatexFrog adds
 
 The PDF and the build files go in an `output` folder. Your comments and compile settings are in `.texpile`: keep it with the project.

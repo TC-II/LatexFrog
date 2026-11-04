@@ -15,8 +15,8 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 
 ### M0. Single repository
 - [x] Local repository with Texpile history, engine, fixtures.
-- [ ] Engine tests pass here.
-- [ ] Rebrand: name, icon, about, installer, app id. Credit Texpile and Juan Sbruzzi. Required before the first push.
+- [x] Engine tests pass here.
+- [x] Rebrand: name, icon, about, installer, app id. Credit Texpile and Juan Sbruzzi. Required before the first push.
 - [ ] Remove what no feature uses, starting with TeXpresso and the TeX Live doctor paths nothing calls.
 
 ### M1. Compile

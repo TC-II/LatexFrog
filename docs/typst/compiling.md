@@ -1,5 +1,5 @@
 ---
-description: How a Typst document becomes a PDF in Texpile: the preview by default, or a compile to a PDF file with Preview off.
+description: How a Typst document becomes a PDF in LatexFrog: the preview by default, or a compile to a PDF file with Preview off.
 order: 7
 ---
 

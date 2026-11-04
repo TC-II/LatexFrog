@@ -70,7 +70,7 @@ export type GitOpResult = {
 	error?: string;
 };
 
-export const NO_BRIDGE = 'Git requires the Texpile desktop app.';
+export const NO_BRIDGE = 'Git requires the LatexFrog desktop app.';
 
 export function errMsg(e: unknown): string {
 	return e instanceof Error ? e.message : String(e);

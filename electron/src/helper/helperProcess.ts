@@ -25,7 +25,7 @@ onToolPathChange((p) => {
 
 function start(): UtilityProcess {
 	const p = timeSync('fork helper process', () =>
-		utilityProcess.fork(path.join(__dirname, 'helperWorker.js'), [], { serviceName: 'Texpile helper' })
+		utilityProcess.fork(path.join(__dirname, 'helperWorker.js'), [], { serviceName: 'LatexFrog helper' })
 	);
 	forks++;
 	p.on('message', (msg: Reply | HelperEvent) => {

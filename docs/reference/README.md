@@ -1,7 +1,7 @@
 ---
 nav: Reference
 overview: none
-description: Look-up pages for Texpile: every limit, supported formats, what goes online, and what changed in each release.
+description: Look-up pages for LatexFrog: every limit, supported formats, what goes online, and what changed in each release.
 blurb: Limits, formats, privacy and release notes.
 icon: library
 order: 38

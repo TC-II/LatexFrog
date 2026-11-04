@@ -8,7 +8,7 @@ order: 1
 
 | You see                                                               | Fix                                                                                                                                                       |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Compile could not start", or **Set Up LaTeX** opens                  | Texpile needs a TeX distribution. [Install one](../installation/latex/README.md), or add its folder in **Set Up LaTeX**.                                  |
+| "Compile could not start", or **Set Up LaTeX** opens                  | LatexFrog needs a TeX distribution. [Install one](../installation/latex/README.md), or add its folder in **Set Up LaTeX**.                                  |
 | "Compile finished, but no PDF appeared"                               | Read the Compile terminal for the error. If your command writes the PDF elsewhere, click **Configure** and set its path under **Advanced: Output Paths**. |
 | Compile is grayed out, with "This project is set up to compile with:" | Click **Use It**, or save your own command.                                                                                                               |
 | An error stays after you fixed it                                     | Compile menu › **Recompile from Scratch**.                                                                                                                |
@@ -17,7 +17,7 @@ order: 1
 | "A compile is already running."                                       | Wait, or press Ctrl Alt Enter to stop it.                                                                                                                 |
 | The compile with `-shell-escape` is refused                           | You are hosting a shared session. End it, then compile.                                                                                                   |
 | The command fails on Windows                                          | Your compile command runs in the Command Prompt (`cmd.exe`). Use its quoting rules.                                                                       |
-| Format Document opens **Set Up LaTeX**                                | Texpile needs `latexindent`. Install it with your distribution.                                                                                           |
+| Format Document opens **Set Up LaTeX**                                | LatexFrog needs `latexindent`. Install it with your distribution.                                                                                           |
 
 ## Live preview
 

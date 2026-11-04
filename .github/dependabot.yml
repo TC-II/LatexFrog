@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # the whole pnpm workspace (root, apps, landing, packages), from the root lockfile
+  # the whole pnpm workspace (root, apps, packages), from the root lockfile
   - package-ecosystem: npm
     directory: /
     schedule:

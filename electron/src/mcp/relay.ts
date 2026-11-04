@@ -10,7 +10,7 @@ type Answer = { ok?: boolean; reason?: string } | null;
 export function relayer(target: TargetWindow) {
 	return async (root: string | undefined, kind: string, args: Record<string, unknown>, timeoutMs?: number) => {
 		const t = target(root);
-		if (!t) return fail('no matching Texpile window');
+		if (!t) return fail('no matching LatexFrog window');
 		const r = (await askRenderer(t.win, kind, t.ownAgent ? { ...args, ownAgent: true } : args, timeoutMs)) as Answer;
 		if (r === null) return fail('the editor did not respond in time');
 		if (!r.ok) return refused(r);

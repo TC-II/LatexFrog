@@ -1,6 +1,6 @@
 ---
 nav: Git
-description: Install git on Windows, macOS, or Linux so Texpile's Source Control panel can commit, sync, and clone your files.
+description: Install git on Windows, macOS, or Linux so LatexFrog's Source Control panel can commit, sync, and clone your files.
 blurb: git, for the Source Control panel.
 icon: git-branch
 order: 3

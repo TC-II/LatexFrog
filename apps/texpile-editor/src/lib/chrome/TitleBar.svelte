@@ -124,7 +124,7 @@
 	let barEl = $state<HTMLElement | null>(null);
 	$effect(() => (barEl ? syncWindowOverlay(barEl) : undefined));
 
-	let title = $state('Texpile');
+	let title = $state('LatexFrog');
 	onMount(() => {
 		const el = document.querySelector('title');
 		if (!el) return;
@@ -183,7 +183,7 @@
 			{#if __WEB__}
 				<a
 					class="app-no-drag text-muted hover:text-surface-950-50 hover:bg-surface-200-800 rounded-base mr-1 flex items-center gap-1.5 self-center px-2 py-1 text-xs whitespace-nowrap"
-					href="https://texpile.com/download"
+					href="https://github.com/TC-II/LatexFrog/download"
 					target="_blank"
 					rel="noopener noreferrer"
 					use:tip={m.web_get_desktop_note()}

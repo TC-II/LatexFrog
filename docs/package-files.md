@@ -1,6 +1,6 @@
 ---
 nav: LaTeX package files
-description: Extend IntelliSense in Texpile for unknown LaTeX packages with package files.
+description: Extend IntelliSense in LatexFrog for unknown LaTeX packages with package files.
 blurb: Extends IntelliSense for unknown LaTeX packages.
 icon: package
 order: 36.6
@@ -11,7 +11,7 @@ section: Advanced
 
 Extends IntelliSense for unknown LaTeX packages.
 
-Texpile by default supports a wide range of completion for LaTeX packages. However, for the less common ones, you will have to create your own package files for Texpile to support them.
+LatexFrog by default supports a wide range of completion for LaTeX packages. However, for the less common ones, you will have to create your own package files for LatexFrog to support them.
 
 ## Where to find it
 
@@ -21,7 +21,7 @@ Texpile by default supports a wide range of completion for LaTeX packages. Howev
 
 Preferences › Editor › LaTeX lists your package files under **Package files** in the Completion section. Click **Manage** to open, delete or draft one.
 
-Folder package files are stored in the `.texpile` folder and are shared with collaborators through Git and real-time collaboration. Global package files are your own, and work in every folder. They are stored in the `packages` folder of Texpile's data folder:
+Folder package files are stored in the `.texpile` folder and are shared with collaborators through Git and real-time collaboration. Global package files are your own, and work in every folder. They are stored in the `packages` folder of LatexFrog's data folder:
 
 | System  | Folder                                                   |
 | ------- | -------------------------------------------------------- |
@@ -31,9 +31,9 @@ Folder package files are stored in the `.texpile` folder and are shared with col
 
 The portable Windows build keeps them in `data\packages` next to the program. The bar above an open package file names its place: "Commands for the review package in this folder" or "Commands for the review package in every folder".
 
-With **Save Package File for …**, Texpile will automatically load the package with your TeX installation and draft one. However, in many cases, this first draft might not be reliable and will require double checking. The command lists up to 10 packages that the open file loads itself and that Texpile has no data or package file for. The package needs to be installed in your TeX distribution. For any other package, write the file by hand in one of the folders above.
+With **Save Package File for …**, LatexFrog will automatically load the package with your TeX installation and draft one. However, in many cases, this first draft might not be reliable and will require double checking. The command lists up to 10 packages that the open file loads itself and that LatexFrog has no data or package file for. The package needs to be installed in your TeX distribution. For any other package, write the file by hand in one of the folders above.
 
-A package file is named after the package: `.texpile/packages/review.json` for `\usepackage{review}`, and `class-` before a class name (`class-thesis.json` for `\documentclass{thesis}`). A package file for a package Texpile already knows adds to what Texpile knows. An entry with the same name replaces the fields it states and keeps the rest. A folder package file does the same over a global one.
+A package file is named after the package: `.texpile/packages/review.json` for `\usepackage{review}`, and `class-` before a class name (`class-thesis.json` for `\documentclass{thesis}`). A package file for a package LatexFrog already knows adds to what LatexFrog knows. An entry with the same name replaces the fields it states and keeps the rest. A folder package file does the same over a global one.
 
 ## An example of a package file
 
@@ -117,7 +117,7 @@ One item in `macros`.
 | `prints` | string                     | none    | What the command prints, shown beside its name in the completion list, such as a symbol's glyph.                                                                                                                                                             |
 | `doc`    | string                     | none    | Shown in the completion list's info panel.                                                                                                                                                                                                                   |
 | `hidden` | `true`                     | none    | Keeps the entry out of the completion list.                                                                                                                                                                                                                  |
-| `remove` | `true`                     | none    | Removes an entry of this name that comes before, such as one Texpile ships.                                                                                                                                                                                  |
+| `remove` | `true`                     | none    | Removes an entry of this name that comes before, such as one LatexFrog ships.                                                                                                                                                                                  |
 
 Completion inserts the command with its `o` arguments left out, and shows the full form beside it.
 
@@ -164,7 +164,7 @@ One item in `deps`.
 | --------- | -------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`      | string   | none         | Required. The file it loads, such as `"packages/xcolor"`, or `"classes/article"` for a class.                                                                                                                                                        |
 | `if`      | string   | none         | The package options it needs, written as a command's `if`. `"!draft"` loads it unless `draft` is given.                                                                                                                                              |
-| `engines` | string[] | every engine | The engines that load it: `"pdflatex"`, `"lualatex"` and `"xelatex"`. Texpile reads the engine from the folder's compile command, and in a shared session from the host's. A command that names no engine loads only dependencies without `engines`. |
+| `engines` | string[] | every engine | The engines that load it: `"pdflatex"`, `"lualatex"` and `"xelatex"`. LatexFrog reads the engine from the folder's compile command, and in a shared session from the host's. A command that names no engine loads only dependencies without `engines`. |
 
 ## Errors
 

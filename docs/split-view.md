@@ -1,5 +1,5 @@
 ---
-description: Edit two or four files side by side in Texpile, show the PDF in two views, or move the preview or a file into a window of its own.
+description: Edit two or four files side by side in LatexFrog, show the PDF in two views, or move the preview or a file into a window of its own.
 blurb: Two or four editors at once, the PDF in two views, and windows of their own.
 icon: columns-2
 order: 26
@@ -23,7 +23,7 @@ Layout › **Editors** shows one editor, two side by side, two stacked, or four 
 - Drag a tab to the edge of an editor to split it there, or onto another editor's tabs to move it. Drop a file from the file tree onto an editor to open it there.
 - A file can be open in two editors at once. What you type in one shows in the other.
 - Closing an editor's last tab closes the editor.
-- Texpile remembers the editors and their tabs for each folder.
+- LatexFrog remembers the editors and their tabs for each folder.
 
 ## A file in its own window
 

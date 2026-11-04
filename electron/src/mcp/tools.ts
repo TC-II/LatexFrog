@@ -18,7 +18,7 @@ import type { McpHost } from './server';
  * free when the user is sitting in front of it.
  */
 const INSTRUCTIONS = [
-	'Texpile is a local, offline LaTeX editor. It opens a FOLDER of .tex files, and the file on disk IS the document:',
+	'LatexFrog is a local, offline LaTeX editor. It opens a FOLDER of .tex files, and the file on disk IS the document:',
 	'no database, no document ids, and saving writes the .tex back in place.',
 	'',
 	'What this server gives you is the state of the editor the user is actually looking at, and the ability to steer it.',
@@ -42,7 +42,7 @@ const INSTRUCTIONS = [
 	'independently of it, which is normal in a repo where one output directory serves several documents, so',
 	'get_compile_config reports the resolved paths and set_output_paths is what changes them.',
 	'',
-	'No tool here sets the compile command. It belongs to the project, in .texpile/config.json, and Texpile hands it to',
+	'No tool here sets the compile command. It belongs to the project, in .texpile/config.json, and LatexFrog hands it to',
 	'a shell, so a command written there waits behind an accept bar until the user takes it. Write the file with your own',
 	'file tools and say what you changed; set_output_paths retargets the build with no such step.',
 	'',
@@ -59,14 +59,14 @@ const INSTRUCTIONS = [
 ].join('\n');
 
 export function buildServer(currentHost: () => McpHost | null): McpServer {
-	const server = new McpServer({ name: 'texpile', version: '1' }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS });
+	const server = new McpServer({ name: 'latexfrog', version: '1' }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS });
 
 	server.registerTool(
 		'get_editor_state',
 		{
-			title: 'Get Texpile editor state',
+			title: 'Get LatexFrog editor state',
 			description:
-				'What Texpile is showing right now: every open workspace window, its tabs and which have ' +
+				'What LatexFrog is showing right now: every open workspace window, its tabs and which have ' +
 				'unsaved changes, the active file, view mode, caret and selection. Use this to work on what ' +
 				'the user is actually looking at. Prefer the workspace whose root matches your working ' +
 				'directory over the focused one, since focus changes when the user clicks another window. ' +
@@ -105,7 +105,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			// pulled rather than pushed: a dirty 2 MB paper is not worth sending on every keystroke
 			const data = await askRenderer(t.win, 'unsaved');
 			if (data === null) return fail('the editor did not respond in time (it may be busy loading a large document)');
@@ -133,7 +133,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			const data = await askRenderer(t.win, 'diagnostics');
 			if (data === null) return fail('the editor did not respond in time');
 			return ok(data);
@@ -143,7 +143,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 	server.registerTool(
 		'open_file',
 		{
-			title: 'Open a file in Texpile',
+			title: 'Open a file in LatexFrog',
 			description:
 				'Bring a file in the workspace forward in the editor, optionally at a line. NOTE: passing a ' +
 				'line switches the window to Source mode, because a line number only means anything there - ' +
@@ -157,7 +157,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ path: p, line, root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			// The renderer resolves this against the workspace tree, not the filesystem. That is the
 			// whole containment story for this server: it is the only tool taking a path, and the path
 			// never reaches the fs service.
@@ -169,7 +169,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 	server.registerTool(
 		'show_diff',
 		{
-			title: 'Show a file diff in Texpile',
+			title: 'Show a file diff in LatexFrog',
 			description:
 				"Switch the window to Diff view, showing the file's working changes against git HEAD. Useful " +
 				'after you have edited files, so the user can see what changed. This changes what is on ' +
@@ -181,7 +181,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ path: p, root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			// a request, not a command: entering diff is refused outright when the folder is not a git
 			// repo, and reporting success we never confirmed is how a caller gets misled
 			const r = (await askRenderer(t.win, 'show_diff', { path: p })) as { ok?: boolean; reason?: string } | null;
@@ -194,7 +194,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 	server.registerTool(
 		'set_view_mode',
 		{
-			title: 'Set the Texpile view mode',
+			title: 'Set the LatexFrog view mode',
 			description:
 				'Switch between Visual (WYSIWYG), Source (LaTeX) and Diff. Changes what the user sees, so ' +
 				'prefer leaving it alone unless the mode is the point - for example switching to Source ' +
@@ -206,7 +206,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ mode, root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			const r = (await askRenderer(t.win, 'view_mode', { mode })) as { ok?: boolean; reason?: string; viewMode?: string } | null;
 			if (r === null) return fail('the editor did not respond in time');
 			if (!r.ok) return fail(`${r.reason ?? 'refused'} (still in ${r.viewMode ?? 'unknown'} mode)`);
@@ -231,7 +231,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ line, root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			const r = (await askRenderer(t.win, 'synctex', { line })) as { ok?: boolean; reason?: string } | null;
 			if (r === null) return fail('the editor did not respond in time');
 			if (!r.ok) return fail(r.reason ?? 'could not sync to that line');
@@ -259,7 +259,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ path: p, root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			// a request, not a command: a path outside the workspace or one that is not a .tex/.typ is
 			// refused, and a caller told it succeeded would compile the wrong thing and never learn why
 			const r = (await askRenderer(t.win, 'main_file', { path: p })) as { ok?: boolean; reason?: string } | null;
@@ -288,7 +288,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			const r = (await askRenderer(t.win, 'compile')) as { ok?: boolean; mode?: string; note?: string } | null;
 			if (r === null) return fail('the editor did not respond in time');
 			// pass the renderer's own mode and guidance through rather than restating it here, so the
@@ -310,7 +310,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			const data = await askRenderer(t.win, 'compile_config');
 			if (data === null) return fail('the editor did not respond in time');
 			return ok(data);
@@ -338,7 +338,7 @@ export function buildServer(currentHost: () => McpHost | null): McpServer {
 		},
 		async ({ outputDir, pdf, log, root }) => {
 			const t = target(root);
-			if (!t) return fail('no matching Texpile window');
+			if (!t) return fail('no matching LatexFrog window');
 			const r = (await askRenderer(t.win, 'set_output_paths', { outputDir, pdf, log })) as { ok?: boolean; reason?: string } | null;
 			if (r === null) return fail('the editor did not respond in time');
 			if (!r.ok) return fail(r.reason ?? 'the editor refused the change');

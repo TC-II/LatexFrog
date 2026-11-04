@@ -8,7 +8,7 @@
 	id="zotero"
 	checked={settings.current.zoteroEnabled !== false}
 	onChange={(v) => updateSettings({ zoteroEnabled: v })}
-	docs="https://texpile.com/docs/integrations/zotero"
+	docs="https://github.com/TC-II/LatexFrog/tree/main/docs/integrations/zotero"
 />
 <PrefsSwitchRow
 	id="cite-doi"

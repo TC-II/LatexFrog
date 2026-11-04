@@ -9,11 +9,11 @@ section: AI and integrations
 
 # AI Assistant
 
-Texpile includes no AI. It works with an agent you install and sign in to yourself: chat with it in the [Agent tab](agent-panel.md), rewrite a selection with [Refine](refine.md), or let it read your editor through the [MCP server](mcp.md). Desktop app only.
+LatexFrog includes no AI. It works with an agent you install and sign in to yourself: chat with it in the [Agent tab](agent-panel.md), rewrite a selection with [Refine](refine.md), or let it read your editor through the [MCP server](mcp.md). Desktop app only.
 
 ## Set up an agent
 
-Install the agent and sign in outside Texpile, then pick it in `Preferences › AI Assistant`. The Agent tab and Refine each have their own choice.
+Install the agent and sign in outside LatexFrog, then pick it in `Preferences › AI Assistant`. The Agent tab and Refine each have their own choice.
 
 ![Preferences, AI Assistant, with Disable all AI integrations at the top and the Refine with and Agent tab choices](../../landing/src/lib/assets/showcase/docs/review/prefs-ai-assistant.png)
 
@@ -32,6 +32,6 @@ If an agent shows **Not found**, add its folder in `Preferences › Toolchain �
 
 ## Turn off AI
 
-**Disable all AI integrations in Texpile**, at the top of `Preferences › AI Assistant`, turns off Refine, the Agent tab and the MCP server. Until you pick an agent, the Agent tab also offers it as a **Disable All AI** button. Turn the switch off to bring back Refine and the Agent tab with your earlier choices. The MCP server stays off until you turn it on again.
+**Disable all AI integrations in LatexFrog**, at the top of `Preferences › AI Assistant`, turns off Refine, the Agent tab and the MCP server. Until you pick an agent, the Agent tab also offers it as a **Disable All AI** button. Turn the switch off to bring back Refine and the Agent tab with your earlier choices. The MCP server stays off until you turn it on again.
 
 What each feature sends is in [Privacy](../reference/privacy.md).

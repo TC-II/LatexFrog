@@ -1,6 +1,6 @@
 ---
 nav: MCP tools
-description: Reference for every tool the Texpile MCP server offers.
+description: Reference for every tool the LatexFrog MCP server offers.
 order: 5
 ---
 

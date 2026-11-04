@@ -51,7 +51,7 @@ export function createWindow(url: string, pending?: PendingOpen): BrowserWindow 
 		// chrome now - the sidebar's 180 minimum plus the editor's 360 reserve, plus window frame.
 		minWidth: 700,
 		minHeight: 600,
-		title: 'Texpile',
+		title: 'LatexFrog',
 		icon: path.join(__dirname, '..', 'icon.png'),
 		backgroundColor: chromeColors().background,
 		...GLASS_AT_CREATION,
@@ -238,7 +238,7 @@ export function createWindow(url: string, pending?: PendingOpen): BrowserWindow 
 		void dialog
 			.showMessageBox(win, {
 				type: 'error',
-				message: 'Texpile stopped responding',
+				message: 'LatexFrog stopped responding',
 				detail: `The editor process ended (${details.reason}).${root ? ` Reload to reopen ${root.raw}.` : ''}`,
 				buttons: order.buttons,
 				defaultId: order.defaultId,

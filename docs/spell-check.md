@@ -8,7 +8,7 @@ section: Editor tips
 
 # Spell check
 
-Texpile underlines spelling problems in English, German, French, Spanish, Italian, Dutch, Portuguese (Brazil and Portugal) and Polish, and grammar problems in English. Math, code, commands and `.bib` files are skipped. Turn it on in File › Preferences… › Spelling.
+LatexFrog underlines spelling problems in English, German, French, Spanish, Italian, Dutch, Portuguese (Brazil and Portugal) and Polish, and grammar problems in English. Math, code, commands and `.bib` files are skipped. Turn it on in File › Preferences… › Spelling.
 
 ![A suggestion box under the word diferently, offering differently, Add to Dictionary, and Ignore](../landing/src/lib/assets/showcase/docs/writing/spell-suggestion-box.png)
 

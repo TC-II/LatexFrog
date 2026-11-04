@@ -1,6 +1,6 @@
 ---
 nav: Typing and selecting
-description: Smart quotes and dashes, Tab in lists and tables, selecting a whole block, and other typing behavior in Texpile's visual editor.
+description: Smart quotes and dashes, Tab in lists and tables, selecting a whole block, and other typing behavior in LatexFrog's visual editor.
 blurb: Smart quotes, Tab, and selecting whole blocks in the visual editor.
 icon: keyboard
 order: 23

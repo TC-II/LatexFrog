@@ -37,7 +37,7 @@ it("answers only the agent given a window's token, and shows it that window alon
 		expect((await call(mcp.url, 'initialize', initialize, replaced)).status).toBe(403);
 		const answer = await call(mcp.url, 'initialize', initialize, token);
 		expect(answer.status).toBe(200);
-		expect(await answer.text()).toContain('"name":"texpile"');
+		expect(await answer.text()).toContain('"name":"latexfrog"');
 		// window 2 has the focus, and still the agent of window 1 sees only its own
 		const state = await (await call(mcp.url, 'tools/call', { name: 'get_editor_state', arguments: {} }, token)).text();
 		expect(state).toContain('/project1');

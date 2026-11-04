@@ -1,6 +1,6 @@
-appId: com.texpile.desktop
-productName: Texpile
-copyright: Copyright © Texpile
+appId: ar.tcii.latexfrog
+productName: LatexFrog
+copyright: Copyright (c) LatexFrog contributors. Derived from Texpile.
 
 # File associations are declared PER PLATFORM because declaring means different things.
 # Windows (nsis) writes the extension's default handler, so it only gets the two formats
@@ -13,11 +13,6 @@ copyright: Copyright © Texpile
 # stamp resources/app-update.yml, and it cannot self-upload (release.yml pushes everything to R2).
 # The feed host serves the ymls from the releases bucket and counts checks; the ymls' file urls
 # are rewritten to dl.texpile.com by scripts/update-yml.mjs before upload.
-publish:
-  provider: generic
-  url: https://updates.texpile.com
-  # differential dont work with multiple range requests
-  useMultipleRangeRequest: false
 # one feed for every version: without this a 1.0.0-rc.1 build writes rc*.yml and installs of it
 # poll rc*.yml, while release.yml and every other install only know latest*.yml
 detectUpdateChannel: false
@@ -71,8 +66,8 @@ npmRebuild: false
 # pre-sized set in build/icons: Ubuntu's hicolor theme indexes nothing above 512, so a lone
 # 1024 icon is invisible to the launcher (generic gear in the app grid).
 protocols:
-  - name: Texpile
-    schemes: [texpile]
+  - name: LatexFrog
+    schemes: [latexfrog]
 
 linux:
   target:
@@ -98,7 +93,7 @@ linux:
 appImage:
   artifactName: ${productName}-${version}.${ext}
 deb:
-  artifactName: texpile-${version}.${ext}
+  artifactName: latexfrog-${version}.${ext}
   # stock postinst probes userns as root, leaving chrome-sandbox non-SUID on Ubuntu 24.04+
   # (AppArmor restricts unprivileged userns) -> app aborts at launch. Ours always SUIDs it.
   afterInstall: build/deb-after-install.tpl

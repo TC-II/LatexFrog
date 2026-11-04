@@ -5,7 +5,7 @@ order: 1
 
 # Visual editor
 
-Edit the document as formatted text. Texpile writes the Typst, and untouched parts stay exactly as they were.
+Edit the document as formatted text. LatexFrog writes the Typst, and untouched parts stay exactly as they were.
 
 ![The visual editor on a Typst paper, with three parts marked](../../landing/src/lib/assets/showcase/docs/typst/visual-editor.png)
 
@@ -36,7 +36,7 @@ Typst outside these forms stays as a Typst code chip. Click it to edit it.
 
 ## Paste
 
-Paste from Word, a spreadsheet, a web page or a screenshot, and Texpile keeps what it can. Math copied from a LaTeX file pastes as Typst math. See [Paste and drop](../paste.md).
+Paste from Word, a spreadsheet, a web page or a screenshot, and LatexFrog keeps what it can. Math copied from a LaTeX file pastes as Typst math. See [Paste and drop](../paste.md).
 
 ## Keyboard shortcuts
 

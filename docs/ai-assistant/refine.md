@@ -8,7 +8,7 @@ order: 3
 
 Rewrite a selection with an AI agent. The result arrives as a [suggestion](../comments/suggesting.md) under the agent's name, and your text changes when you accept it.
 
-> [!REQUIRES] an [AI agent](README.md#set-up-an-agent) installed outside Texpile
+> [!REQUIRES] an [AI agent](README.md#set-up-an-agent) installed outside LatexFrog
 
 Select text, then right-click › **Refine with {agent}** and pick an action. With **Toolbar on selection** on in `Preferences › Editor`, the selection toolbar also has a Refine button.
 
@@ -18,4 +18,4 @@ Select text, then right-click › **Refine with {agent}** and pick an action. Wi
 
 Works in LaTeX, Typst, Markdown, BibTeX and plain text, in a folder open in the desktop app. Refine is off for guests and while you host a shared session. The agent also gets the text around the selection: see [Privacy](../reference/privacy.md).
 
-If you see "The text from {agent} was not used", the result broke a rule, and the note names it. In LaTeX, Texpile drops a result that cites a key missing from your bibliography or removes a `\label`.
+If you see "The text from {agent} was not used", the result broke a rule, and the note names it. In LaTeX, LatexFrog drops a result that cites a key missing from your bibliography or removes a `\label`.

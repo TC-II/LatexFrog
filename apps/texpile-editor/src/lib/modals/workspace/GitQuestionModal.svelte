@@ -83,7 +83,7 @@
 				{m.vcs_signin_github_hint()}
 				<a
 					class="anchor"
-					href="https://github.com/settings/tokens/new?scopes=repo&description=Texpile"
+					href="https://github.com/settings/tokens/new?scopes=repo&description=LatexFrog"
 					target="_blank"
 					rel="noopener noreferrer">{m.vcs_create_token()}</a
 				>

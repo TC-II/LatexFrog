@@ -5,13 +5,14 @@ import { browser } from '$lib/runtime';
 import { box } from '$lib/runes/box.svelte';
 import { formatShareCode, isValidShareCode, normalizeShareCode } from './e2e/shareCode';
 
-export const JOIN_APP_URL = 'https://join.texpile.com';
+// Texpile's join page and relay are its own service; a self-hosted relay is set in the session dialog
+export const JOIN_APP_URL = '';
 
 /** the link a host hands out for a share code. */
 /** the desktop hand-off; carries the name so it is not typed twice. Never leaves the machine. */
 export function appLinkFor(code: string, name: string): string {
 	const trimmed = name.trim();
-	const base = 'texpile://join/' + normalizeShareCode(code);
+	const base = 'latexfrog://join/' + normalizeShareCode(code);
 	return trimmed ? base + '?n=' + encodeURIComponent(trimmed) : base;
 }
 

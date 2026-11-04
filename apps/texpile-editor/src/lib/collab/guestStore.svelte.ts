@@ -2,6 +2,7 @@
 // for SessionView. Guests never touch the filesystem — everything lives in the Y.Doc and the
 // blob channel.
 
+import { m } from '$lib/paraglide/messages';
 import { announceFilesArrived } from '$lib/editor/visual/fileAccess';
 import * as Y from 'yjs';
 import { deriveSessionKeys } from './e2e/keys';
@@ -127,6 +128,7 @@ class GuestCollabController {
 		try {
 			const keys = await deriveSessionKeys(code);
 			const relayUrl = settings.current.collabRelayUrl.trim();
+			if (!relayUrl) throw new Error(m.session_no_relay());
 			const doc = new Y.Doc();
 			const fork = new LocalFork(doc);
 			const transport = new RelayTransport(relayUrl, keys.roomId, keys.joinProof);

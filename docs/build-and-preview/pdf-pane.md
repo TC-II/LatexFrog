@@ -1,5 +1,5 @@
 ---
-description: The PDF pane: invert colors, presentation mode, pop-out, two views, save a PDF, check colors for color vision deficiency, and reload a PDF built outside Texpile.
+description: The PDF pane: invert colors, presentation mode, pop-out, two views, save a PDF, check colors for color vision deficiency, and reload a PDF built outside LatexFrog.
 order: 4
 ---
 
@@ -23,6 +23,6 @@ Layout › **Split the preview** shows the PDF twice, one view above the other. 
 
 "…" › **Simulate color vision** shows the page as seen with protanopia, deuteranopia, tritanopia or achromatopsia. Only the screen changes. The PDF file stays the same. Works in the PDF pane, the LaTeX live preview and the Typst preview.
 
-## A PDF built outside Texpile
+## A PDF built outside LatexFrog
 
 A PDF built by another program, for example `latexmk -pvc` or an agent, reloads on its own when it is newer than the one on screen. If your build writes elsewhere, set its path in the compile settings under **Advanced: Output Paths**.

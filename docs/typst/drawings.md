@@ -1,5 +1,5 @@
 ---
-description: Draw CeTZ pictures in a Typst document with Texpile's figure editor and see every canvas edit written into the .typ file.
+description: Draw CeTZ pictures in a Typst document with LatexFrog's figure editor and see every canvas edit written into the .typ file.
 order: 5
 ---
 
@@ -9,10 +9,10 @@ A `#cetz.canvas` picture in a `.typ` file opens in the figure editor. It works a
 
 ## tinymist
 
-The drawing comes from tinymist, the program Texpile uses for Typst. Texpile starts it when a figure tab opens.
+The drawing comes from tinymist, the program LatexFrog uses for Typst. LatexFrog starts it when a figure tab opens.
 
-If tinymist is missing, the figure tab says "Typst figures need tinymist." and Texpile offers to install it. See [Install tinymist for Typst](../build-and-preview/toolchain.md#install-tinymist-for-typst).
+If tinymist is missing, the figure tab says "Typst figures need tinymist." and LatexFrog offers to install it. See [Install tinymist for Typst](../build-and-preview/toolchain.md#install-tinymist-for-typst).
 
 ## Saved drawings
 
-Texpile keeps the drawings in `.texpile/figures`. The document shows them from there. That folder stays out of Git.
+LatexFrog keeps the drawings in `.texpile/figures`. The document shows them from there. That folder stays out of Git.

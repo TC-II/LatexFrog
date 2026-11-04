@@ -1,5 +1,5 @@
 ---
-description: The Texpile command palette: search and run any action in the editor, or open any file.
+description: The LatexFrog command palette: search and run any action in the editor, or open any file.
 blurb: Search and run any action, or open any file.
 icon: keyboard
 order: 4

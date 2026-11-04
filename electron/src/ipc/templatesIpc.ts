@@ -49,7 +49,7 @@ export function registerTemplatesIpc(): void {
 	);
 	handleFs('templates:discard', async (dir: string) => discardStagedDir(templatesDir(), dir));
 
-	const userAgent = `Texpile/${app.getVersion()} (https://texpile.com)`;
+	const userAgent = `LatexFrog/${app.getVersion()} (https://github.com/TC-II/LatexFrog)`;
 	ipcMain.handle('templates:universeIndex', async () => {
 		const tinymist = await resolveTinymist(app.getPath('userData'));
 		return fetchTemplateIndex((url, init) => net.fetch(url, init), userAgent, tinymist?.typstVersion ?? null);

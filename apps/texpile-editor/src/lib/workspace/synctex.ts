@@ -25,7 +25,7 @@ export type InverseResult = {
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
 	const n = nativeBridge();
-	if (!n) return { ok: false, error: 'SyncTeX requires the Texpile desktop app.' } as T;
+	if (!n) return { ok: false, error: 'SyncTeX requires the LatexFrog desktop app.' } as T;
 	try {
 		return (await n.synctex(body)) as T;
 	} catch (e) {

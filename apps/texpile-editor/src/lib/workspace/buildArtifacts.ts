@@ -26,7 +26,7 @@ export function isBuildArtifact(path: string): boolean {
 export function gitignoreLines(format: 'latex' | 'typst'): string[] {
 	// no PDF line, deliberately: the output document is part of the paper's history, and a '*.pdf'
 	// glob would take the figures with it
-	const lines = ['# Texpile: compile scratch', '_draft/'];
+	const lines = ['# LatexFrog: compile scratch', '_draft/'];
 	if (format === 'latex') {
 		lines.push(...SIDECAR_EXTS.map((e) => `*.${e}`));
 	}

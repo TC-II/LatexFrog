@@ -14,18 +14,18 @@ A project is a folder, and opening the folder is all the setup it needs. A folde
 
 ## The main file
 
-The main file is the one Texpile compiles and the preview follows. Right-click a `.tex` or `.typ` file in the file tree › **Set as Main File**. With several documents and none set, the first compile asks you to choose one.
+The main file is the one LatexFrog compiles and the preview follows. Right-click a `.tex` or `.typ` file in the file tree › **Set as Main File**. With several documents and none set, the first compile asks you to choose one.
 
 ![The menu on a file, with Unset Main File, Copy, Show in Folder, Version History, Rename, and Delete](../../landing/src/lib/assets/showcase/docs/app/file-tree-context-menu.png 'The menu on the main file.')
 
-Texpile saves the choice, the build settings and the comments in a hidden `.texpile` folder inside the project, so they travel with the folder, Git included. The folder's [snippets](../snippets.md) live there too.
+LatexFrog saves the choice, the build settings and the comments in a hidden `.texpile` folder inside the project, so they travel with the folder, Git included. The folder's [snippets](../snippets.md) live there too.
 
 ## Multi-file projects
 
 Files pulled in with `\input` (LaTeX) or `#include` (Typst) compile as part of the main file.
 
 - **New Include** (right-click in the file tree) creates a file and inserts its `\input` or `#include` line at the cursor.
-- After a rename or move, Texpile offers to update the references to the old name: `\input`, `\includegraphics`, Typst includes and images, and Markdown image links.
+- After a rename or move, LatexFrog offers to update the references to the old name: `\input`, `\includegraphics`, Typst includes and images, and Markdown image links.
 - The word count at the end of the format bar counts the open file. Hover it for the whole document, file by file. The count leaves out math, citations, references, comments, code and the LaTeX preamble.
 - **Contents** under the file tree lists the headings, figures, tables and beamer frames of the whole paper, from any file in it.
 
@@ -39,7 +39,7 @@ Double-click a `.tex`, `.sty`, `.cls`, `.tikz`, `.typ` or `.bib` file to edit it
 - An image file opens in an image tab. See [Images](images.md).
 - Delete moves items to the Recycle Bin or Trash. Click a row in the file tree, then `Ctrl Z` undoes a file change: a new file, paste, rename, move, delete or Replace in Files.
 - **File › Restore Deleted File…** brings back a deleted file from [Version History](../version-control/local-history.md).
-- Dragging files between two Texpile windows copies them.
+- Dragging files between two LatexFrog windows copies them.
 
 ## Tabs
 

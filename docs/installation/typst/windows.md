@@ -1,6 +1,6 @@
 ---
 nav: Windows
-description: Install tinymist on Windows with winget or the standalone installer, so Texpile can compile Typst documents.
+description: Install tinymist on Windows with winget or the standalone installer, so LatexFrog can compile Typst documents.
 blurb: winget, or the standalone installer.
 icon: windows
 order: 1
@@ -20,4 +20,4 @@ Or use the installer script:
 powershell -c "irm https://github.com/Myriad-Dreamin/tinymist/releases/latest/download/tinymist-installer.ps1 | iex"
 ```
 
-Restart Texpile if it is open.
+Restart LatexFrog if it is open.

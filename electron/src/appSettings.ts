@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS = {
 	latexChecks: {} as Record<string, boolean>, // LaTeX checks turned on or off by id; a check not listed is on
 	completionByMode: true, // completion offers math commands in equations and text commands in text
 	argumentHints: true, // a command shows the arguments it takes as you type
-	checkForUpdates: true,
+	checkForUpdates: false,
 	uiZoom: 1, // whole-window zoom factor (webContents.setZoomFactor); the View menu adjusts it
 	transparentWindow: false, // the window's grounds let the blurred desktop through (windowGlass.ts)
 	mathPreview: true, // live math preview tooltip in source mode
@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS = {
 	editorKeymap: 'default', // modal keybindings for the source editor: 'default' | 'vim' | 'emacs'
 	uiLocale: 'en', // UI display language, not the LaTeX document language. Overridden per-read by
 	// the detected system language until the user picks one; see systemUiLocale + readSettings.
-	collabRelayUrl: 'wss://collab.texpile.com', // shared-session relay endpoint
+	collabRelayUrl: '', // shared-session relay endpoint
 	// Let an MCP client (Claude Code, Claude Desktop) see what the editor is showing. Off by
 	// default: connecting also requires pasting a config snippet into the client, so defaulting this
 	// on would open a loopback port for everyone while buying nothing until they act anyway.

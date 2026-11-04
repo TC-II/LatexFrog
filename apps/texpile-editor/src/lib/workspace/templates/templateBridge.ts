@@ -12,7 +12,7 @@ export function templatesBridge(): TexpileTemplatesBridge | undefined {
 /** the bridge, or a clear error; the message can reach a toast */
 export function requireTemplatesBridge(): TexpileTemplatesBridge {
 	const bridge = templatesBridge();
-	if (!bridge) throw new Error('Templates require the Texpile desktop app.');
+	if (!bridge) throw new Error('Templates require the LatexFrog desktop app.');
 	return bridge;
 }
 

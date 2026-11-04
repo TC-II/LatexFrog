@@ -79,7 +79,7 @@ export type MenuStateInput = {
 
 // main knows this as app.name, but the strings that embed it are ours to translate, so the
 // substitution happens here. menubar_version_footer already hardcodes it the same way.
-const APP = 'Texpile';
+const APP = 'LatexFrog';
 
 /** every label the native template can ask for, keyed the way windowChrome.ts looks them up */
 function labels(tool: 'latexindent' | 'typstyle'): Record<string, string> {
@@ -179,7 +179,6 @@ function labels(tool: 'latexindent' | 'typstyle'): Record<string, string> {
 		shortcuts: m.menubar_keyboard_shortcuts(),
 		whatsNew: m.whatsnew_menu_label(),
 		documentation: m.menubar_documentation(),
-		discord: m.menubar_join_discord(),
 		report: m.menubar_report_problem(),
 		updates: m.menubar_check_for_updates(),
 		// Roles carry a label of Electron's own, hardcoded English in a table inside Electron, and

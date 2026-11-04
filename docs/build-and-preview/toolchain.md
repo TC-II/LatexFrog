@@ -1,17 +1,17 @@
 ---
-description: The Toolchain panel in Preferences shows which programs Texpile found, lets you add folders to search, switch between TeX Live and MiKTeX, and install tinymist for Typst.
+description: The Toolchain panel in Preferences shows which programs LatexFrog found, lets you add folders to search, switch between TeX Live and MiKTeX, and install tinymist for Typst.
 order: 1
 ---
 
 # Toolchain
 
-**File › Preferences… › Toolchain** shows which programs Texpile found and where it looks for them.
+**File › Preferences… › Toolchain** shows which programs LatexFrog found and where it looks for them.
 
 ![The Toolchain tab of Preferences with Check Again, Folders, and the LaTeX programs marked Found or Not found](../../landing/src/lib/assets/showcase/docs/app/preferences-toolchain.png)
 
-Texpile needs only the programs your commands call. The default compile command needs latexmk and lualatex. Live preview needs lualatex, **Format Document** needs latexindent, and jumping between the text and the PDF needs synctex.
+LatexFrog needs only the programs your commands call. The default compile command needs latexmk and lualatex. Live preview needs lualatex, **Format Document** needs latexindent, and jumping between the text and the PDF needs synctex.
 
-Texpile reads your PATH once, when it starts: restart it after you change PATH. Folders you add here apply at once.
+LatexFrog reads your PATH once, when it starts: restart it after you change PATH. Folders you add here apply at once.
 
 ## The Set Up dialog
 
@@ -25,7 +25,7 @@ Texpile reads your PATH once, when it starts: restart it after you change PATH. 
 
 ## Folders and distribution
 
-Texpile searches **Folders** before PATH, for every program it runs, including your compile command. **Locate** on a **Not found** row adds the program's folder.
+LatexFrog searches **Folders** before PATH, for every program it runs, including your compile command. **Locate** on a **Not found** row adds the program's folder.
 
 With more than one TeX Live or MiKTeX installed, pick one under **Distribution** to put its folder first. **From PATH** uses your PATH.
 
@@ -33,8 +33,8 @@ With more than one TeX Live or MiKTeX installed, pick one under **Distribution**
 
 **Install tinymist** is in the Typst section, the **Set Up Typst** dialog, and the "tinymist is not installed." bar above a `.typ` file.
 
-![The lower part of the Toolchain tab with tinymist Not found, the Texpile's copy row with an Install tinymist button, and git Found](../../landing/src/lib/assets/showcase/docs/app/toolchain-typst-git.png)
+![The lower part of the Toolchain tab with tinymist Not found, the LatexFrog's copy row with an Install tinymist button, and git Found](../../landing/src/lib/assets/showcase/docs/app/toolchain-typst-git.png)
 
-A tinymist on PATH or in **Folders** comes first. To use Texpile's copy, pick **Texpile's copy** under **Distribution**.
+A tinymist on PATH or in **Folders** comes first. To use LatexFrog's copy, pick **LatexFrog's copy** under **Distribution**.
 
-If Texpile's copy fails to run on your computer, [install tinymist yourself](../installation/typst/README.md).
+If LatexFrog's copy fails to run on your computer, [install tinymist yourself](../installation/typst/README.md).

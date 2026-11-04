@@ -1,6 +1,6 @@
-# Texpile Translations
+# LatexFrog Translations
 
-Texpile ships in the languages below. Open an [issue](../../issues) if you can help with another
+LatexFrog ships in the languages below. Open an [issue](../../issues) if you can help with another
 one, or with keeping one of these current.
 
 | Language              | Locale    | Status                                                                  |

@@ -17,7 +17,7 @@
 	import { tinymistInstaller } from '../tinymistInstall.svelte';
 	import { m } from '$lib/paraglide/messages';
 
-	const INSTALL_GUIDE = 'https://texpile.com/docs/installation';
+	const INSTALL_GUIDE = 'https://github.com/TC-II/LatexFrog/tree/main/docs/installation';
 
 	const program = $derived(askedProgram.current);
 	const family = $derived(program ? familyOf(program) : null);
