@@ -103,16 +103,31 @@ pub fn asegurar_con_nombre(root: &Path, dir: &str, pre: &str, driver: &str, huel
 /// Para un build de un perfil: el archivo que abre el documento (`\begin{document}`) y lo que viene después de esa línea, que es lo que
 /// se compila con el formato cargado. `None` si no hay `\begin{document}` en los archivos del preámbulo o su `\end{document}` está en
 /// otro archivo (entonces el build va sin formato). `copia` da el archivo que se lee de verdad (el de `.latexfrog/piezas` si hay sustitución).
-pub fn cuerpo_del_documento(root: &Path, archivos: &BTreeSet<String>, copia: impl Fn(&str) -> String) -> Option<String> {
+/// What gets compiled after the precompiled preamble, and the project file it was taken from.
+pub struct Cuerpo {
+    pub origen: String,
+    pub texto: String,
+}
+
+/// `.latexfrog/build/<profile>/lv-<profile>-resto.tex` stands for a project file, with the same line numbers. The file it stands for
+/// is in the `.origen` next to it. Without this an error in the root file had no file, and SyncTeX could not reach the root's text.
+pub fn origen_del_resto(root: &Path, rel: &str) -> Option<String> {
+    let base = rel.strip_suffix("-resto.tex").filter(|_| rel.starts_with(".latexfrog/build/"))?;
+    let origen = std::fs::read_to_string(root.join(format!("{base}-resto.origen"))).ok()?;
+    Some(origen.trim().to_string()).filter(|o| !o.is_empty())
+}
+
+pub fn cuerpo_del_documento(root: &Path, archivos: &BTreeSet<String>, copia: impl Fn(&str) -> String) -> Option<Cuerpo> {
     for a in archivos {
         let efectivo = copia(a);
         let Ok(texto) = std::fs::read_to_string(root.join(&efectivo)) else { continue };
         let mut pos = 0;
-        for linea in texto.split_inclusive('\n') {
+        for (n, linea) in texto.split_inclusive('\n').enumerate() {
             let sin_coment = linea.split('%').next().unwrap_or("");
             if let Some(i) = sin_coment.find("\\begin{document}") {
                 let resto = &texto[pos + i + "\\begin{document}".len()..];
-                return resto.contains("\\end{document}").then(|| resto.to_string());
+                // Blank lines in front keep every line number equal to the source's: problems and SyncTeX point at real lines.
+                return resto.contains("\\end{document}").then(|| Cuerpo { origen: a.clone(), texto: "\n".repeat(n) + resto });
             }
             pos += linea.len();
         }
@@ -123,6 +138,21 @@ pub fn cuerpo_del_documento(root: &Path, archivos: &BTreeSet<String>, copia: imp
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn body_keeps_the_line_numbers_of_its_source() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("main.tex"), "\\documentclass{article}\n\n\\begin{document}\nhola\n\\end{document}\n").unwrap();
+        let archivos: BTreeSet<String> = ["main.tex".to_string()].into();
+        let c = cuerpo_del_documento(d.path(), &archivos, |a| a.to_string()).unwrap();
+        assert_eq!(c.origen, "main.tex");
+        assert_eq!(c.texto.lines().nth(3), Some("hola"));
+        let dir = d.path().join(".latexfrog/build/p");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("lv-p-resto.origen"), "main.tex").unwrap();
+        assert_eq!(origen_del_resto(d.path(), ".latexfrog/build/p/lv-p-resto.tex").as_deref(), Some("main.tex"));
+        assert_eq!(origen_del_resto(d.path(), ".latexfrog/build/p/lv-p.tex"), None);
+    }
 
     #[test]
     fn el_preambulo_no_entra_a_las_partes_ni_a_lo_que_ellas_incluyen() {

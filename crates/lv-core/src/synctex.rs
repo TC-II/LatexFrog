@@ -288,6 +288,7 @@ impl Synctex {
             let n = norm(r);
             n == abs || n == rel_n || n == con_punto
         }).map(|(t, _)| *t)
+        .or_else(|| self.inputs.iter().map(|(t, _)| *t).find(|t| self.rel_of_tag(root, *t).as_deref() == Some(rel)))
     }
 
     /// La ruta de un archivo de entrada, relativa a la raíz y con `/`. `None` si es del driver (`.latexfrog/`), del sistema o de
@@ -305,7 +306,10 @@ impl Synctex {
         } else {
             ruta.trim_start_matches("./").to_string()
         };
-        (!rel.is_empty() && !rel.starts_with(".latexfrog/") && !rel.split('/').any(|c| c == "..")).then_some(rel)
+        if rel.starts_with(".latexfrog/") {
+            return crate::formato::origen_del_resto(root, &rel);
+        }
+        (!rel.is_empty() && !rel.split('/').any(|c| c == "..")).then_some(rel)
     }
 
     // --- consultas ---------------------------------------------------------------------------------------------------------

@@ -788,10 +788,13 @@ impl Session {
         }
         let raiz_copia = sustituidos.get(&plan.spec.root_rel).cloned();
         let copia = |a: &str| sustituidos.get(a).cloned().or_else(|| (a == plan.spec.root_rel).then(|| raiz_copia.clone()).flatten()).unwrap_or_else(|| a.to_string());
-        let Some(resto) = crate::formato::cuerpo_del_documento(&self.root, &archivos, copia) else { return };
+        let Some(cuerpo) = crate::formato::cuerpo_del_documento(&self.root, &archivos, copia) else { return };
         let dir = format!(".latexfrog/build/{perfil}");
         let rel_resto = format!("{dir}/lv-{perfil}-resto.tex");
-        if crate::build::write_if_changed(&self.root.join(&rel_resto), &resto).is_err() {
+        let rel_origen = format!("{dir}/lv-{perfil}-resto.origen");
+        if crate::build::write_if_changed(&self.root.join(&rel_resto), &cuerpo.texto).is_err()
+            || crate::build::write_if_changed(&self.root.join(&rel_origen), &cuerpo.origen).is_err()
+        {
             return;
         }
         let huella = crate::formato::huella(&self.root, &plan.spec.driver, &archivos);
