@@ -573,7 +573,9 @@ contextBridge.exposeInMainWorld('texpileAcp', {
 
 // Latex Frog's build engine as a sidecar (profiles and parts); see lv/lvIpc.ts
 contextBridge.exposeInMainWorld('texpileLv', {
-	run: (root: string, args: string[]) => ipcRenderer.invoke('lv:run', root, args)
+	run: (root: string, args: string[]) => ipcRenderer.invoke('lv:run', root, args),
+	pedir: (request: object) => ipcRenderer.invoke('lv:pedir', request),
+	onEvento: (cb: (event: unknown) => void) => ipcRenderer.on('lv:evento', (_e, event) => cb(event))
 });
 
 // terminal bridge to the node-pty shells in the main process, keyed by a string `id`

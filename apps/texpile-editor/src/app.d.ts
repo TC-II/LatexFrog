@@ -202,7 +202,7 @@ declare global {
 		/** tinymist bridge (Electron only; undefined in the browser dev server). */
 		texpileTypst?: TexpileTypstBridge;
 		/** Latex Frog build engine sidecar: profiles and parts (Electron only). */
-		texpileLv?: { run(root: string, args: string[]): Promise<{ ok: boolean; code?: number | null; stdout?: string; stderr?: string; error?: string }> };
+		texpileLv?: { run(root: string, args: string[]): Promise<{ ok: boolean; code?: number | null; stdout?: string; stderr?: string; error?: string }>; pedir(request: object): Promise<{ ok: boolean; datos?: unknown; error?: string }>; onEvento(cb: (event: unknown) => void): void };
 		/** Zotero citation bridge (Electron only; undefined in the browser dev server). */
 		texpileZotero?: TexpileZoteroBridge;
 		/** Cite by DOI's lookup (Electron only; undefined in the browser dev server). */

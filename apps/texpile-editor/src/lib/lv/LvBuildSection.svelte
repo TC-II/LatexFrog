@@ -5,6 +5,7 @@
 	// builds the active profile. Renders nothing when the folder is not a Latex Frog project.
 	import { workspaceRoot } from '$lib/workspace/workspaceStore';
 	import { menuItemClass, separatorClass } from '$lib/menus/menuStyles';
+	import '$lib/lv/lvEngine';
 
 	type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null };
 	type Part = { name: string };
