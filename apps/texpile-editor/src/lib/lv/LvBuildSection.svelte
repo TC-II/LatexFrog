@@ -1,51 +1,23 @@
 <script lang="ts">
-	// Latex Frog's build profiles and parts, inside the Compile button's menu. The list comes from the
-	// lv-core sidecar (`lv-build . --info`), and a choice writes the project's `.lv/state.json` through
-	// the same sidecar; the Compile button itself still runs the project's command (`lv-build .`), which
-	// builds the active profile. Renders nothing when the folder is not a Latex Frog project.
-	import { workspaceRoot } from '$lib/workspace/workspaceStore';
+	// The project's build profiles and parts, inside the Compile button's menu. Renders nothing outside an engine project.
 	import { menuItemClass, separatorClass } from '$lib/menus/menuStyles';
-	import '$lib/lv/lvEngine';
+	import { lvProject } from '$lib/lv/lvEngine.svelte';
 
-	type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null };
-	type Part = { name: string };
-	type View = {
-		config: { profiles: Profile[] } | null;
-		state: { activeProfile: string | null; selection: string[] };
-		parts: Part[];
-		lockedBy: number | null;
-	};
-
-	let view = $state<View | null>(null);
 	let busy = $state(false);
 	let error = $state('');
 
-	async function run(args: string[]) {
-		const root = workspaceRoot.current;
-		const lv = window.texpileLv;
-		if (!root || !lv) return;
+	async function apply(fields: object) {
 		busy = true;
 		error = '';
-		const r = await lv.run(root, [...args, '--info']);
-		busy = false;
-		if (r.ok && r.stdout) {
-			try {
-				view = JSON.parse(r.stdout) as View;
-			} catch {
-				error = 'La respuesta de lv-build no es JSON';
-			}
-		} else if (!view) {
-			view = null; // not a Latex Frog project (or no lv-build on the PATH): stay out of the way
-		} else {
-			error = r.stderr || r.error || 'lv-build falló';
+		try {
+			await lvProject.setState(fields);
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
 		}
+		busy = false;
 	}
 
-	// the menu mounts this each time it opens, so the list is never stale
-	$effect(() => {
-		if (workspaceRoot.current) void run([]);
-	});
-
+	const view = $derived(lvProject.view);
 	const profiles = $derived((view?.config?.profiles ?? []).filter((p) => !p.hidden));
 	const active = $derived(profiles.find((p) => p.id === view?.state.activeProfile) ?? null);
 	const bySelection = $derived(active?.parts === 'selection');
@@ -55,20 +27,19 @@
 		if (!view) return;
 		const cur = view.state.selection;
 		const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
-		if (next.length === 0) return; // an empty selection is not a build
-		void run(['--parts', next.join(',')]);
+		if (next.length > 0) void apply({ selection: next }); // an empty selection is not a build
 	}
 </script>
 
 {#if view && profiles.length > 0}
 	<div class="flex flex-col gap-1 px-3 py-2 text-sm" aria-busy={busy}>
 		<label class="flex items-center justify-between gap-3">
-			<span class="opacity-70">Perfil</span>
+			<span class="opacity-70">Profile</span>
 			<select
 				class="rounded border border-surface-300-700 bg-transparent px-1 py-0.5"
 				value={view.state.activeProfile ?? ''}
 				disabled={busy || view.lockedBy !== null}
-				onchange={(e) => void run(['--activar', e.currentTarget.value])}
+				onchange={(e) => void apply({ profile: e.currentTarget.value })}
 			>
 				{#each profiles as p (p.id)}
 					<option value={p.id}>{p.label}</option>
@@ -85,10 +56,10 @@
 				{/each}
 			</div>
 		{:else if active}
-			<span class="opacity-60">Partes: {active.parts === 'all' ? 'todas' : active.parts === 'current' ? 'la del archivo actual' : active.parts}</span>
+			<span class="opacity-60">Parts: {active.parts === 'all' ? 'all' : active.parts === 'current' ? 'current file' : active.parts}</span>
 		{/if}
 		{#if view.lockedBy !== null}
-			<span class="text-warning-500">Abierto en otra instancia (PID {view.lockedBy})</span>
+			<span class="text-warning-500">Open in another window (PID {view.lockedBy})</span>
 		{/if}
 		{#if error}
 			<span class="text-error-500">{error}</span>

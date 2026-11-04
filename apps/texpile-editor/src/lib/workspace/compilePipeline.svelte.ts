@@ -29,6 +29,7 @@ import { basename, dirname, joinPath, revealItem, samePath } from './fileSystem'
 import { toaster } from '$lib/modals/toaster-svelte';
 import { reportMissingTool } from './toolMissing';
 import { m } from '$lib/paraglide/messages';
+import { lvProject, toLogState, type Finished } from '$lib/lv/lvEngine.svelte';
 
 // what the Compile menu asked for besides a plain run: both are latexmk flags spliced into the same command
 type CompileMode = 'normal' | 'scratch' | 'clean';
@@ -61,7 +62,39 @@ export class CompilePipeline {
 	// terminal's sentinel tracking and cleared at the start of each run
 	private compileStdout = '';
 
-	constructor(private deps: CompileDeps) {}
+	constructor(private deps: CompileDeps) {
+		lvProject.onFinished = (ev) => void this.finishEngineRun(ev);
+		lvProject.onError = (message) => {
+			this.endRun();
+			toaster.error({ title: m.terminal_error_failed_start(), description: message });
+		};
+	}
+
+	// an engine project compiles through the sidecar; the guards below are about the shell command it never runs
+	private startEngineRun = async () => {
+		this.busy = true;
+		this.compiling = true;
+		this.deps.setPdfPaneOpen(true);
+		try {
+			await this.deps.flushSaves();
+			await lvProject.compile();
+		} catch (e) {
+			this.endRun();
+			toaster.error({ title: m.terminal_error_failed_start(), description: e instanceof Error ? e.message : String(e) });
+		}
+	};
+
+	private finishEngineRun = async (ev: Finished) => {
+		try {
+			compileLog.current = toLogState(await lvProject.problems(ev.profile), ev.profile);
+			this.deps.shareCompileState();
+			const root = workspaceRoot.current;
+			if (root && ev.pdf && ev.updated) this.showCompiledPdf(joinPath(root, ev.pdf), Date.now());
+		} finally {
+			this.endRun();
+			this.deps.refreshTree();
+		}
+	};
 
 	/** a run ended (or was stopped): clear both the button state and the overlap guard */
 	private endRun() {
@@ -73,6 +106,11 @@ export class CompilePipeline {
 	}
 
 	stopCompile = () => {
+		if (lvProject.active) {
+			// the run ends at its `finished` event; with nothing running there is none to wait for
+			void lvProject.cancel().then((cancelled) => cancelled || this.endRun(), () => this.endRun());
+			return;
+		}
 		this.deps.getDock()?.interrupt();
 		this.endRun();
 	};
@@ -81,6 +119,7 @@ export class CompilePipeline {
 	resetForFolder = () => {
 		this.endRun();
 		this.compileGen++;
+		void lvProject.sync(workspaceRoot.current, this.deps.fileExists);
 	};
 
 	// component teardown: stop the pollers
@@ -118,7 +157,7 @@ export class CompilePipeline {
 	runCleanAux = () => this.startCompile('clean');
 	// the latexmk rows of the Compile menu: latexmk only, and only while Compile runs the shell command
 	get latexmkActionsAvailable(): boolean {
-		return isLatexmkCommand(resolveCompileCommand(mainFile.current)) && !compileConfig.current.latex.liveMode;
+		return !lvProject.active && isLatexmkCommand(resolveCompileCommand(mainFile.current)) && !compileConfig.current.latex.liveMode;
 	}
 	get hasOutput(): boolean {
 		return pdfStore.current !== null;
@@ -132,6 +171,7 @@ export class CompilePipeline {
 	};
 
 	private startCompile = async (mode: CompileMode) => {
+		await lvProject.ready;
 		// One run at a time. The Compile button becomes Stop so a local user rarely gets here twice,
 		// but the shortcut and shared-session guests both reach this directly - and a guest can fire
 		// requests as fast as they like. Overlapping runs fight over the same aux/output files and
@@ -142,6 +182,7 @@ export class CompilePipeline {
 			toaster.info({ title: m.wsview_toast_compile_busy(), duration: 2500 });
 			return;
 		}
+		if (lvProject.active) return this.startEngineRun();
 		// The project asks for a command this machine has not accepted. Held here rather than at the
 		// button, because the button is one of seven ways in: the keybinding, the compile window
 		// event, the palette, MCP, Save & run, the first-compile confirm, and a GUEST asking the host
@@ -460,6 +501,13 @@ export class CompilePipeline {
 		// the persisted main file, so a folder resolves its real format even before the
 		// reactive mainFile store hydrates. The command comes from the adopted config, which
 		// projectConfigSync.adopt() fills before this runs (initProject sequences them).
+		await lvProject.ready;
+		if (lvProject.active) {
+			const pdf = await lvProject.existingPdf();
+			const s = pdf ? await this.deps.stat(pdf) : null;
+			if (pdf && s?.exists && s.size > 0) this.showCompiledPdf(pdf, s.mtimeMs);
+			return;
+		}
 		const bootRoot = workspaceRoot.current;
 		const pdfPath = this.expectedPdfPath(resolveCompileCommand(bootRoot ? savedMainFile(bootRoot) : null));
 		if (!pdfPath) {
@@ -479,7 +527,7 @@ export class CompilePipeline {
 	loadExternalPdf = async () => {
 		// the pane shows no PDF until a main file is picked, so an old one on disk opened it just to say so, the first
 		// time the window came back into focus
-		if (this.busy || !mainFile.current) return;
+		if (this.busy || !mainFile.current || lvProject.active) return;
 		const pdfPath = this.expectedPdfPath();
 		if (!pdfPath) return;
 		const first = await this.deps.stat(pdfPath);
