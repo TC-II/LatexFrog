@@ -51,7 +51,7 @@ fn compilar(s: &std::sync::Arc<Session>, r: &Recolector, n: usize) -> (bool, Opt
 }
 
 fn figura(p: &Path, n: u32, ext: &str) -> PathBuf {
-    p.join(format!("figuras-cache/lv-figs-figure{n}.{ext}"))
+    p.join(format!("figuras-cache/lv-figs-pre-figure{n}.{ext}"))
 }
 
 /// Cuántas subcompilaciones de figuras lanzó pgf en lo que va del log del build.
@@ -89,7 +89,7 @@ fn una_figura_que_no_compila_no_queda_dada_por_buena_y_el_build_siguiente_la_rei
     );
     assert!(!figura(&p, 0, "pdf").exists(), "el PDF de la figura que no salió se borra");
     assert!(!figura(&p, 0, "md5").exists(), "el .md5 que miente no queda en el cache compartido");
-    assert!(!p.join(".latexfrog/build/figs/figuras-cache/lv-figs-figure0.md5").exists(), "ni en el directorio del perfil");
+    assert!(!p.join(".latexfrog/build/figs/figuras-cache/lv-figs-pre-figure0.md5").exists(), "ni en el directorio del perfil");
     assert!(figura(&p, 1, "pdf").is_file() && figura(&p, 1, "md5").is_file(), "la otra figura sigue buena");
 
     // El error de la figura está en los problemas, con el archivo y la línea de la fuente.
