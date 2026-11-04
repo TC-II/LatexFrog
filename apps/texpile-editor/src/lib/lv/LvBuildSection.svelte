@@ -108,9 +108,6 @@
 		{#if draftNote}
 			<span class="opacity-60">{draftNote}</span>
 		{/if}
-		{#if locked}
-			<span class="text-warning-500">{m.lv_locked({ pid: view.lockedBy ?? 0 })}</span>
-		{/if}
 		{#if error}
 			<span class="text-error-500">{error}</span>
 		{/if}

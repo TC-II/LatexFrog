@@ -7,6 +7,7 @@
 	import LvBuildSection from '$lib/lv/LvBuildSection.svelte';
 	import LvDeliveryDialog from '$lib/lv/LvDeliveryDialog.svelte';
 	import { lvProject } from '$lib/lv/lvEngine.svelte';
+	import LvProjectRows from '$lib/lv/LvProjectRows.svelte';
 
 	type Props = {
 		menu: AnchoredMenu;
@@ -38,6 +39,7 @@
 				<span class="cap-center">{m.lv_delivery_menu()}</span>
 			</button>
 		{/if}
+		<LvProjectRows onPick={() => menu.close()} />
 		{#if latexmkActions}
 			<button class={ROW} onclick={() => pick(onFromScratch)}>
 				<RotateCcw class="size-4 shrink-0" />

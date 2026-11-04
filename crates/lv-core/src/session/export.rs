@@ -151,9 +151,10 @@ impl Session {
                 let huella = crate::formato::huella(&self.root, &plan.spec.driver, &archivos);
                 if let Some(fmt) = crate::formato::asegurar(&self.root, ".latexfrog/build/fragmento", &plan.spec.driver, &huella) {
                     // With an empty body no \include runs, so nothing reads the parts' .aux files and every \ref came out as ??. They load at the
-                    // top of the fragment, on its first line so its line numbers hold: anything before \begin{document} is skipped under the format.
+                    // top of the fragment, on its first line so its line numbers hold: anything before \begin{document} is skipped under the format,
+                    // and in the body LaTeX has already disabled \newlabel, hence the local definition.
                     let auxes: String = plan.seed.iter().flat_map(|s| s.0.iter()).map(|p| format!("\\@input{{{p}.aux}}")).collect();
-                    plan.fragmento = plan.fragmento.take().map(|f| format!("\\makeatletter\\let\\@setckpt\\@gobbletwo{auxes}\\makeatother {f}"));
+                    plan.fragmento = plan.fragmento.take().map(|f| format!("\\begingroup\\makeatletter\\let\\@setckpt\\@gobbletwo\\let\\@writefile\\@gobbletwo\\def\\newlabel##1##2{{\\global\\@namedef{{r@##1}}{{##2}}}}{auxes}\\endgroup {f}"));
                     plan.spec.driver = crate::formato::CUERPO.to_string();
                     plan.spec.formato = Some(fmt);
                 }

@@ -85,6 +85,10 @@ class LvProject {
 		return () => void this.listeners.delete(listener);
 	}
 
+	/** the engine holds this folder; true also while setting up a plain folder, when `view` is still null */
+	private sessionOpen = false;
+	private folder: { root: string | null; exists: (path: string) => Promise<boolean> } = { root: null, exists: async () => false };
+
 	get active(): boolean {
 		return this.view !== null;
 	}
@@ -99,6 +103,7 @@ class LvProject {
 
 	/** a folder was opened (or closed): open it in the engine if it is an engine project */
 	sync(root: string | null, exists: (path: string) => Promise<boolean>) {
+		this.folder = { root, exists };
 		this.ready = this.open(root, exists).catch((e) => {
 			this.view = null;
 			this.onError?.(e instanceof Error ? e.message : String(e));
@@ -107,17 +112,36 @@ class LvProject {
 	}
 
 	private async open(root: string | null, exists: (path: string) => Promise<boolean>) {
-		const wasActive = this.active;
+		const wasOpen = this.sessionOpen;
 		this.view = null;
 		this.progress = null;
 		this.fileInfo = null;
 		this.typical = {};
-		if (wasActive) await this.request('close');
+		this.sessionOpen = false;
+		if (wasOpen) await this.request('close');
 		if (!root) return;
 		const known = (await exists(joinPath(root, 'latexfrog.json'))) || (await exists(joinPath(root, 'latexviewer.json')));
 		if (!known) return;
 		this.view = (await this.request<{ project: ProjectView }>('open', { root })).project;
 		await this.loadTypical();
+		this.sessionOpen = true;
+		void import('./lvPanels').then((p) => p.offerOrphans());
+	}
+
+	/**
+	 * A plain folder has to be open in the engine to detect and validate, but it stays a terminal project until a
+	 * configuration is saved: `view` stays null, so Compile does not change under the user while they decide.
+	 */
+	async openForSetup() {
+		const root = this.folder.root;
+		if (!root || this.sessionOpen) return;
+		await this.request('open', { root });
+		this.sessionOpen = true;
+	}
+
+	/** after saving, or giving up on, a configuration: the folder is whatever its files now say */
+	resync() {
+		return this.sync(this.folder.root, this.folder.exists);
 	}
 
 	async refresh() {

@@ -17,23 +17,23 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 - [x] Local repository with Texpile history, engine, fixtures.
 - [x] Engine tests pass here.
 - [x] Rebrand: name, icon, about, installer, app id. Credit Texpile and Juan Sbruzzi. Required before the first push.
-- [ ] Remove what no feature uses, starting with TeXpresso and the TeX Live doctor paths nothing calls.
+- [x] Remove what no feature uses, starting with TeXpresso and the TeX Live doctor paths nothing calls.
 
 ### M1. Compile
-- [ ] One line in `startCompile` sends LatexFrog projects to the sidecar; all entry points follow.
-- [ ] Problems panel, Stop and busy state follow sidecar builds.
-- [ ] Full protocol, documented, with tests including cancel with no process left.
+- [x] One line in `startCompile` sends LatexFrog projects to the sidecar; all entry points follow.
+- [x] Problems panel, Stop and busy state follow sidecar builds.
+- [x] Full protocol, documented, with tests including cancel with no process left.
 
 ### M2. Project features
-- [ ] Project-wide Outline next to Files, from `Symbols.sections`, with jump to section.
+- [x] Project-wide Outline next to Files, from `Symbols.sections`, with jump to section.
 - [x] Profiles, parts, variables, current file, live progress.
-- [ ] SyncTeX through the engine in the viewer and the editor.
+- [x] SyncTeX through the engine in the viewer and the editor.
 
 ### M3. Delivery and diagnostics
 - [x] Figure cache: bake and clean with a preview.
 - [x] Export parts with the printed number; delivery profile.
-- [ ] History, doctor, orphans, project lock.
-- [ ] Config editor with Detect, validation and diff; project migration.
+- [x] History, doctor, orphans, project lock.
+- [x] Config editor with Detect, validation and diff; project migration.
 
 ### M4. Release
 - [ ] Installer that bundles the sidecar (`extraResources`).
