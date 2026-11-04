@@ -3,13 +3,18 @@
 import type { LogEntry } from '$lib/compileLog/compileLog';
 import type { CompileLogState } from '$lib/stores/compileLogStore';
 import { joinPath } from '$lib/workspace/fileSystem';
+import { activeFilePath } from '$lib/workspace/workspaceStore';
 
-export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null };
+export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean };
+export type Variable = { name: string; label: string; choices: string[]; default: string | null };
+export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean };
+export type Typical = { ms: number; pasadas: number; n: number };
+export type Progress = { profile: string; startedAt: number; tool: string | null; pass: number };
 export type ProjectView = {
 	root: string;
 	rootFile: string | null;
-	config: { profiles: Profile[] } | null;
-	state: { activeProfile: string | null; selection: string[] };
+	config: { profiles: Profile[]; variables: Variable[] } | null;
+	state: { activeProfile: string | null; selection: string[]; variables: Record<string, string>; draftImages: boolean };
 	parts: { name: string }[];
 	lockedBy: number | null;
 };
@@ -55,7 +60,11 @@ export function toLogState(problems: Problem[], profile: string): CompileLogStat
 class LvProject {
 	view = $state<ProjectView | null>(null);
 	/** what the running build is doing, for the status line */
-	progress = $state('');
+	progress = $state<Progress | null>(null);
+	/** the part of the active file, and whether the active profile builds it */
+	fileInfo = $state<FileInfo | null>(null);
+	/** profile id to its usual duration, from the project's history */
+	typical = $state<Record<string, Typical>>({});
 	/** settles once the current folder is known to be an engine project or not; Compile waits for it */
 	ready: Promise<void> = Promise.resolve();
 	onFinished: ((ev: Finished) => void) | null = null;
@@ -85,12 +94,15 @@ class LvProject {
 	private async open(root: string | null, exists: (path: string) => Promise<boolean>) {
 		const wasActive = this.active;
 		this.view = null;
-		this.progress = '';
+		this.progress = null;
+		this.fileInfo = null;
+		this.typical = {};
 		if (wasActive) await this.request('close');
 		if (!root) return;
 		const known = (await exists(joinPath(root, 'latexfrog.json'))) || (await exists(joinPath(root, 'latexviewer.json')));
 		if (!known) return;
 		this.view = (await this.request<{ project: ProjectView }>('open', { root })).project;
+		await this.loadTypical();
 	}
 
 	async refresh() {
@@ -102,7 +114,27 @@ class LvProject {
 		await this.refresh();
 	}
 
-	compile = () => this.request('compile');
+	async loadTypical() {
+		this.typical = await this.request<Record<string, Typical>>('typical-times');
+	}
+
+	/** tells the engine which file is being worked on: a `current` profile builds that file's part */
+	async noteActiveFile() {
+		const root = this.view?.root.replace(/\\/g, '/');
+		const path = activeFilePath.current?.replace(/\\/g, '/');
+		if (!root || !path?.toLowerCase().startsWith(root.toLowerCase() + '/')) {
+			this.fileInfo = null;
+			return;
+		}
+		const info = await this.request<FileInfo>('file-info', { file: path.slice(root.length + 1) }).catch(() => null);
+		this.fileInfo = info;
+		if (info?.partsChanged) await this.refresh();
+	}
+
+	async compile() {
+		await this.noteActiveFile();
+		return this.request('compile');
+	}
 
 	async cancel(): Promise<boolean> {
 		return (await this.request<{ cancelled: boolean }>('cancel')).cancelled;
@@ -119,11 +151,15 @@ class LvProject {
 	}
 
 	handle(ev: EngineEvent) {
-		if (ev.type === 'started') this.progress = `Compiling (${ev.profile})`;
-		else if (ev.type === 'pass') this.progress = `${ev.tool}, pass ${ev.n}`;
+		if (ev.type === 'started') {
+			if (!SERVICE_PROFILES.has(ev.profile)) this.progress = { profile: ev.profile, startedAt: Date.now(), tool: null, pass: 0 };
+		} else if (ev.type === 'pass') {
+			if (this.progress) this.progress = { ...this.progress, tool: ev.tool, pass: ev.n };
+		}
 		else if (ev.type === 'error') this.onError?.(ev.message);
 		else if (ev.type === 'finished' && !SERVICE_PROFILES.has(ev.profile)) {
-			this.progress = '';
+			this.progress = null;
+			void this.loadTypical().catch(() => {});
 			this.onFinished?.(ev);
 		}
 	}
