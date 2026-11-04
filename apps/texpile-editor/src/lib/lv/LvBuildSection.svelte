@@ -58,9 +58,6 @@
 		{:else if active}
 			<span class="opacity-60">Parts: {active.parts === 'all' ? 'all' : active.parts === 'current' ? 'current file' : active.parts}</span>
 		{/if}
-		{#if view.lockedBy !== null}
-			<span class="text-warning-500">Open in another window (PID {view.lockedBy})</span>
-		{/if}
 		{#if error}
 			<span class="text-error-500">{error}</span>
 		{/if}

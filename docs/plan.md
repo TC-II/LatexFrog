@@ -32,8 +32,8 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 ### M3. Delivery and diagnostics
 - [ ] Figure cache: bake and clean with a preview.
 - [ ] Export parts with the printed number; delivery profile.
-- [ ] History, doctor, orphans, project lock.
-- [ ] Config editor with Detect, validation and diff; project migration.
+- [x] History, doctor, orphans, project lock.
+- [x] Config editor with Detect, validation and diff; project migration.
 
 ### M4. Release
 - [ ] Installer that bundles the sidecar (`extraResources`).
