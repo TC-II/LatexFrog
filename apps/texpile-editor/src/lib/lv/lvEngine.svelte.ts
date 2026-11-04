@@ -2,7 +2,8 @@
 // engine project: Compile, Stop and the Problems panel go through the sidecar, and the terminal path stays for other folders.
 import type { LogEntry } from '$lib/compileLog/compileLog';
 import type { CompileLogState } from '$lib/stores/compileLogStore';
-import { joinPath } from '$lib/workspace/fileSystem';
+import { pdfStore } from '$lib/stores/pdfStore';
+import { fileUrl, joinPath, relativeTo } from '$lib/workspace/fileSystem';
 import { activeFilePath } from '$lib/workspace/workspaceStore';
 
 export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean };
@@ -27,6 +28,11 @@ export type Problem = {
 	line_end: number | null;
 	context: string;
 };
+export type Section = { level: number; title: string; file: string; line: number; label: string | null };
+export type Symbols = { sections: Section[] };
+type Rect = { page: number; x: number; y: number; w: number; h: number };
+type SyncForward = { perfil: string; pdf: string; page: number; rects: Rect[]; line_used: number };
+type SyncInverse = { file: string | null; line: number; inside: boolean };
 export type Finished = { type: 'finished'; profile: string; ok: boolean; cancelled: boolean; pdf: string | null; updated: boolean };
 type EngineEvent = Finished | { type: 'pass'; n: number; tool: string } | { type: 'started'; profile: string } | { type: 'error'; message: string };
 
@@ -65,6 +71,8 @@ class LvProject {
 	fileInfo = $state<FileInfo | null>(null);
 	/** profile id to its usual duration, from the project's history */
 	typical = $state<Record<string, Typical>>({});
+	/** bumped when a build ends: the project index may have moved */
+	revision = $state(0);
 	/** settles once the current folder is known to be an engine project or not; Compile waits for it */
 	ready: Promise<void> = Promise.resolve();
 	onFinished: ((ev: Finished) => void) | null = null;
@@ -157,6 +165,40 @@ class LvProject {
 		return pdf ? joinPath(v.root, pdf) : null;
 	}
 
+	symbols = () => this.request<Symbols>('symbols');
+
+	/** the profile whose PDF the viewer shows: a click there must resolve against that build, not the active profile's */
+	private shownProfile(): string | null {
+		const url = pdfStore.current;
+		const shown = typeof url === 'string' ? decodeURIComponent(url).match(/[\\/]build[\\/]([^\\/]+)[\\/]/)?.[1] : undefined;
+		return shown ?? this.view?.state.activeProfile ?? null;
+	}
+
+	/** a source line to its place in the PDF, in the shape the viewer takes: h and v are the box's left and baseline */
+	async syncForward(path: string, line: number) {
+		const v = this.view;
+		if (!v) return null;
+		const file = relativeTo(v.root, path).replace(/\\/g, '/');
+		const res = await this.request<SyncForward | null>('synctex-forward', { file, line });
+		const box = res?.rects[0];
+		if (!res || !box) return null;
+		// the newest PDF holding this file may not be the one on screen
+		const pdf = joinPath(v.root, res.pdf);
+		const shown = pdfStore.current;
+		const target = fileUrl(pdf);
+		if (typeof shown !== 'string' || !shown.startsWith(target)) pdfStore.current = target + '&t=' + Date.now();
+		return { page: res.page, h: box.x, v: box.y + box.h, width: box.w, height: box.h };
+	}
+
+	/** a place in the shown PDF to its source line; null when it comes from outside the project */
+	async syncInverse(page: number, x: number, y: number) {
+		const v = this.view;
+		const profile = this.shownProfile();
+		if (!v || !profile) return null;
+		const res = await this.request<SyncInverse | null>('synctex-inverse', { profile, page, x, y });
+		return res?.file && res.line >= 1 ? { file: joinPath(v.root, res.file), line: res.line } : null;
+	}
+
 	handle(ev: EngineEvent) {
 		for (const listener of this.listeners) listener(ev);
 		if (ev.type === 'started') {
@@ -168,6 +210,7 @@ class LvProject {
 		else if (ev.type === 'finished' && !SERVICE_PROFILES.has(ev.profile)) {
 			this.progress = null;
 			void this.loadTypical().catch(() => {});
+			this.revision++;
 			this.onFinished?.(ev);
 		}
 	}
