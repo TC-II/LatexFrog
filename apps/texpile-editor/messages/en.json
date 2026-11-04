@@ -3110,5 +3110,19 @@
 	"lv_publish_title": "Delivery",
 	"lv_publish_run": "Publish {profile}",
 	"lv_published": "Published {file}",
-	"lv_open_folder": "Open folder"
+	"lv_open_folder": "Open folder",
+	"lv_profile": "Profile",
+	"lv_parts_all": "Parts: all",
+	"lv_parts_current": "Parts: the current file's",
+	"lv_parts_one": "Parts: one at a time",
+	"lv_locked": "Open in another window (PID {pid})",
+	"lv_draft_images": "Draft images",
+	"lv_draft_delivery": "Delivered output is never draft",
+	"lv_draft_always": "This profile always uses draft images",
+	"lv_file_in_build": "This file is in the build",
+	"lv_file_other_part": "This file ({part}) is not in the build",
+	"lv_file_unrelated": "This file is not part of the document",
+	"lv_progress_compiling": "Compiling {profile}",
+	"lv_progress_pass": "{tool}, pass {pass}",
+	"lv_progress_typical": "{elapsed} of about {typical}"
 }
