@@ -30,8 +30,8 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 - [ ] SyncTeX through the engine in the viewer and the editor.
 
 ### M3. Delivery and diagnostics
-- [ ] Figure cache: bake and clean with a preview.
-- [ ] Export parts with the printed number; delivery profile.
+- [x] Figure cache: bake and clean with a preview.
+- [x] Export parts with the printed number; delivery profile.
 - [ ] History, doctor, orphans, project lock.
 - [ ] Config editor with Detect, validation and diff; project migration.
 

@@ -60,6 +60,13 @@ class LvProject {
 	ready: Promise<void> = Promise.resolve();
 	onFinished: ((ev: Finished) => void) | null = null;
 	onError: ((message: string) => void) | null = null;
+	private listeners = new Set<(event: unknown) => void>();
+
+	/** every engine event, for panels; returns the unsubscribe */
+	subscribe(listener: (event: unknown) => void) {
+		this.listeners.add(listener);
+		return () => void this.listeners.delete(listener);
+	}
 
 	get active(): boolean {
 		return this.view !== null;
@@ -119,6 +126,7 @@ class LvProject {
 	}
 
 	handle(ev: EngineEvent) {
+		for (const listener of this.listeners) listener(ev);
 		if (ev.type === 'started') this.progress = `Compiling (${ev.profile})`;
 		else if (ev.type === 'pass') this.progress = `${ev.tool}, pass ${ev.n}`;
 		else if (ev.type === 'error') this.onError?.(ev.message);
