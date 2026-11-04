@@ -201,6 +201,8 @@ declare global {
 		texpileTerminal?: TexpileTerminalBridge;
 		/** tinymist bridge (Electron only; undefined in the browser dev server). */
 		texpileTypst?: TexpileTypstBridge;
+		/** Latex Frog build engine sidecar: profiles and parts (Electron only). */
+		texpileLv?: { run(root: string, args: string[]): Promise<{ ok: boolean; code?: number | null; stdout?: string; stderr?: string; error?: string }> };
 		/** Zotero citation bridge (Electron only; undefined in the browser dev server). */
 		texpileZotero?: TexpileZoteroBridge;
 		/** Cite by DOI's lookup (Electron only; undefined in the browser dev server). */

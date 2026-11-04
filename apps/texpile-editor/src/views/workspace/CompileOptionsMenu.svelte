@@ -4,6 +4,7 @@
 	import { menuItemClass, menuPanelClass, separatorClass } from '$lib/menus/menuStyles';
 	import { m } from '$lib/paraglide/messages';
 	import type { AnchoredMenu } from '$lib/pdf-view/anchoredMenu.svelte';
+	import LvBuildSection from '$lib/lv/LvBuildSection.svelte';
 
 	type Props = {
 		menu: AnchoredMenu;
@@ -27,6 +28,7 @@
 
 {#if menu.open}
 	<div bind:this={menu.el} class="{menuPanelClass} fixed z-1300 flex min-w-48 flex-col" style={menu.style} role="menu">
+		<LvBuildSection />
 		{#if latexmkActions}
 			<button class={ROW} onclick={() => pick(onFromScratch)}>
 				<RotateCcw class="size-4 shrink-0" />

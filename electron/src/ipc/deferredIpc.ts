@@ -36,6 +36,7 @@ const steps: Array<() => Promise<void>> = [
 	async () => (await import('./exportTargetIpc.js')).registerExportTargetIpc(),
 	async () => (await import('./typstIpc.js')).registerTypstIpc(),
 	async () => (await import('./toolchainIpc.js')).registerToolchainIpc(),
+	async () => (await import('../lv/lvIpc.js')).registerLvIpc(),
 	async () => (await import('./tinymistIpc.js')).registerTinymistIpc(),
 	async () => (await import('./typstPreviewIpc.js')).registerTypstPreviewIpc(),
 	async () => (await import('../zotero.js')).registerZotero(),

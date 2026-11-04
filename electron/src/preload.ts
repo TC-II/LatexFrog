@@ -571,6 +571,11 @@ contextBridge.exposeInMainWorld('texpileAcp', {
 	}
 });
 
+// Latex Frog's build engine as a sidecar (profiles and parts); see lv/lvIpc.ts
+contextBridge.exposeInMainWorld('texpileLv', {
+	run: (root: string, args: string[]) => ipcRenderer.invoke('lv:run', root, args)
+});
+
 // terminal bridge to the node-pty shells in the main process, keyed by a string `id`
 contextBridge.exposeInMainWorld('texpileTerminal', {
 	/** whether node-pty loaded. Resolves { ok, error? }; error says why it failed. */
