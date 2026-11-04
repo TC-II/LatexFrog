@@ -10,7 +10,7 @@ const files = git('-c', 'core.quotePath=false', 'diff', '--name-only', '--diff-f
 
 const badPath = [/\.pdf$/i, /\.synctex/i, /(^|\/)(inspo|01-Overleaf)(\/|$)/i, /^fixtures\/libro-tc/, /\.env(\.|$)/];
 // `dev` and `x` are the neutral user names of the fixture logs and the engine's unit tests
-const badText = [/C:[\\/]Users[\\/](?!dev[\\/]|x[\\/])/i,/01-Overleaf(?!\\Funciones|\\Introducci|\\`|`)/, /[\w.]+@gmail\.com/i];
+const badText = [/C:[\\/]Users[\\/](?!(dev|x)\b)/i,/01-Overleaf(?!\\Funciones|\\Introducci|\\`|`)/, /[\w.]+@gmail\.com/i];
 // these two document the rule itself
 const skipText = new Set(['CLAUDE.md', 'scripts/check-public.mjs']);
 
