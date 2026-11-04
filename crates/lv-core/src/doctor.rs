@@ -189,7 +189,7 @@ fn programa(id: &str, nombre: &str, args: &[&str], necesario: bool, por_que: &st
     Hallazgo::nuevo(id, Nivel::Ok, format!("{nombre}: {}", ok_texto(&s)), "")
 }
 
-/// Todo lo que se puede saber de las herramientas de TeX. `engine` es el de `latexviewer.json`; `usa_*` dicen qué necesita el proyecto.
+/// Todo lo que se puede saber de las herramientas de TeX. `engine` es el de `latexfrog.json`; `usa_*` dicen qué necesita el proyecto.
 pub struct Necesidades<'a> {
     pub engine: &'a str,
     /// Algún perfil externaliza figuras (hace falta `-shell-escape`).
@@ -455,7 +455,7 @@ pub fn chequeos_de_proyecto(e: &EntradaDeProyecto) -> Vec<Hallazgo> {
                         "variable-def",
                         Nivel::Aviso,
                         format!("«\\{nombre}» se define sin guardia: el menú de compilación no la puede cambiar"),
-                        format!("La variable está en latexviewer.json y la app la define antes de cargar la raíz, pero {rel}:{linea} la vuelve a definir sin condición y gana siempre."),
+                        format!("La variable está en latexfrog.json y la app la define antes de cargar la raíz, pero {rel}:{linea} la vuelve a definir sin condición y gana siempre."),
                     )
                     .con_arreglo(format!("Poner el valor por omisión con guardia: \\ifdefined\\{nombre}\\else\\def\\{nombre}{{...}}\\fi"))
                     .en(rel, linea),
@@ -539,7 +539,7 @@ pub fn chequeos_de_proyecto(e: &EntradaDeProyecto) -> Vec<Hallazgo> {
                     "autoclean",
                     Nivel::Aviso,
                     "LaTeX Workshop borra los auxiliares después de cada build",
-                    format!("{} tiene `latex-workshop.latex.autoClean.run: {}`. Si compilás también desde VS Code, borra auxiliares que la app necesita entre builds (la app los guarda aparte, en .lv/build, pero los de la raíz se pierden).", c.display(), &m[1]),
+                    format!("{} tiene `latex-workshop.latex.autoClean.run: {}`. Si compilás también desde VS Code, borra auxiliares que la app necesita entre builds (la app los guarda aparte, en .latexfrog/build, pero los de la raíz se pierden).", c.display(), &m[1]),
                 )
                 .con_arreglo("Poner `latex-workshop.latex.autoClean.run` en `never` para este proyecto."),
             );
@@ -569,7 +569,7 @@ pub fn chequeo_de_coccion(historial: &[Linea]) -> Option<Hallazgo> {
                 ms as f64 / 1000.0
             ),
         )
-        .con_arreglo("Sólo una sugerencia, la app no toca nada: excluir `figuras-cache/` y `.lv/` del análisis en tiempo real de tu antivirus (en Windows Defender: Configuración, Protección antivirus, Exclusiones)."),
+        .con_arreglo("Sólo una sugerencia, la app no toca nada: excluir `figuras-cache/` y `.latexfrog/` del análisis en tiempo real de tu antivirus (en Windows Defender: Configuración, Protección antivirus, Exclusiones)."),
     )
 }
 
@@ -577,7 +577,7 @@ pub fn chequeo_de_procesos(huerfanos: &[ProcesoTex], bloqueado_por: Option<u32>)
     let mut h = Vec::new();
     if let Some(pid) = bloqueado_por {
         h.push(
-            Hallazgo::nuevo("candado", Nivel::Aviso, format!("El proyecto está abierto en otra instancia (PID {pid})"), "Esta instancia no compila ni cocina: dos colas sobre el mismo .lv y el mismo cache se pisarían.")
+            Hallazgo::nuevo("candado", Nivel::Aviso, format!("El proyecto está abierto en otra instancia (PID {pid})"), "Esta instancia no compila ni cocina: dos colas sobre el mismo .latexfrog y el mismo cache se pisarían.")
                 .con_arreglo("Cerrar la otra instancia y volver a abrir el proyecto."),
         );
     }
@@ -844,7 +844,7 @@ mod tests {
         assert_eq!(h.nivel, Nivel::Info);
         assert!(h.titulo.contains("2,5") || h.titulo.contains("2.5"), "{}", h.titulo);
         let a = h.arreglo.unwrap();
-        assert!(a.contains("figuras-cache/") && a.contains(".lv/") && a.contains("la app no toca nada"), "{a}");
+        assert!(a.contains("figuras-cache/") && a.contains(".latexfrog/") && a.contains("la app no toca nada"), "{a}");
         // Pocas figuras, o una cocción cancelada, no cuentan; la más nueva es la que vale.
         assert!(chequeo_de_coccion(&[Linea { cocidas: 5, ms: 400_000, ..rapida.clone() }]).is_none());
         assert!(chequeo_de_coccion(&[Linea { cancelado: true, ms: 400_000, ..rapida.clone() }]).is_none());

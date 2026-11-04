@@ -27,13 +27,13 @@ fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("fixtures").join("tikz-figuras")
 }
 
-/// El fixture sin lo que dejó una compilación anterior, con el `latexviewer.json` de esta prueba.
+/// El fixture sin lo que dejó una compilación anterior, con el `latexfrog.json` de esta prueba.
 fn proyecto() -> (TempDir, PathBuf) {
     let tmp = TempDir::new().unwrap();
     let p = tmp.path().join("figuras");
     fs::create_dir_all(&p).unwrap();
     fs::copy(fixture().join("main.tex"), p.join("main.tex")).unwrap();
-    fs::write(p.join("latexviewer.json"), CONFIG).unwrap();
+    fs::write(p.join("latexfrog.json"), CONFIG).unwrap();
     (tmp, p)
 }
 
@@ -89,7 +89,7 @@ fn una_figura_que_no_compila_no_queda_dada_por_buena_y_el_build_siguiente_la_rei
     );
     assert!(!figura(&p, 0, "pdf").exists(), "el PDF de la figura que no salió se borra");
     assert!(!figura(&p, 0, "md5").exists(), "el .md5 que miente no queda en el cache compartido");
-    assert!(!p.join(".lv/build/figs/figuras-cache/lv-figs-figure0.md5").exists(), "ni en el directorio del perfil");
+    assert!(!p.join(".latexfrog/build/figs/figuras-cache/lv-figs-figure0.md5").exists(), "ni en el directorio del perfil");
     assert!(figura(&p, 1, "pdf").is_file() && figura(&p, 1, "md5").is_file(), "la otra figura sigue buena");
 
     // El error de la figura está en los problemas, con el archivo y la línea de la fuente.
@@ -144,7 +144,7 @@ fn cancelar_un_build_que_esta_cocinando_no_deja_md5_sin_un_pdf_completo() {
             assert!(String::from_utf8_lossy(&pdf[pdf.len().saturating_sub(1024)..]).contains("%%EOF"), "{n} da por buena una figura sin PDF completo");
         }
     }
-    let en_perfil = p.join(".lv/build/figs/figuras-cache");
+    let en_perfil = p.join(".latexfrog/build/figs/figuras-cache");
     for e in fs::read_dir(&en_perfil).into_iter().flatten().flatten() {
         let n = e.file_name().to_string_lossy().to_string();
         if n.ends_with(".md5") {

@@ -1,6 +1,6 @@
 //! Abrir una carpeta como proyecto, listar sus carpetas y proponer la raíz del documento.
 //!
-//! En F1 la raíz no se guarda en ningún lado (el `latexviewer.json` es de F2): o es la única candidata, o la elige el
+//! En F1 la raíz no se guarda en ningún lado (el `latexfrog.json` es de F2): o es la única candidata, o la elige el
 //! usuario, o viene de `LV_ROOT`.
 
 use crate::error::{Error, Result};
@@ -10,7 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Carpetas que no se muestran en el árbol ni se recorren buscando raíces.
-const OCULTAS: [&str; 3] = [".lv", ".git", "node_modules"];
+const OCULTAS: [&str; 4] = [".latexfrog", ".lv", ".git", "node_modules"];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectInfo {

@@ -63,7 +63,7 @@ pub fn asegurar(root: &Path, dir: &str, driver: &str, huella: &str) -> Option<St
 }
 
 /// Lo mismo con otro nombre de formato (uno por perfil: `lv-<perfil>-pre`). El nombre es también el `\jobname` con que se precompila,
-/// y por eso el archivo que pgf vuelve a leer en cada subcompilación de una figura (`.lv/drivers/<nombre>.tex`).
+/// y por eso el archivo que pgf vuelve a leer en cada subcompilación de una figura (`.latexfrog/drivers/<nombre>.tex`).
 pub fn asegurar_con_nombre(root: &Path, dir: &str, pre: &str, driver: &str, huella: &str) -> Option<String> {
     let base = format!("{dir}/{pre}");
     let fmt = root.join(format!("{base}.fmt"));
@@ -77,7 +77,7 @@ pub fn asegurar_con_nombre(root: &Path, dir: &str, pre: &str, driver: &str, huel
     }
     let _ = std::fs::create_dir_all(root.join(dir));
     let _ = std::fs::remove_file(&fmt);
-    let fuente = format!(".lv/drivers/{pre}.tex");
+    let fuente = format!(".latexfrog/drivers/{pre}.tex");
     if crate::build::write_if_changed(&root.join(&fuente), driver).is_err() {
         return None;
     }
@@ -102,7 +102,7 @@ pub fn asegurar_con_nombre(root: &Path, dir: &str, pre: &str, driver: &str, huel
 
 /// Para un build de un perfil: el archivo que abre el documento (`\begin{document}`) y lo que viene después de esa línea, que es lo que
 /// se compila con el formato cargado. `None` si no hay `\begin{document}` en los archivos del preámbulo o su `\end{document}` está en
-/// otro archivo (entonces el build va sin formato). `copia` da el archivo que se lee de verdad (el de `.lv/piezas` si hay sustitución).
+/// otro archivo (entonces el build va sin formato). `copia` da el archivo que se lee de verdad (el de `.latexfrog/piezas` si hay sustitución).
 pub fn cuerpo_del_documento(root: &Path, archivos: &BTreeSet<String>, copia: impl Fn(&str) -> String) -> Option<String> {
     for a in archivos {
         let efectivo = copia(a);

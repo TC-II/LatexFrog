@@ -1,5 +1,5 @@
-//! Historial de trabajos (9 del plan, F8): `.lv/history.jsonl`, **una línea por cada trabajo de la cola** (build, cocción de figuras,
-//! exportación y vista previa de un fragmento), no sólo por build. Es de esta máquina (`.lv/` no se versiona) y se rota al llegar a ~1 MB.
+//! Historial de trabajos (9 del plan, F8): `.latexfrog/history.jsonl`, **una línea por cada trabajo de la cola** (build, cocción de figuras,
+//! exportación y vista previa de un fragmento), no sólo por build. Es de esta máquina (`.latexfrog/` no se versiona) y se rota al llegar a ~1 MB.
 //!
 //! Cada línea lleva lo que hace falta para explicar por qué un trabajo tardó lo que tardó: las pasadas y lo que tardó cada herramienta
 //! (sacado del stdout de latexmk), las figuras que pgf cocinó adentro del build, los auxiliares que faltaban, si el build anterior no
@@ -14,7 +14,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Mutex;
 
-pub const HISTORY_FILE: &str = ".lv/history.jsonl";
+pub const HISTORY_FILE: &str = ".latexfrog/history.jsonl";
 /// Al pasar de este tamaño se queda la mitad más nueva.
 pub const LIMITE_DE_BYTES: u64 = 1_000_000;
 
@@ -94,7 +94,7 @@ pub struct Entrada {
     /// Archivos que una figura lee desde adentro de su `tikzpicture` y cambiaron.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub datos_cambiados: Vec<String>,
-    /// Los que la app veía por primera vez (sin registro previo en `.lv/tikz-datos.json`): no se sabe si cambiaron, se invalidan por las dudas.
+    /// Los que la app veía por primera vez (sin registro previo en `.latexfrog/tikz-datos.json`): no se sabe si cambiaron, se invalidan por las dudas.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub datos_nuevos: Vec<String>,
     /// Cuántos `.md5` de figuras se borraron por eso.

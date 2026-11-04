@@ -1,4 +1,4 @@
-//! Aceptación de la pantalla «Proyecto» (F8b), del lado del core: abrir un proyecto SIN `latexviewer.json` y llegar, sólo con lo que se
+//! Aceptación de la pantalla «Proyecto» (F8b), del lado del core: abrir un proyecto SIN `latexfrog.json` y llegar, sólo con lo que se
 //! detecta, a la configuración que se escribió a mano (`fixtures/configs/`). El del libro es la copia de `inspo/Proyecto` en
 //! `fixtures/libro-tc` (la arma `scripts/copiar-libro.ps1`; si no está, esa prueba se saltea). Nada se escribe en las carpetas.
 
@@ -64,7 +64,7 @@ fn el_libro_de_inspo_llega_a_su_configuracion_sin_escribir_nada_a_mano() {
     // La configuración que sale es la del fixture. La etiqueta de la variable no se puede deducir de los textos («Pie» contra «Pie de
     // página»): es lo único que se edita a mano en la pantalla, y acá se iguala.
     let mut sale = como_config(&p);
-    let mut debe = sin_perfiles(esperada("libro-tc.latexviewer.json"));
+    let mut debe = sin_perfiles(esperada("libro-tc.latexfrog.json"));
     for c in [&mut sale, &mut debe] {
         for v in c.variables.values_mut() {
             v.label = None;
@@ -76,7 +76,7 @@ fn el_libro_de_inspo_llega_a_su_configuracion_sin_escribir_nada_a_mano() {
 
 #[test]
 fn libro_include_y_articulo_simple_llegan_a_su_configuracion() {
-    for (carpeta, esperado) in [("libro-include", "libro-include.latexviewer.json"), ("articulo-simple", "articulo-simple.latexviewer.json")] {
+    for (carpeta, esperado) in [("libro-include", "libro-include.latexfrog.json"), ("articulo-simple", "articulo-simple.latexfrog.json")] {
         let p = detectada(&fixtures().join(carpeta));
         assert_eq!(como_config(&p), sin_perfiles(esperada(esperado)), "{carpeta}");
         assert_eq!(p.raiz, "main.tex");
@@ -86,7 +86,7 @@ fn libro_include_y_articulo_simple_llegan_a_su_configuracion() {
 #[test]
 fn una_configuracion_guardada_manda_sobre_la_recomendada_y_el_texto_se_lee_de_vuelta() {
     let libro = fixtures().join("libro-include");
-    let mut cfg = esperada("libro-include.latexviewer.json");
+    let mut cfg = esperada("libro-include.latexfrog.json");
     cfg.root = "main.tex".into();
     let p = detectar(&libro, None, Some(&cfg), &BTreeMap::new()).unwrap();
     assert_eq!(p.raiz, "main.tex");

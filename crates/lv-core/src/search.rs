@@ -1,6 +1,6 @@
 //! Búsqueda y reemplazo en el proyecto (6.6 del plan), línea por línea con el crate `regex`.
 //!
-//! - Por defecto sólo los archivos del grafo (`.tex`) y los `.bib`; con `all_files`, todo el árbol de texto (sin `.lv`,
+//! - Por defecto sólo los archivos del grafo (`.tex`) y los `.bib`; con `all_files`, todo el árbol de texto (sin `.latexfrog`,
 //!   `.git`, `figuras-cache`, binarios ni archivos de más de 2 MB).
 //! - Las columnas salen en unidades UTF-16, que es como cuenta el editor (un `ñ` es 1, un emoji es 2).
 //! - Se lee con `fsio::read_file` (texto normalizado a `\n`) y se escribe con `fsio::write_file`: el reemplazo conserva el EOL y
@@ -17,7 +17,7 @@ use std::time::Instant;
 
 pub const MAX_COINCIDENCIAS: usize = 5000;
 const MAX_BYTES: u64 = 2 * 1024 * 1024;
-const OCULTAS: [&str; 5] = [".lv", ".git", "node_modules", "figuras-cache", "target"];
+const OCULTAS: [&str; 6] = [".latexfrog", ".lv", ".git", "node_modules", "figuras-cache", "target"];
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", default)]

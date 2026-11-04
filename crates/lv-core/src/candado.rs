@@ -1,6 +1,6 @@
 //! Candado por proyecto (5.6 del plan, F8). Dos instancias de la app sobre el mismo proyecto tendrían dos colas escribiendo el mismo
-//! `.lv/` y el mismo cache de figuras: se pisarían los auxiliares, los `.md5` y los PDF de las figuras. La primera en abrirlo toma
-//! `.lv/lock` con su PID; la segunda lo ve y trabaja sin compilar ni cocinar (la edición sigue andando), y lo avisa.
+//! `.latexfrog/` y el mismo cache de figuras: se pisarían los auxiliares, los `.md5` y los PDF de las figuras. La primera en abrirlo toma
+//! `.latexfrog/lock` con su PID; la segunda lo ve y trabaja sin compilar ni cocinar (la edición sigue andando), y lo avisa.
 //!
 //! Un cierre brusco (matar la app, cortar la luz) no puede dejar el proyecto trabado para siempre: el candado que ya existe sólo vale
 //! si el proceso de su PID sigue **vivo y es la app** (el nombre del ejecutable). Un PID que ya no existe, o que otro programa heredó, se
@@ -12,7 +12,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-pub const LOCK_FILE: &str = ".lv/lock";
+pub const LOCK_FILE: &str = ".latexfrog/lock";
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Contenido {
@@ -80,7 +80,7 @@ pub fn adquirir(root: &Path) -> Adquirido {
 
 pub fn adquirir_con(root: &Path, pid: u32, app: &str, imagen_de: &dyn Fn(u32) -> Option<String>) -> Adquirido {
     let path = root.join(LOCK_FILE);
-    let _ = fs::create_dir_all(root.join(".lv"));
+    let _ = fs::create_dir_all(root.join(".latexfrog"));
     let token = token();
     let contenido = Contenido { pid, app: app.to_string(), token, desde_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0) };
     let texto = serde_json::to_vec_pretty(&contenido).unwrap_or_default();
@@ -122,7 +122,7 @@ mod tests {
     use super::*;
 
     fn escribir(root: &Path, c: &Contenido) {
-        fs::create_dir_all(root.join(".lv")).unwrap();
+        fs::create_dir_all(root.join(".latexfrog")).unwrap();
         fs::write(root.join(LOCK_FILE), serde_json::to_vec(c).unwrap()).unwrap();
     }
 

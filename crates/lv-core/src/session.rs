@@ -39,7 +39,6 @@ mod diagnostico;
 mod export;
 mod historia;
 mod proyecto;
-mod texpresso;
 pub use proyecto::{ListadoProbado, Probada, Validacion};
 pub use bake::{Cocinando, ErrorFigura, FiglistView, FiguraView, FiguresStatus};
 
@@ -64,7 +63,7 @@ pub struct ProfileView {
     pub clean_before: bool,
     pub auto_compile: bool,
     pub hidden: bool,
-    /// El perfil siempre va con las imágenes en borrador (`draftImages` de `latexviewer.json`).
+    /// El perfil siempre va con las imágenes en borrador (`draftImages` de `latexfrog.json`).
     pub draft_images: bool,
     /// El perfil figura en `publish.names`: es lo que se entrega y el interruptor de borrador de la máquina no lo toca.
     pub publica: bool,
@@ -104,15 +103,15 @@ pub struct ProjectView {
     pub root: String,
     pub candidates: Vec<String>,
     pub root_file: Option<String>,
-    /// `latexviewer.json` existe en disco. Si no, la configuración es la inferida y la interfaz ofrece guardarla.
+    /// `latexfrog.json` existe en disco. Si no, la configuración es la inferida y la interfaz ofrece guardarla.
     pub config_saved: bool,
-    /// El `latexviewer.json` que hay no se pudo leer: se usa la configuración inferida y no se pisa el archivo solo.
+    /// El `latexfrog.json` que hay no se pudo leer: se usa la configuración inferida y no se pisa el archivo solo.
     pub config_error: Option<String>,
     pub config: Option<ConfigView>,
     pub state: State,
     pub parts: Vec<PartView>,
     pub index_ms: u64,
-    /// El PID de otra instancia de la app que tiene abierto este proyecto (`.lv/lock`): acá no se compila ni se cocina.
+    /// El PID de otra instancia de la app que tiene abierto este proyecto (`.latexfrog/lock`): acá no se compila ni se cocina.
     pub locked_by: Option<u32>,
     /// Las piezas del documento que un perfil puede sacar (índice, bibliografía, PDF insertados...).
     pub piezas: Vec<crate::piezas::PiezaInfo>,
@@ -174,6 +173,8 @@ struct Datos {
 }
 
 pub struct Session {
+    /// What opening this project moved from the old names.
+    pub migration: crate::migration::Migration,
     pub root: PathBuf,
     name: String,
     candidates: Vec<String>,
@@ -199,10 +200,6 @@ pub struct Session {
     /// Qué pidió el próximo build y qué se decidió del listado de figuras antes de él: lo consume `lanzar` y va al historial.
     motivo: Mutex<Option<String>>,
     listado_decidido: Mutex<Option<historial::Listado>>,
-    /// La vista previa en vivo con TeXpresso (`session/texpresso.rs`). Al soltar la sesión se apaga.
-    texpresso: crate::texpresso::Supervisor,
-    /// El último sondeo completo de TeXpresso (el que mira adentro de la distro).
-    texpresso_sondeo: Mutex<Option<crate::texpresso::Disponibilidad>>,
 }
 
 /// Un trabajo de la cola: un build, la cocción de figuras (F6), la exportación de partes y la vista previa de un fragmento (F7).
@@ -233,10 +230,8 @@ impl Trabajo for Job {
 struct PlanExtra {
     /// Las partes que entran, en lugar de las del perfil (una parte por exportación; ninguna en un fragmento).
     partes: Option<Vec<String>>,
-    /// El texto del fragmento: se escribe en `.lv/fragment/frag.tex` justo antes de compilar.
+    /// El texto del fragmento: se escribe en `.latexfrog/fragment/frag.tex` justo antes de compilar.
     fragmento: Option<String>,
-    /// El driver de TeXpresso (`session/texpresso.rs`): el del perfil, con las figuras sólo del cache (sin `-shell-escape`).
-    texpresso: bool,
 }
 
 fn es_de_servicio(perfil: &str) -> bool {
@@ -261,7 +256,7 @@ struct Plan {
 /// Copia el `.bbl` más completo de los otros perfiles como `.bbl` del perfil `destino` (la vista previa de un fragmento no corre biber).
 /// El más grande y no el más nuevo: el de un perfil de un solo capítulo sólo trae las obras que cita ese capítulo.
 fn sembrar_bbl(root: &Path, destino: &str) {
-    let Ok(dirs) = std::fs::read_dir(root.join(".lv/build")) else { return };
+    let Ok(dirs) = std::fs::read_dir(root.join(".latexfrog/build")) else { return };
     let mejor = dirs
         .flatten()
         .filter_map(|e| {
@@ -303,15 +298,16 @@ impl Session {
 
     pub fn open_with_cocinero(path: &Path, sink: Sink, builder: Builder, cocinero: Cocinero) -> Result<Arc<Session>> {
         let p = project::open_project(path)?;
+        let migration = crate::migration::migrate(&p.root)?;
         let (config, config_error) = match config::read_config(&p.root) {
             Ok(c) => (c, None),
             Err(e) => (None, Some(e.to_string())),
         };
         let state = config::read_state(&p.root);
         let existe = |rel: &String| fsio::resolver(&p.root, rel, false).is_ok_and(|r| r.is_file());
-        // La raíz es la de `latexviewer.json`; sin él, la única candidata (`state.json` ya no la guarda, F8b).
+        // La raíz es la de `latexfrog.json`; sin él, la única candidata (`state.json` ya no la guarda, F8b).
         let root_file = config.as_ref().map(|c| c.root.clone()).filter(existe).or_else(|| p.info.suggested.clone());
-        // Dos instancias sobre el mismo proyecto escribirían el mismo `.lv/` y el mismo cache: la primera toma el candado.
+        // Dos instancias sobre el mismo proyecto escribirían el mismo `.latexfrog/` y el mismo cache: la primera toma el candado.
         let (candado, bloqueado_por) = match candado::adquirir(&p.root) {
             candado::Adquirido::Tomado(c) => (Some(c), None),
             candado::Adquirido::Ocupado(pid) => (None, Some(pid)),
@@ -334,8 +330,7 @@ impl Session {
             bloqueado_por,
             motivo: Mutex::new(None),
             listado_decidido: Mutex::new(None),
-            texpresso: crate::texpresso::Supervisor::nuevo(Default::default()),
-            texpresso_sondeo: Mutex::new(None),
+            migration,
         };
         {
             let mut d = s.datos.lock().map_err(|_| otro("estado envenenado"))?;
@@ -468,7 +463,7 @@ impl Session {
             return Err(Error::NotFound(rel.to_string()));
         }
         let mut d = self.lock()?;
-        // Sólo cambia esta sesión (lo usan `LV_ROOT` de los smokes y el ejemplo `build`): la raíz del proyecto está en `latexviewer.json`
+        // Sólo cambia esta sesión (lo usan `LV_ROOT` de los smokes y el ejemplo `build`): la raíz del proyecto está en `latexfrog.json`
         // y se cambia desde la pantalla Proyecto. Antes se guardaba en `state.json` y pisaba a la del proyecto.
         d.root_file = Some(rel.to_string());
         if !d.config_saved {
@@ -533,12 +528,10 @@ impl Session {
         let nuevo = d.state.clone();
         self.guardar_estado(&d);
         drop(d);
-        // El perfil, la selección o las variables cambian lo que compila TeXpresso.
-        self.texpresso_al_dia();
         Ok(nuevo)
     }
 
-    /// Escribe `latexviewer.json` con la configuración actual (la inferida, si no había). Es explícito: el archivo es del
+    /// Escribe `latexfrog.json` con la configuración actual (la inferida, si no había). Es explícito: el archivo es del
     /// proyecto y va a git.
     pub fn save_config(&self) -> Result<ProjectView> {
         let mut d = self.lock()?;
@@ -585,8 +578,6 @@ impl Session {
             self.recalcular(&mut d);
         }
         drop(d);
-        // Con un perfil `current`, guardar en otro capítulo cambia lo que compila TeXpresso.
-        self.texpresso_al_dia();
         Ok(FileInfo { part, affects: affects.into(), profile_auto, parts_changed })
     }
 
@@ -644,12 +635,12 @@ impl Session {
             // compartido, las figuras del capítulo (el índice dentro del fragmento no es el del capítulo).
             f.slugs.push((crate::build::FRAGMENTO_REL.to_string(), "frag".to_string()));
         }
-        // Las piezas que el perfil saca: copias de los archivos que las tienen, con su bloque comentado, en `.lv/piezas/<perfil>/`.
+        // Las piezas que el perfil saca: copias de los archivos que las tienen, con su bloque comentado, en `.latexfrog/piezas/<perfil>/`.
         let mut sustituciones = Vec::new();
         if !pc.omit.is_empty() {
             let piezas = crate::piezas::detectar(&self.root, &ix);
             for (rel, contenido) in crate::piezas::copias(&self.root, &piezas, &pc.omit) {
-                let copia = format!(".lv/piezas/{perfil}/{rel}");
+                let copia = format!(".latexfrog/piezas/{perfil}/{rel}");
                 crate::build::write_if_changed(&self.root.join(&copia), &contenido)?;
                 sustituciones.push((rel, copia));
             }
@@ -664,8 +655,7 @@ impl Session {
             // (la exportación nunca va en borrador, ni aunque su perfil lo diga: es lo que se entrega)
             draft_images: perfil != config::PERFIL_EXPORT && (pc.draft_images || Self::borrador_para(&d.state, &cfg, perfil)),
             figuras,
-            // TeXpresso no tiene `-shell-escape`: consume el cache y dibuja en línea lo que falte, como el completo de S5.
-            solo_cache: pc.externalize && (pc.cache_only || extra.texpresso),
+            solo_cache: pc.externalize && pc.cache_only,
             fragmento: extra.fragmento.is_some(),
             omitir: pc.omit.iter().filter_map(|o| crate::piezas::Pieza::de_clave(o)).collect(),
             sustituciones,
@@ -779,7 +769,7 @@ impl Session {
 
     /// Con pdflatex, el preámbulo del perfil precompilado (`formato.rs`): el formato es el driver del perfil hasta `\begin{document}`, y lo
     /// que se compila es una línea `\begin{document}` más lo que sigue a esa línea en el archivo que abre el documento (copiado a
-    /// `.lv/build/<perfil>/`). Medido en el libro: una pasada de 2,1 s baja a ~0,6 s. El formato se rehace cuando cambian el driver
+    /// `.latexfrog/build/<perfil>/`). Medido en el libro: una pasada de 2,1 s baja a ~0,6 s. El formato se rehace cuando cambian el driver
     /// (otro capítulo, otras piezas) o un archivo del preámbulo; si no se puede (otro motor, un paquete que no lo admite), el build va
     /// como siempre. Las figuras nuevas se cocinan igual que antes: pgf lee el driver completo, que es el `\jobname` del formato.
     fn preambulo_precompilado(&self, perfil: &str, plan: &mut Plan) {
@@ -799,7 +789,7 @@ impl Session {
         let raiz_copia = sustituidos.get(&plan.spec.root_rel).cloned();
         let copia = |a: &str| sustituidos.get(a).cloned().or_else(|| (a == plan.spec.root_rel).then(|| raiz_copia.clone()).flatten()).unwrap_or_else(|| a.to_string());
         let Some(resto) = crate::formato::cuerpo_del_documento(&self.root, &archivos, copia) else { return };
-        let dir = format!(".lv/build/{perfil}");
+        let dir = format!(".latexfrog/build/{perfil}");
         let rel_resto = format!("{dir}/lv-{perfil}-resto.tex");
         if crate::build::write_if_changed(&self.root.join(&rel_resto), &resto).is_err() {
             return;
@@ -1066,7 +1056,7 @@ impl Session {
     // --- SyncTeX ----------------------------------------------------------------------------------------------------------
 
     fn synctex_gz(&self, perfil: &str) -> PathBuf {
-        self.root.join(format!(".lv/build/{perfil}/lv-{perfil}.synctex.gz"))
+        self.root.join(format!(".latexfrog/build/{perfil}/lv-{perfil}.synctex.gz"))
     }
 
     /// Qué PDF usar para un archivo (6.4 del plan, la regla de `synctex_pdf.ps1` generalizada): el perfil de partes elegidas
@@ -1151,7 +1141,7 @@ impl Session {
     pub fn carpeta_de_salida(&self, cual: &str) -> Result<PathBuf> {
         let cfg = self.lock()?.config.clone().ok_or_else(|| otro("no hay configuración"))?;
         let rel = match cual {
-            "publicar" => cfg.publish.as_ref().map(|p| p.dir.clone()).ok_or_else(|| otro("el proyecto no define `publish.dir` en latexviewer.json"))?,
+            "publicar" => cfg.publish.as_ref().map(|p| p.dir.clone()).ok_or_else(|| otro("el proyecto no define `publish.dir` en latexfrog.json"))?,
             "exportar" => cfg.export_cfg().dir,
             otra => return Err(otro(format!("carpeta de salida desconocida: {otra:?} (es «publicar» o «exportar»)"))),
         };
@@ -1171,7 +1161,7 @@ impl Session {
             (d.config.clone().ok_or_else(|| otro("no hay configuración"))?, d.root_file.clone().unwrap_or_default())
         };
         let Some(pubcfg) = &cfg.publish else {
-            return Err(otro("el proyecto no define `publish.dir` en latexviewer.json"));
+            return Err(otro("el proyecto no define `publish.dir` en latexfrog.json"));
         };
         let Some(pc) = cfg.profiles.get(perfil) else {
             return Err(otro(format!("no existe el perfil {perfil:?}")));

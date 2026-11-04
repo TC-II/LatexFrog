@@ -450,7 +450,7 @@ fn ordenar_secciones(ix: &ProjectIndex, todas: Vec<Section>) -> Vec<Section> {
     out
 }
 
-const OCULTAS: [&str; 5] = [".lv", ".git", "node_modules", "figuras-cache", "target"];
+const OCULTAS: [&str; 6] = [".latexfrog", ".lv", ".git", "node_modules", "figuras-cache", "target"];
 const IMAGENES: [&str; 6] = ["png", "jpg", "jpeg", "pdf", "eps", "svg"];
 const LIMITE_ARCHIVOS: usize = 6000;
 
@@ -849,13 +849,13 @@ mod tests {
             ("img/foto.png", "x"),
             ("img/otra.PDF", "x"),
             ("figuras-cache/x.pdf", "x"),
-            (".lv/build/a.tex", ""),
+            (".latexfrog/build/a.tex", ""),
             ("notas.txt", ""),
         ]);
         let s = simbolos(&d, "main.tex");
         let v: Vec<_> = s.files.iter().map(|f| (f.rel.as_str(), f.kind.as_str())).collect();
         assert!(v.contains(&("Secciones/uno.tex", "tex")) && v.contains(&("refs.bib", "bib")) && v.contains(&("img/foto.png", "image")) && v.contains(&("img/otra.PDF", "image")));
-        assert!(!v.iter().any(|(r, _)| r.starts_with("figuras-cache") || r.starts_with(".lv") || r.ends_with(".txt")), "{v:?}");
+        assert!(!v.iter().any(|(r, _)| r.starts_with("figuras-cache") || r.starts_with(".latexfrog") || r.ends_with(".txt")), "{v:?}");
     }
 
     #[test]

@@ -3,8 +3,8 @@ entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
  %&-line parsing enabled.
-**./.lv/drivers/lv-completo.tex
-(.lv/drivers/lv-completo.tex
+**./.latexfrog/drivers/lv-completo.tex
+(.latexfrog/drivers/lv-completo.tex
 LaTeX2e <2025-11-01>
 L3 programming layer <2025-12-24>
 (faltante.tex (C:\Users\dev\AppData\Local\Programs\MiKTeX\tex/latex/base\article.cls
@@ -26,7 +26,7 @@ File: size10.clo 2025/01/22 v1.4n Standard LaTeX file (size option)
 ) (C:\Users\dev\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend-pdftex.def
 File: l3backend-pdftex.def 2025-10-09 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count283
-) (C:\_DATA\ITBA\Repositorios GitHub\latex-frog\spikes\work\errores-logs\.lv/build/completo\lv-completo.aux)
+) (C:\_DATA\ITBA\Repositorios GitHub\latex-frog\spikes\work\errores-logs\.latexfrog/build/completo\lv-completo.aux)
 \openout1 = `lv-completo.aux'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 2.

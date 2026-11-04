@@ -286,7 +286,7 @@ impl Session {
         let cfg = d.config.clone().ok_or_else(|| otro("no hay configuración"))?;
         let fcfg = FigureCfg::de(&cfg);
         if fcfg.modo == Modo::Off {
-            return Err(otro("el cache de figuras está apagado (`figureCache.mode` en latexviewer.json)"));
+            return Err(otro("el cache de figuras está apagado (`figureCache.mode` en latexfrog.json)"));
         }
         let ix = ProjectIndex::build(&self.root, &rf, &cfg.parts.commands);
         let todas = ix.part_names();
@@ -304,7 +304,7 @@ impl Session {
         // Los flags de la cocción son los de `partial` (omite portada e índices), `externalize` y el de listado de pgf.
         let flags: Vec<String> = cfg.flags.partial.iter().chain(&cfg.flags.externalize).chain(&cfg.flags.figure_list).cloned().collect();
         if cfg.flags.figure_list.is_empty() && fcfg.modo == Modo::Project {
-            return Err(otro("el modo `project` necesita `flags.figureList` en latexviewer.json: la macro que pone a pgf en `mode=list and make`"));
+            return Err(otro("el modo `project` necesita `flags.figureList` en latexfrog.json: la macro que pone a pgf en `mode=list and make`"));
         }
         let vars: Vec<(String, String)> = cfg
             .variables
@@ -660,7 +660,7 @@ impl Session {
         Ok(res)
     }
 
-    /// Escribe `.lv/figlist.json`, con la raíz y las partes con que se armó. La lista de un perfil parcial no pisa a una completa que
+    /// Escribe `.latexfrog/figlist.json`, con la raíz y las partes con que se armó. La lista de un perfil parcial no pisa a una completa que
     /// **vale** hoy (mismo sello, misma raíz y todas las partes con figuras: la limpieza sólo se autoriza con ésa): se limita a
     /// actualizar qué falta. Una completa de otra raíz o de otras partes no se conserva.
     fn guardar_lista(&self, plan: &PlanBake, nombres: &[String], pendientes: &[String], fallidas: &[String], sello: Option<&str>, huella: Option<String>) {

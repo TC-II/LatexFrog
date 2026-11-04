@@ -106,7 +106,7 @@ impl Caso {
 fn exportar_deja_un_pdf_por_parte_con_el_numero_impreso_y_no_toca_la_seleccion_ni_el_pdf_del_parcial() {
     let c = caso();
     c.sembrar();
-    let parcial = ".lv/build/parcial/lv-parcial.pdf";
+    let parcial = ".latexfrog/build/parcial/lv-parcial.pdf";
     let (antes, seleccion) = (c.mtime(parcial), c.s.view().unwrap().state.selection);
     c.s.request_export(Some(vec!["Cap/uno".into(), "Cap/dos".into()])).unwrap();
     c.esperar_ocioso();
@@ -217,7 +217,7 @@ fn la_vista_previa_de_un_fragmento_resuelve_referencias_y_comparte_el_cache_sin_
     c.esperar_ocioso();
     let ev = c.eventos_clave();
     assert_eq!(ev.last().map(String::as_str), Some("fin(fragmento,ok=true)"), "{ev:?}");
-    let pdf = ".lv/build/fragmento/lv-fragmento.pdf";
+    let pdf = ".latexfrog/build/fragmento/lv-fragmento.pdf";
     assert!(fs::read(c.p.join(pdf)).unwrap().starts_with(b"%PDF"));
     let t = c.texto_de(pdf);
     assert!(t.contains("capitulo 5") && t.contains("Del fragmento"), "referencia resuelta: {t}");
@@ -241,7 +241,7 @@ fn la_variable_del_menu_llega_al_documento_porque_la_guardia_deja_ganar_al_drive
         v.insert("OpcionPie".to_string(), valor.to_string());
         c.s.set_state(StatePatch { variables: Some(v), ..Default::default() }).unwrap();
         c.compilar("parcial");
-        c.texto_de(".lv/build/parcial/lv-parcial.pdf")
+        c.texto_de(".latexfrog/build/parcial/lv-parcial.pdf")
     };
     assert!(pie("ninguno").contains("Pie:ninguno"));
     assert!(pie("autor").contains("Pie:autor"), "el cambio de variable recompila (cambia el driver)");

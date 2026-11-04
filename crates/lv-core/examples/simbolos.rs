@@ -1,5 +1,5 @@
 //! Cuenta lo que el índice de símbolos saca de un proyecto y cuánto tarda: `cargo run --release -p lv-core --example simbolos --
-//! <carpeta> [--root <raíz.tex>]`. Sin `--root` usa la de `latexviewer.json` o la que se infiera. Sirve para medir y para mirar el lint.
+//! <carpeta> [--root <raíz.tex>]`. Sin `--root` usa la de `latexfrog.json` o la que se infiera. Sirve para medir y para mirar el lint.
 
 use lv_core::config::read_config;
 use lv_core::graph::ProjectIndex;

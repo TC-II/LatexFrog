@@ -1,7 +1,7 @@
 [0] Config.pm:328> INFO - This is Biber 2.21
-[0] Config.pm:331> INFO - Logfile is '.lv/build/completo/lv-completo.blg'
+[0] Config.pm:331> INFO - Logfile is '.latexfrog/build/completo/lv-completo.blg'
 [63] biber-MSWIN64:342> INFO - === 
-[86] Biber.pm:421> INFO - Reading '.lv/build/completo/lv-completo.bcf'
+[86] Biber.pm:421> INFO - Reading '.latexfrog/build/completo/lv-completo.bcf'
 [147] Biber.pm:1002> INFO - Found 2 citekeys in bib section 0
 [156] Biber.pm:4487> INFO - Processing section 0
 [163] Biber.pm:4678> INFO - Looking for bibtex file 'refs.bib' for section 0

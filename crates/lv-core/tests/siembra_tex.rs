@@ -62,7 +62,7 @@ fn proyecto() -> (TempDir, PathBuf) {
         ("Cap/a.tex", CAP_A),
         ("Cap/b.tex", CAP_B),
         ("estilo.tex", "\\tikzset{miestilo/.style={thick,blue!60!black}}\n"),
-        ("latexviewer.json", CONFIG),
+        ("latexfrog.json", CONFIG),
     ] {
         let f = p.join(rel);
         fs::create_dir_all(f.parent().unwrap()).unwrap();
@@ -89,10 +89,10 @@ fn un_parcial_despues_de_una_coccion_numera_el_capitulo_como_el_libro_aunque_no_
     // Una cocción de todo el documento: lista las figuras y las cocina. Ningún perfil compiló nunca.
     s.request_bake().unwrap();
     esperar_ocioso(&s);
-    assert!(!p.join(".lv/build/rapido").exists() && !p.join(".lv/build/completo").exists());
-    let aux_a = fs::read_to_string(p.join(".lv/build/cocina/Cap/a.aux")).expect("la cocina compiló la parte A entera");
+    assert!(!p.join(".latexfrog/build/rapido").exists() && !p.join(".latexfrog/build/completo").exists());
+    let aux_a = fs::read_to_string(p.join(".latexfrog/build/cocina/Cap/a.aux")).expect("la cocina compiló la parte A entera");
     assert!(aux_a.contains("setcounter{chapter}{8}"), "{aux_a}");
-    assert!(!p.join(".lv/build/cocina/.sospechoso").exists(), "el listado salió bien");
+    assert!(!p.join(".latexfrog/build/cocina/.sospechoso").exists(), "el listado salió bien");
 
     // Un parcial con sólo la parte B: el capítulo sale 9, no 8.
     s.set_state(StatePatch { selection: Some(vec!["Cap/b".into()]), ..Default::default() }).unwrap();
@@ -100,9 +100,9 @@ fn un_parcial_despues_de_una_coccion_numera_el_capitulo_como_el_libro_aunque_no_
     esperar_ocioso(&s);
     assert!(r.log().contains("Output written"), "el parcial no compiló: {}", r.log());
     // El `.aux` de la parte que sí se compiló lleva el contador del capítulo: es el que se imprime en el PDF.
-    let aux_b = fs::read_to_string(p.join(".lv/build/parcial/Cap/b.aux")).unwrap();
+    let aux_b = fs::read_to_string(p.join(".latexfrog/build/parcial/Cap/b.aux")).unwrap();
     assert!(aux_b.contains("setcounter{chapter}{9}"), "el capítulo Dos tenía que salir 9: {aux_b}");
-    let sembrado = fs::read_to_string(p.join(".lv/build/parcial/Cap/a.aux")).expect("se sembró el .aux de la parte excluida");
+    let sembrado = fs::read_to_string(p.join(".latexfrog/build/parcial/Cap/a.aux")).expect("se sembró el .aux de la parte excluida");
     assert_eq!(sembrado, aux_a, "es el de la cocina, tal cual");
 }
 
@@ -115,7 +115,7 @@ fn sin_cocina_ni_otro_build_el_parcial_numera_como_siempre_y_no_inventa_nada() {
     s.request_build(Some("parcial")).unwrap();
     esperar_ocioso(&s);
     // Esta primera vez la app lista las figuras del parcial antes de compilar (sólo de la parte B): no hay `.aux` de la A en ningún lado.
-    assert!(!p.join(".lv/build/parcial/Cap/a.aux").exists(), "no hay de dónde sembrar");
-    let aux_b = fs::read_to_string(p.join(".lv/build/parcial/Cap/b.aux")).unwrap();
+    assert!(!p.join(".latexfrog/build/parcial/Cap/a.aux").exists(), "no hay de dónde sembrar");
+    let aux_b = fs::read_to_string(p.join(".latexfrog/build/parcial/Cap/b.aux")).unwrap();
     assert!(aux_b.contains("setcounter{chapter}{8}"), "sin el .aux de la parte A el capítulo B es el 8: {aux_b}");
 }

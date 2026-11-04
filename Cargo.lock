@@ -241,6 +241,7 @@ dependencies = [
  "lv-core",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

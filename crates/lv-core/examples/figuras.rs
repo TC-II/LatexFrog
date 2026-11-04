@@ -21,7 +21,7 @@ fn main() {
     let cfg = match read_config(root) {
         Ok(Some(c)) => c,
         Ok(None) => {
-            eprintln!("la carpeta no tiene latexviewer.json");
+            eprintln!("la carpeta no tiene latexfrog.json");
             std::process::exit(2);
         }
         Err(e) => {

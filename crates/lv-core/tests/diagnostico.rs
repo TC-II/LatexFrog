@@ -29,7 +29,7 @@ fn el_doctor_de_la_sesion_ve_el_def_sin_guardia_al_abrir_una_copia_sin_parchear(
     fs::write(d.path().join("main.tex"), "\\documentclass{book}\n\\input{structure}\n\\begin{document}\nHola\n\\end{document}\n").unwrap();
     fs::write(d.path().join("structure.tex"), "\\def\\OpcionPie{completo}\n").unwrap();
     fs::write(
-        d.path().join("latexviewer.json"),
+        d.path().join("latexfrog.json"),
         r#"{ "root": "main.tex", "variables": { "OpcionPie": { "choices": ["completo", "autor"], "default": "completo" } }, "profiles": { "completo": {} } }"#,
     )
     .unwrap();
@@ -71,7 +71,7 @@ fn el_doctor_contra_tex_de_verdad_no_da_errores_y_ve_el_path_de_latexmk() {
     // El doctor no deja nada en el proyecto (ni el x.tex de la sonda, ni nada de latexmk).
     let mut nombres: Vec<String> = fs::read_dir(d.path()).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
     nombres.sort();
-    assert_eq!(nombres, [".lv", "main.tex"]);
+    assert_eq!(nombres, [".latexfrog", "main.tex"]);
 }
 
 #[cfg(windows)]

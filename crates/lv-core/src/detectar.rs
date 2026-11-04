@@ -4,7 +4,7 @@
 //! proyecto (sin compilar) y se explica en palabras de usuario; el resultado es una `Propuesta` con una `ProjectConfig` lista para guardar.
 //!
 //! Es una heurística, no un parser de TeX: lo que no se reconoce no se inventa (queda para editar a mano en la pantalla). El caso de
-//! prueba es el libro de `inspo/Proyecto`, cuya configuración (`fixtures/configs/libro-tc.latexviewer.json`) se tiene que poder alcanzar
+//! prueba es el libro de `inspo/Proyecto`, cuya configuración (`fixtures/configs/libro-tc.latexfrog.json`) se tiene que poder alcanzar
 //! sólo confirmando.
 
 use crate::config::{
@@ -144,7 +144,7 @@ pub struct Propuesta {
     pub salidas: SalidasDetectadas,
     pub variables: Vec<VariableDetectada>,
     pub avisos: Vec<String>,
-    /// La configuración propuesta como **texto** (JSON con sangría, en el orden de claves de `latexviewer.json`): es lo que la pantalla
+    /// La configuración propuesta como **texto** (JSON con sangría, en el orden de claves de `latexfrog.json`): es lo que la pantalla
     /// edita y guarda. Como valor (`config`) las claves saldrían ordenadas por nombre.
     pub texto: String,
     /// La misma configuración como valor, para las pruebas.

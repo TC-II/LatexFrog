@@ -1,6 +1,6 @@
 //! Aislamiento de los auxiliares por perfil (opción A de S1, 5.4 y 5.5 del plan).
 //!
-//! Cada perfil compila en `.lv/build/<perfil>/`. Lo que hace falta alrededor de latexmk, todo medido en S1:
+//! Cada perfil compila en `.latexfrog/build/<perfil>/`. Lo que hace falta alrededor de latexmk, todo medido en S1:
 //! - **Sembrado:** con `\includeonly`, LaTeX saca de los `.aux` las referencias de las partes que no entran. Antes de un
 //!   build parcial se copia el `.aux` de cada parte excluida desde el build de otro perfil que lo tenga más nuevo, y sólo
 //!   si el contenido difiere (así no se toca el mtime de lo que ya es igual y no se provocan pasadas).
@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 pub fn build_dir(root: &Path, perfil: &str) -> PathBuf {
-    root.join(".lv").join("build").join(perfil)
+    root.join(".latexfrog").join("build").join(perfil)
 }
 
 fn marcador(root: &Path, perfil: &str) -> PathBuf {
@@ -52,7 +52,7 @@ pub fn ensure_include_dirs(root: &Path, perfil: &str, dirs: &BTreeSet<String>) -
     Ok(())
 }
 
-/// Crea las dos carpetas del cache de figuras: `<cache>/` en la raíz (donde pgf deja los PDF) y `.lv/build/<perfil>/<cache>/`
+/// Crea las dos carpetas del cache de figuras: `<cache>/` en la raíz (donde pgf deja los PDF) y `.latexfrog/build/<perfil>/<cache>/`
 /// (donde deja los `.md5`). MiKTeX las crea solo; **TeX Live no**, y sin ellas el primer build que externaliza falla con
 /// `I can't write on file '<cache>/....md5'` y `Emergency stop` (revisión previa a F6, probado con TeX Live 2022).
 pub fn ensure_cache_dirs(root: &Path, perfil: &str, cache_dir: &str) -> Result<()> {
@@ -111,7 +111,7 @@ pub fn seed(root: &Path, destino: &str, excluidas: &[String], fuentes: &[String]
     Ok(copiados)
 }
 
-/// Mueve los `.md5` que pgf dejó en `.lv/build/<perfil>/<cache>` al cache compartido de la raíz. Devuelve cuántos.
+/// Mueve los `.md5` que pgf dejó en `.latexfrog/build/<perfil>/<cache>` al cache compartido de la raíz. Devuelve cuántos.
 ///
 /// Con `rename`: es atómico (nadie ve un `.md5` a medio escribir) y mantiene el contenido y la fecha; copiar y borrar
 /// dejaba un instante con dos copias, y en Linux `fs::copy` no conserva el mtime. Si no se puede (el cache en otra unidad)
@@ -183,36 +183,36 @@ mod tests {
     fn siembra_desde_el_mas_nuevo_y_no_toca_lo_que_ya_es_igual() {
         let d = tempfile::tempdir().unwrap();
         let r = d.path();
-        escribir(r, ".lv/build/rapido/Secciones/Dos.aux", "viejo");
+        escribir(r, ".latexfrog/build/rapido/Secciones/Dos.aux", "viejo");
         pausa();
-        escribir(r, ".lv/build/completo/Secciones/Dos.aux", "nuevo");
+        escribir(r, ".latexfrog/build/completo/Secciones/Dos.aux", "nuevo");
         let fuentes = vec!["rapido".to_string(), "completo".to_string(), "parcial".to_string()];
         let excl = vec!["Secciones/Dos".to_string(), "Secciones/Tres".to_string()];
         assert_eq!(seed(r, "parcial", &excl, &fuentes, &[]).unwrap(), 1, "Tres no existe en ninguno");
-        assert_eq!(fs::read_to_string(r.join(".lv/build/parcial/Secciones/Dos.aux")).unwrap(), "nuevo");
+        assert_eq!(fs::read_to_string(r.join(".latexfrog/build/parcial/Secciones/Dos.aux")).unwrap(), "nuevo");
         // Segunda vez: el propio ya es igual o más nuevo, no se copia (ni se toca su mtime).
-        let m1 = mtime(&r.join(".lv/build/parcial/Secciones/Dos.aux"));
+        let m1 = mtime(&r.join(".latexfrog/build/parcial/Secciones/Dos.aux"));
         pausa();
         assert_eq!(seed(r, "parcial", &excl, &fuentes, &[]).unwrap(), 0);
-        assert_eq!(mtime(&r.join(".lv/build/parcial/Secciones/Dos.aux")), m1);
+        assert_eq!(mtime(&r.join(".latexfrog/build/parcial/Secciones/Dos.aux")), m1);
         // Un origen más nuevo pero con el mismo contenido tampoco provoca una copia.
         pausa();
-        escribir(r, ".lv/build/rapido/Secciones/Dos.aux", "nuevo");
+        escribir(r, ".latexfrog/build/rapido/Secciones/Dos.aux", "nuevo");
         assert_eq!(seed(r, "parcial", &excl, &fuentes, &[]).unwrap(), 0);
-        assert_eq!(mtime(&r.join(".lv/build/parcial/Secciones/Dos.aux")), m1);
+        assert_eq!(mtime(&r.join(".latexfrog/build/parcial/Secciones/Dos.aux")), m1);
     }
 
     #[test]
     fn no_siembra_desde_un_build_sospechoso() {
         let d = tempfile::tempdir().unwrap();
         let r = d.path();
-        escribir(r, ".lv/build/rapido/Secciones/Dos.aux", "truncado\\newlabel{");
+        escribir(r, ".latexfrog/build/rapido/Secciones/Dos.aux", "truncado\\newlabel{");
         mark_suspect(r, "rapido").unwrap();
         assert!(is_suspect(r, "rapido"));
         let fuentes = vec!["rapido".to_string()];
         let excl = vec!["Secciones/Dos".to_string()];
         assert_eq!(seed(r, "parcial", &excl, &fuentes, &[]).unwrap(), 0);
-        assert!(!r.join(".lv/build/parcial/Secciones/Dos.aux").exists());
+        assert!(!r.join(".latexfrog/build/parcial/Secciones/Dos.aux").exists());
         clear_suspect(r, "rapido");
         assert_eq!(seed(r, "parcial", &excl, &fuentes, &[]).unwrap(), 1, "un build bueno vuelve a ser origen válido");
     }
@@ -225,52 +225,52 @@ mod tests {
         let reserva = vec!["cocina".to_string(), "export".to_string()];
         let excl = vec!["Secciones/Dos".to_string(), "Secciones/Tres".to_string()];
         // Un proyecto en frío: sólo la cocción dejó `.aux` (la de Dos, en la cocina; la de Tres, en la exportación).
-        escribir(r, ".lv/build/cocina/Secciones/Dos.aux", "cocina");
-        escribir(r, ".lv/build/export/Secciones/Tres.aux", "export");
+        escribir(r, ".latexfrog/build/cocina/Secciones/Dos.aux", "cocina");
+        escribir(r, ".latexfrog/build/export/Secciones/Tres.aux", "export");
         assert_eq!(seed(r, "parcial", &excl, &fuentes, &reserva).unwrap(), 2);
-        assert_eq!(fs::read_to_string(r.join(".lv/build/parcial/Secciones/Dos.aux")).unwrap(), "cocina");
-        assert_eq!(fs::read_to_string(r.join(".lv/build/parcial/Secciones/Tres.aux")).unwrap(), "export");
+        assert_eq!(fs::read_to_string(r.join(".latexfrog/build/parcial/Secciones/Dos.aux")).unwrap(), "cocina");
+        assert_eq!(fs::read_to_string(r.join(".latexfrog/build/parcial/Secciones/Tres.aux")).unwrap(), "export");
         // Sin último recurso no se siembra nada (como antes).
         assert_eq!(seed(r, "otro", &excl, &fuentes, &[]).unwrap(), 0);
         // Un perfil normal con la parte tiene prioridad AUNQUE el de último recurso sea más nuevo.
         pausa();
-        escribir(r, ".lv/build/rapido/Secciones/Dos.aux", "rapido");
+        escribir(r, ".latexfrog/build/rapido/Secciones/Dos.aux", "rapido");
         pausa();
-        escribir(r, ".lv/build/cocina/Secciones/Dos.aux", "cocina más nueva");
+        escribir(r, ".latexfrog/build/cocina/Secciones/Dos.aux", "cocina más nueva");
         assert_eq!(seed(r, "otro", &excl, &fuentes, &reserva).unwrap(), 2);
-        assert_eq!(fs::read_to_string(r.join(".lv/build/otro/Secciones/Dos.aux")).unwrap(), "rapido");
+        assert_eq!(fs::read_to_string(r.join(".latexfrog/build/otro/Secciones/Dos.aux")).unwrap(), "rapido");
         // Entre la cocina y la exportación gana la más nueva.
         pausa();
-        escribir(r, ".lv/build/export/Secciones/Dos.aux", "export más nueva");
+        escribir(r, ".latexfrog/build/export/Secciones/Dos.aux", "export más nueva");
         assert_eq!(seed(r, "solo", &["Secciones/Dos".to_string()], &[], &reserva).unwrap(), 1);
-        assert_eq!(fs::read_to_string(r.join(".lv/build/solo/Secciones/Dos.aux")).unwrap(), "export más nueva");
+        assert_eq!(fs::read_to_string(r.join(".latexfrog/build/solo/Secciones/Dos.aux")).unwrap(), "export más nueva");
     }
 
     #[test]
     fn no_siembra_de_la_cocina_ni_de_la_exportacion_si_son_sospechosas() {
         let d = tempfile::tempdir().unwrap();
         let r = d.path();
-        escribir(r, ".lv/build/cocina/Secciones/Dos.aux", "truncado\\newlabel{");
+        escribir(r, ".latexfrog/build/cocina/Secciones/Dos.aux", "truncado\\newlabel{");
         mark_suspect(r, "cocina").unwrap();
         let reserva = vec!["cocina".to_string(), "export".to_string()];
         let excl = vec!["Secciones/Dos".to_string()];
         assert_eq!(seed(r, "parcial", &excl, &[], &reserva).unwrap(), 0);
-        assert!(!r.join(".lv/build/parcial/Secciones/Dos.aux").exists());
+        assert!(!r.join(".latexfrog/build/parcial/Secciones/Dos.aux").exists());
         // Una exportación buena sí sirve aunque la cocina no.
-        escribir(r, ".lv/build/export/Secciones/Dos.aux", "export");
+        escribir(r, ".latexfrog/build/export/Secciones/Dos.aux", "export");
         assert_eq!(seed(r, "parcial", &excl, &[], &reserva).unwrap(), 1);
         // Y si la cocina vuelve a salir bien, vuelve a valer.
         clear_suspect(r, "cocina");
         pausa();
-        escribir(r, ".lv/build/cocina/Secciones/Dos.aux", "cocina buena");
+        escribir(r, ".latexfrog/build/cocina/Secciones/Dos.aux", "cocina buena");
         assert_eq!(seed(r, "parcial", &excl, &[], &reserva).unwrap(), 1);
-        assert_eq!(fs::read_to_string(r.join(".lv/build/parcial/Secciones/Dos.aux")).unwrap(), "cocina buena");
+        assert_eq!(fs::read_to_string(r.join(".latexfrog/build/parcial/Secciones/Dos.aux")).unwrap(), "cocina buena");
     }
 
     #[test]
     fn el_perfil_no_se_siembra_a_si_mismo() {
         let d = tempfile::tempdir().unwrap();
-        escribir(d.path(), ".lv/build/parcial/x.aux", "a");
+        escribir(d.path(), ".latexfrog/build/parcial/x.aux", "a");
         assert_eq!(seed(d.path(), "parcial", &["x".to_string()], &["parcial".to_string()], &[]).unwrap(), 0);
     }
 
@@ -278,13 +278,13 @@ mod tests {
     fn mueve_los_md5_al_cache_compartido_y_no_toca_los_pdf() {
         let d = tempfile::tempdir().unwrap();
         let r = d.path();
-        escribir(r, ".lv/build/parcial/figuras-cache/A-uno-0.md5", "nuevo");
-        escribir(r, ".lv/build/parcial/figuras-cache/A-uno-0.log", "log");
+        escribir(r, ".latexfrog/build/parcial/figuras-cache/A-uno-0.md5", "nuevo");
+        escribir(r, ".latexfrog/build/parcial/figuras-cache/A-uno-0.log", "log");
         escribir(r, "figuras-cache/A-uno-0.md5", "viejo");
         assert_eq!(move_md5(r, "parcial", "figuras-cache"), 1);
         assert_eq!(fs::read_to_string(r.join("figuras-cache/A-uno-0.md5")).unwrap(), "nuevo");
-        assert!(!r.join(".lv/build/parcial/figuras-cache/A-uno-0.md5").exists());
-        assert!(r.join(".lv/build/parcial/figuras-cache/A-uno-0.log").exists());
+        assert!(!r.join(".latexfrog/build/parcial/figuras-cache/A-uno-0.md5").exists());
+        assert!(r.join(".latexfrog/build/parcial/figuras-cache/A-uno-0.log").exists());
         assert_eq!(move_md5(r, "parcial", "figuras-cache"), 0);
         assert_eq!(move_md5(r, "no-hay", "figuras-cache"), 0);
     }
@@ -296,15 +296,15 @@ mod tests {
         for f in [
             "lv-rapido.aux", "lv-rapido.fdb_latexmk", "lv-rapido.out", "lv-rapido.toc", "lv-rapido.run.xml", "Secciones/Dos.aux", "Capítulos/Desarrollo/Tres.aux",
         ] {
-            escribir(r, &format!(".lv/build/rapido/{f}"), "x");
+            escribir(r, &format!(".latexfrog/build/rapido/{f}"), "x");
         }
         for f in ["lv-rapido.pdf", "lv-rapido.synctex.gz", "lv-rapido.log", "figuras-cache/A-0.aux"] {
-            escribir(r, &format!(".lv/build/rapido/{f}"), "x");
+            escribir(r, &format!(".latexfrog/build/rapido/{f}"), "x");
         }
         mark_suspect(r, "rapido").unwrap();
         assert_eq!(clean_profile(r, "rapido", "figuras-cache"), 7);
         for f in ["lv-rapido.pdf", "lv-rapido.synctex.gz", "lv-rapido.log", "figuras-cache/A-0.aux"] {
-            assert!(r.join(".lv/build/rapido").join(f).exists(), "{f} no se borra");
+            assert!(r.join(".latexfrog/build/rapido").join(f).exists(), "{f} no se borra");
         }
         assert!(is_suspect(r, "rapido"), "limpiar no cambia el estado: lo decide el build que sigue");
         assert_eq!(clean_profile(r, "no-hay", "figuras-cache"), 0);
@@ -314,12 +314,12 @@ mod tests {
     fn el_md5_movido_conserva_contenido_y_fecha_y_no_deja_copia() {
         let d = tempfile::tempdir().unwrap();
         let r = d.path();
-        escribir(r, ".lv/build/rapido/figuras-cache/B-dos-1.md5", "contenido");
-        let antes = mtime(&r.join(".lv/build/rapido/figuras-cache/B-dos-1.md5")).unwrap();
+        escribir(r, ".latexfrog/build/rapido/figuras-cache/B-dos-1.md5", "contenido");
+        let antes = mtime(&r.join(".latexfrog/build/rapido/figuras-cache/B-dos-1.md5")).unwrap();
         assert_eq!(move_md5(r, "rapido", "figuras-cache"), 1);
         assert_eq!(fs::read_to_string(r.join("figuras-cache/B-dos-1.md5")).unwrap(), "contenido");
         assert_eq!(mtime(&r.join("figuras-cache/B-dos-1.md5")).unwrap(), antes, "rename conserva la fecha");
-        assert!(!r.join(".lv/build/rapido/figuras-cache/B-dos-1.md5").exists());
+        assert!(!r.join(".latexfrog/build/rapido/figuras-cache/B-dos-1.md5").exists());
     }
 
     #[test]
@@ -327,10 +327,10 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         ensure_cache_dirs(d.path(), "rapido", "figuras-cache").unwrap();
         assert!(d.path().join("figuras-cache").is_dir());
-        assert!(d.path().join(".lv/build/rapido/figuras-cache").is_dir());
+        assert!(d.path().join(".latexfrog/build/rapido/figuras-cache").is_dir());
         ensure_cache_dirs(d.path(), "rapido", "figuras-cache").unwrap();
         ensure_cache_dirs(d.path(), "parcial", "img/cache").unwrap();
-        assert!(d.path().join("img/cache").is_dir() && d.path().join(".lv/build/parcial/img/cache").is_dir());
+        assert!(d.path().join("img/cache").is_dir() && d.path().join(".latexfrog/build/parcial/img/cache").is_dir());
     }
 
     #[test]
@@ -338,6 +338,6 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let dirs: BTreeSet<String> = ["Capítulos".to_string(), "Capítulos/Desarrollo".to_string()].into();
         ensure_include_dirs(d.path(), "rapido", &dirs).unwrap();
-        assert!(d.path().join(".lv/build/rapido/Capítulos/Desarrollo").is_dir());
+        assert!(d.path().join(".latexfrog/build/rapido/Capítulos/Desarrollo").is_dir());
     }
 }

@@ -13,7 +13,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-const CREA_PDF: &str = "New-Item -ItemType Directory -Force '.lv/build/completo' | Out-Null\nSet-Content '.lv/build/completo/lv-completo.pdf' 'x'\n";
+const CREA_PDF: &str = "New-Item -ItemType Directory -Force '.latexfrog/build/completo' | Out-Null\nSet-Content '.latexfrog/build/completo/lv-completo.pdf' 'x'\n";
 
 fn proyecto() -> TempDir {
     let d = TempDir::new().unwrap();
@@ -25,7 +25,7 @@ fn proyecto() -> TempDir {
 fn falso(dir: &Path, cuerpo: &str) -> Builder {
     let script = dir.join("falso.ps1");
     fs::write(&script, cuerpo).unwrap();
-    // El script vive afuera de `.lv` para no mezclarse con lo que genera la app.
+    // El script vive afuera de `.latexfrog` para no mezclarse con lo que genera la app.
     Builder::con_programa(
         "powershell",
         vec!["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"].into_iter().map(OsString::from).chain([script.into_os_string()]).collect(),
@@ -63,7 +63,7 @@ fn bytes_invalidos_y_sin_salto_final_no_cortan_la_salida() {
     assert_eq!(r.log(), "ab\u{FFFD}\u{FFFD}cd", "la salida llega completa, sin salto final y con reemplazos");
     assert!(ok && !cancelled && updated);
     assert_eq!(code, Some(0));
-    assert_eq!(pdf.as_deref(), Some(".lv/build/completo/lv-completo.pdf"));
+    assert_eq!(pdf.as_deref(), Some(".latexfrog/build/completo/lv-completo.pdf"));
 }
 
 #[test]
@@ -167,8 +167,8 @@ fn codigo_cero_sin_pdf_no_es_ok() {
 #[test]
 fn un_build_sin_cambios_sale_con_cero_sin_tocar_el_pdf_y_es_ok() {
     let d = proyecto();
-    fs::create_dir_all(d.path().join(".lv/build/completo")).unwrap();
-    fs::write(d.path().join(".lv/build/completo/lv-completo.pdf"), "viejo").unwrap();
+    fs::create_dir_all(d.path().join(".latexfrog/build/completo")).unwrap();
+    fs::write(d.path().join(".latexfrog/build/completo/lv-completo.pdf"), "viejo").unwrap();
     std::thread::sleep(Duration::from_millis(50));
     let b = falso(d.path(), "exit 0\n");
     let r = Recolector::nuevo();
@@ -203,7 +203,7 @@ fn pasa_el_perfil_el_directorio_y_la_linea_de_comandos() {
     let log = r.log();
     assert!(log.contains("PERFIL=completo"), "{log}");
     assert!(log.contains(d.path().file_name().unwrap().to_str().unwrap()), "cwd = la raíz del proyecto: {log}");
-    for esperado in ["-pdf", "-synctex=1", "-interaction=nonstopmode", "-file-line-error", "-latexoption=-max-print-line=10000", "-r .lv/latexmkrc", ".lv/drivers/lv-completo.tex"] {
+    for esperado in ["-pdf", "-synctex=1", "-interaction=nonstopmode", "-file-line-error", "-latexoption=-max-print-line=10000", "-r .latexfrog/latexmkrc", ".latexfrog/drivers/lv-completo.tex"] {
         assert!(log.contains(esperado), "falta {esperado:?} en {log}");
     }
 }
@@ -215,8 +215,8 @@ fn genera_el_driver_y_el_rc_en_lv_y_no_los_reescribe_si_no_cambian() {
     let r = Recolector::nuevo();
     b.start(d.path(), "main.tex", "completo", r.sink.clone()).unwrap();
     r.esperar(60);
-    let driver = d.path().join(".lv/drivers/lv-completo.tex");
-    let rc = d.path().join(".lv/latexmkrc");
+    let driver = d.path().join(".latexfrog/drivers/lv-completo.tex");
+    let rc = d.path().join(".latexfrog/latexmkrc");
     assert_eq!(fs::read_to_string(&driver).unwrap(), lv_core::build::render_driver("completo", "main.tex").unwrap());
     assert_eq!(fs::read_to_string(&rc).unwrap(), lv_core::build::render_latexmkrc());
     let (m1, m2) = (fs::metadata(&driver).unwrap().modified().unwrap(), fs::metadata(&rc).unwrap().modified().unwrap());
@@ -230,12 +230,12 @@ fn genera_el_driver_y_el_rc_en_lv_y_no_los_reescribe_si_no_cambian() {
     }
     assert_eq!(fs::metadata(&driver).unwrap().modified().unwrap(), m1, "tocar el driver haría recompilar a latexmk");
     assert_eq!(fs::metadata(&rc).unwrap().modified().unwrap(), m2);
-    // Y no se escribe nada afuera de .lv (el script falso está en la raíz, es del test).
+    // Y no se escribe nada afuera de .latexfrog (el script falso está en la raíz, es del test).
     let sobras: Vec<_> = fs::read_dir(d.path())
         .unwrap()
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().to_string())
-        .filter(|n| !["main.tex", "falso.ps1", ".lv"].contains(&n.as_str()))
+        .filter(|n| !["main.tex", "falso.ps1", ".latexfrog"].contains(&n.as_str()))
         .collect();
     assert!(sobras.is_empty(), "{sobras:?}");
 }

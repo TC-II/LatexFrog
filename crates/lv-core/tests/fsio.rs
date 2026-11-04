@@ -264,7 +264,7 @@ fn recorrer(dir: &Path, salida: &mut Vec<PathBuf>) {
         let p = e.path();
         let nombre = e.file_name().to_string_lossy().to_string();
         if p.is_dir() {
-            if !["figuras-cache", ".lv", ".git", "Apuntes", "Sources", "_Revisar", "output_visualizations", "Pictures", "Imagenes"].contains(&nombre.as_str()) {
+            if !["figuras-cache", ".latexfrog", ".git", "Apuntes", "Sources", "_Revisar", "output_visualizations", "Pictures", "Imagenes"].contains(&nombre.as_str()) {
                 recorrer(&p, salida);
             }
         } else if matches!(p.extension().and_then(|x| x.to_str()), Some("tex" | "bib" | "ist" | "md")) {

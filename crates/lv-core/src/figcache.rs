@@ -1,5 +1,5 @@
 //! El cache de figuras como datos (sección 7 del plan): su configuración, el sello, lo que hay en la carpeta, la lista de
-//! figuras del último listado (`.lv/figlist.json`), cuáles están pendientes y qué se puede limpiar. Sin procesos: el que
+//! figuras del último listado (`.latexfrog/figlist.json`), cuáles están pendientes y qué se puede limpiar. Sin procesos: el que
 //! lanza TeX es `cocinero.rs`, y la verificación de lo que salió, `figures.rs`.
 //!
 //! Los nombres del cache son los de pgf: `<carpeta>/<sello>-<slug>-<n>` (el libro, con `\FigurasDe{slug}`) o, en el modo
@@ -18,7 +18,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::OnceLock;
 
-pub const FIGLIST_FILE: &str = ".lv/figlist.json";
+pub const FIGLIST_FILE: &str = ".latexfrog/figlist.json";
 
 // --- configuración -------------------------------------------------------------------------------------------------------
 
@@ -51,7 +51,7 @@ fn ruta_relativa_valida(r: &str) -> bool {
 }
 
 impl FigureCfg {
-    /// Lee `figureCache` de `latexviewer.json`. Sin esa sección, el modo es `project` si algún perfil externaliza (el
+    /// Lee `figureCache` de `latexfrog.json`. Sin esa sección, el modo es `project` si algún perfil externaliza (el
     /// proyecto trae sus macros) y `off` si no: un artículo sin figuras externalizadas no necesita nada de esto.
     pub fn de(cfg: &ProjectConfig) -> FigureCfg {
         let v = cfg.figure_cache.as_ref();
@@ -228,7 +228,7 @@ pub fn necesita_cocer(cfg: &FigureCfg, e: &EstadoCache) -> bool {
 
 // --- la lista del último listado ---------------------------------------------------------------------------------------------------
 
-/// Lo que dejó el último listado (`.lv/figlist.json`): qué figuras pide el proyecto con este sello y cuáles había que cocinar.
+/// Lo que dejó el último listado (`.latexfrog/figlist.json`): qué figuras pide el proyecto con este sello y cuáles había que cocinar.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Figlist {
@@ -318,7 +318,7 @@ fn leer_md5(p: &Path) -> Option<String> {
     fs::read_to_string(p).ok().map(|t| t.trim().to_string())
 }
 
-/// Las figuras que hay que cocinar: les falta el PDF, o el `.md5` que escribió el listado (`.lv/build/cocina/...`) difiere en
+/// Las figuras que hay que cocinar: les falta el PDF, o el `.md5` que escribió el listado (`.latexfrog/build/cocina/...`) difiere en
 /// **contenido** del que está en el cache compartido (el de la figura tal como se cocinó). No por fecha: los `.md5` cambian de
 /// carpeta y una copia no siempre conserva el mtime.
 pub fn pendientes(root: &Path, nombres: &[String]) -> Vec<String> {
@@ -425,7 +425,7 @@ pub fn huella_de_figuras(root: &Path, archivos: &BTreeSet<String>, datos: &BTree
 
 // --- archivos que una figura lee desde adentro de su tikzpicture ------------------------------------------------------------------------
 
-pub const DATOS_FILE: &str = ".lv/tikz-datos.json";
+pub const DATOS_FILE: &str = ".latexfrog/tikz-datos.json";
 
 /// Un archivo que lee una figura desde adentro de su `tikzpicture` y las figuras que dependen de él.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -444,7 +444,7 @@ struct DatoGuardado {
     md5: String,
 }
 
-/// El estado de `.lv/tikz-datos.json`. El formato anterior (sólo el md5, como texto) se lee con un tamaño imposible: el primer
+/// El estado de `.latexfrog/tikz-datos.json`. El formato anterior (sólo el md5, como texto) se lee con un tamaño imposible: el primer
 /// build lo recalcula y lo reescribe en el formato nuevo, sin invalidar nada si el md5 no cambió.
 fn leer_datos_guardados(root: &Path) -> BTreeMap<String, DatoGuardado> {
     let Some(serde_json::Value::Object(m)) = fs::read(root.join(DATOS_FILE)).ok().and_then(|b| serde_json::from_slice(&b).ok()) else { return BTreeMap::new() };
@@ -470,7 +470,7 @@ fn mirar_dato(p: &Path, previo: Option<&DatoGuardado>) -> DatoGuardado {
 
 /// pgf decide si una figura cambió con el md5 del texto de su dibujo **tal como está escrito**: con un `\input{datos}` adentro,
 /// hashea esa línea y no `datos.tex`; y latexmk tampoco lo ve, porque con la figura en el cache el documento no abre el archivo
-/// (reproducido: se cambia `datos.tex`, 0 subcompilaciones y la imagen idéntica). Por eso la app guarda en `.lv/tikz-datos.json` el md5
+/// (reproducido: se cambia `datos.tex`, 0 subcompilaciones y la imagen idéntica). Por eso la app guarda en `.latexfrog/tikz-datos.json` el md5
 /// de cada uno de esos archivos y, si alguno cambió (o es la primera vez que lo ve), borra los `.md5` de las figuras de quien lo
 /// incluye, de **todos** los sellos (deshacer un estilo no tiene que devolver una figura vieja) y en el cache y en el directorio de cada
 /// perfil. Sin `.md5` pgf recocina la figura (y la verificación de figuras la revisa), y la lista de la cocción la da por pendiente.
@@ -522,7 +522,7 @@ pub fn invalidar_con_detalle(root: &Path, dir: &str, datos: &[DatoDeFigura]) -> 
                 }
             }
         }
-        let perfiles: Vec<std::path::PathBuf> = fs::read_dir(root.join(".lv/build")).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+        let perfiles: Vec<std::path::PathBuf> = fs::read_dir(root.join(".latexfrog/build")).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
         for n in &borradas {
             let _ = fs::remove_file(root.join(dir).join(format!("{n}.md5")));
             for p in &perfiles {
@@ -617,7 +617,7 @@ pub struct Limpieza {
 
 fn dir_de_cache_seguro(dir: &str) -> bool {
     let d = dir.trim_matches('/');
-    !d.is_empty() && d != "." && !d.starts_with(".lv") && !d.starts_with('.') && ruta_relativa_valida(d)
+    !d.is_empty() && d != "." && !d.starts_with(".latexfrog") && !d.starts_with('.') && ruta_relativa_valida(d)
 }
 
 /// Lo que se borraría: todo lo de la carpeta del cache cuyo nombre base no está en la figlist. Sólo con una lista completa del
@@ -810,26 +810,26 @@ mod tests {
             for e in ["pdf", "md5"] {
                 escribir(r, &format!("figuras-cache/{n}.{e}"), "x");
             }
-            escribir(r, &format!(".lv/build/rapido/figuras-cache/{n}.md5"), "x");
+            escribir(r, &format!(".latexfrog/build/rapido/figuras-cache/{n}.md5"), "x");
         }
-        escribir(r, ".lv/build/rapido/lv-rapido.fdb_latexmk", "fdb");
-        escribir(r, ".lv/build/parcial/lv-parcial.fdb_latexmk", "fdb");
+        escribir(r, ".latexfrog/build/rapido/lv-rapido.fdb_latexmk", "fdb");
+        escribir(r, ".latexfrog/build/parcial/lv-parcial.fdb_latexmk", "fdb");
         escribir(r, "datos.tex", "uno");
         let datos = [dato("datos.tex", Some(&["cap"]))];
         // La primera vez no hay md5 guardado: se invalida (no se sabe si el cache es de este contenido).
         let b = invalidar_por_datos(r, "figuras-cache", &datos);
         assert_eq!(b, ["AAAAAA-cap-0", "AAAAAA-cap-1", "BBBBBB-cap-0"], "las del slug `cap` de todos los sellos; `otro` no");
         for n in &b {
-            assert!(!r.join(format!("figuras-cache/{n}.md5")).exists() && !r.join(format!(".lv/build/rapido/figuras-cache/{n}.md5")).exists(), "{n}");
+            assert!(!r.join(format!("figuras-cache/{n}.md5")).exists() && !r.join(format!(".latexfrog/build/rapido/figuras-cache/{n}.md5")).exists(), "{n}");
             assert!(r.join(format!("figuras-cache/{n}.pdf")).is_file(), "el PDF queda: lo reemplaza la recocción");
         }
         assert!(r.join("figuras-cache/AAAAAA-otro-0.md5").is_file());
-        assert!(!r.join(".lv/build/rapido/lv-rapido.fdb_latexmk").exists() && !r.join(".lv/build/parcial/lv-parcial.fdb_latexmk").exists(), "latexmk no ve el cambio: sin su fdb corre");
+        assert!(!r.join(".latexfrog/build/rapido/lv-rapido.fdb_latexmk").exists() && !r.join(".latexfrog/build/parcial/lv-parcial.fdb_latexmk").exists(), "latexmk no ve el cambio: sin su fdb corre");
         // Sin cambios: nada. Con un cambio: otra vez.
         escribir(r, "figuras-cache/AAAAAA-cap-0.md5", "nuevo");
-        escribir(r, ".lv/build/rapido/lv-rapido.fdb_latexmk", "fdb");
+        escribir(r, ".latexfrog/build/rapido/lv-rapido.fdb_latexmk", "fdb");
         assert!(invalidar_por_datos(r, "figuras-cache", &datos).is_empty());
-        assert!(r.join("figuras-cache/AAAAAA-cap-0.md5").is_file() && r.join(".lv/build/rapido/lv-rapido.fdb_latexmk").is_file());
+        assert!(r.join("figuras-cache/AAAAAA-cap-0.md5").is_file() && r.join(".latexfrog/build/rapido/lv-rapido.fdb_latexmk").is_file());
         escribir(r, "datos.tex", "dos dos");
         assert_eq!(invalidar_por_datos(r, "figuras-cache", &datos), ["AAAAAA-cap-0", "AAAAAA-cap-1", "BBBBBB-cap-0"]);
         // Sin slug conocido se invalidan todas; un dato que deja de leerse se olvida y uno nuevo cuenta como cambiado.
@@ -909,16 +909,16 @@ mod tests {
         // ok: PDF y md5 iguales.
         escribir(r, "figuras-cache/ok.pdf", "p");
         escribir(r, "figuras-cache/ok.md5", "igual\n");
-        escribir(r, ".lv/build/cocina/figuras-cache/ok.md5", "igual");
+        escribir(r, ".latexfrog/build/cocina/figuras-cache/ok.md5", "igual");
         // cambio: el md5 del listado es otro.
         escribir(r, "figuras-cache/cambio.pdf", "p");
         escribir(r, "figuras-cache/cambio.md5", "viejo");
-        escribir(r, ".lv/build/cocina/figuras-cache/cambio.md5", "nuevo");
+        escribir(r, ".latexfrog/build/cocina/figuras-cache/cambio.md5", "nuevo");
         // falta: sin PDF.
-        escribir(r, ".lv/build/cocina/figuras-cache/falta.md5", "x");
+        escribir(r, ".latexfrog/build/cocina/figuras-cache/falta.md5", "x");
         // sin-md5: PDF sin md5 compartido.
         escribir(r, "figuras-cache/sin-md5.pdf", "p");
-        escribir(r, ".lv/build/cocina/figuras-cache/sin-md5.md5", "x");
+        escribir(r, ".latexfrog/build/cocina/figuras-cache/sin-md5.md5", "x");
         // sin-listado: PDF y md5 compartido pero el listado no escribió el suyo.
         escribir(r, "figuras-cache/sin-listado.pdf", "p");
         escribir(r, "figuras-cache/sin-listado.md5", "x");
@@ -1064,7 +1064,7 @@ mod tests {
         escribir(d.path(), "main.tex", "x");
         escribir(d.path(), "dato.pdf", "x");
         let f = figlist(true, "6D06AB");
-        for malo in [".", "", "/", ".lv/build", ".git", "..", "a/../b"] {
+        for malo in [".", "", "/", ".latexfrog/build", ".git", "..", "a/../b"] {
             assert!(limpieza_preview(d.path(), malo, "6D06AB", Some(&f)).is_err(), "{malo:?}");
         }
         assert!(d.path().join("dato.pdf").is_file() && d.path().join("main.tex").is_file());

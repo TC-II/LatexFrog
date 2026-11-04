@@ -3,7 +3,7 @@
 //! latexmk lance en los primeros milisegundos antes de entrar al Job puede escaparse.
 //!
 //! **Cómo se sabe de qué proyecto es un proceso**: por su directorio de trabajo. Todo lo que lanza la app (latexmk, pdflatex, biber,
-//! makeindex, perl) corre con la raíz del proyecto como directorio actual, y sus argumentos son relativos (`.lv/build/...`): la
+//! makeindex, perl) corre con la raíz del proyecto como directorio actual, y sus argumentos son relativos (`.latexfrog/build/...`): la
 //! línea de comandos no dice de qué proyecto es. El directorio de trabajo de otro proceso se lee de su bloque de entorno de proceso (PEB).
 //! Sólo se ofrecen procesos **del mismo usuario** cuyo directorio actual esté adentro de la raíz.
 
@@ -218,7 +218,7 @@ mod tests {
         let raiz = Path::new(r"C:\Users\x\Libro TC");
         assert!(esta_adentro(r"C:\Users\x\Libro TC", raiz));
         assert!(esta_adentro(r"c:\users\x\libro tc\", raiz), "mayúsculas y barra final no cuentan");
-        assert!(esta_adentro(r"C:\Users\x\Libro TC\.lv\build\parcial", raiz));
+        assert!(esta_adentro(r"C:\Users\x\Libro TC\.latexfrog\build\parcial", raiz));
         assert!(esta_adentro(r"\\?\C:\Users\x\Libro TC", raiz), "el prefijo \\?\\ no cuenta");
         assert!(!esta_adentro(r"C:\Users\x\Libro TC 2", raiz), "otra carpeta con el mismo comienzo");
         assert!(!esta_adentro(r"C:\Users\x", raiz));

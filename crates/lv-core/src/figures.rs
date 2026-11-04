@@ -187,7 +187,7 @@ mod tests {
             escribir(root, &format!("{nombre}.log"), l);
         }
         escribir(root, &format!("{nombre}.md5"), b"md5");
-        escribir(root, &format!(".lv/build/rapido/{nombre}.md5"), b"md5");
+        escribir(root, &format!(".latexfrog/build/rapido/{nombre}.md5"), b"md5");
     }
 
     #[test]
@@ -204,16 +204,16 @@ mod tests {
         let r = d.path();
         figura(r, "figuras-cache/A-uno-0", Some(PDF_BUENO), Some(LOG_ROTO));
         escribir(r, "main.tex", b"\\documentclass{article}\n");
-        escribir(r, ".lv/build/rapido/lv-rapido.fdb_latexmk", b"fdb");
+        escribir(r, ".latexfrog/build/rapido/lv-rapido.fdb_latexmk", b"fdb");
         let rotas = verificar(r, "rapido", &["figuras-cache/A-uno-0".into()], antes(), false);
         assert_eq!(rotas.len(), 1);
-        assert!(!r.join(".lv/build/rapido/lv-rapido.fdb_latexmk").exists(), "sin su fdb latexmk vuelve a correr y la figura se reintenta");
+        assert!(!r.join(".latexfrog/build/rapido/lv-rapido.fdb_latexmk").exists(), "sin su fdb latexmk vuelve a correr y la figura se reintenta");
         let p = &rotas[0].problemas;
         assert_eq!(p.len(), 1, "{p:#?}");
         assert_eq!(p[0].kind, "figure");
         assert!(p[0].message.starts_with("Figura «A-uno-0»: Undefined control sequence"), "{}", p[0].message);
         assert_eq!((p[0].file.as_deref(), p[0].line), (Some("main.tex"), Some(31)));
-        for rel in ["figuras-cache/A-uno-0.pdf", "figuras-cache/A-uno-0.md5", ".lv/build/rapido/figuras-cache/A-uno-0.md5"] {
+        for rel in ["figuras-cache/A-uno-0.pdf", "figuras-cache/A-uno-0.md5", ".latexfrog/build/rapido/figuras-cache/A-uno-0.md5"] {
             assert!(!r.join(rel).exists(), "{rel} se borra");
         }
         assert!(r.join("figuras-cache/A-uno-0.log").is_file(), "el .log queda: es la prueba del error");

@@ -1,7 +1,7 @@
-//! Compilación con latexmk: driver y `.lv/latexmkrc` generados, proceso con salida en streaming y cancelación.
+//! Compilación con latexmk: driver y `.latexfrog/latexmkrc` generados, proceso con salida en streaming y cancelación.
 //!
-//! Esquema de S1 (opción A): el perfil compila `.lv/drivers/lv-<perfil>.tex` con cwd = raíz del proyecto, y su PDF y
-//! sus auxiliares quedan en `.lv/build/<perfil>/`. El rc de la app se lee después del `latexmkrc` del proyecto.
+//! Esquema de S1 (opción A): el perfil compila `.latexfrog/drivers/lv-<perfil>.tex` con cwd = raíz del proyecto, y su PDF y
+//! sus auxiliares quedan en `.latexfrog/build/<perfil>/`. El rc de la app se lee después del `latexmkrc` del proyecto.
 //!
 //! Detalles que no son obvios:
 //! - Los eventos de log llevan **fragmentos de texto**, no líneas: pdflatex escribe `[12] [13] [14]...` sin saltos de
@@ -33,12 +33,12 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum BuildEvent {
     /// Hay un build en curso y este quedó pendiente: corre una sola vez cuando termine (5.6 del plan).
-    Queued { perfil: String },
+    Queued { #[serde(rename = "profile")] perfil: String },
     /// `retry`: es el reintento después de reparar un `.aux` truncado (el panel no borra el log).
-    Started { id: u64, perfil: String, cmdline: String, retry: bool },
+    Started { id: u64, #[serde(rename = "profile")] perfil: String, cmdline: String, retry: bool },
     Log { id: u64, text: String },
     /// Arrancó una regla de latexmk (`Run number N of rule 'X'` del stdout): `tool` es `pdflatex`, `biber`, `makeindex`...; `n`, la vez
     /// que corre esa herramienta en este build (la pasada 2 de `pdflatex`). Es lo que la barra muestra mientras compila.
@@ -50,7 +50,7 @@ pub enum BuildEvent {
     /// cortado. `repaired`: este build es el reintento después de borrar los auxiliares.
     Finished {
         id: u64,
-        perfil: String,
+        #[serde(rename = "profile")] perfil: String,
         ok: bool,
         code: Option<i32>,
         cancelled: bool,
@@ -77,9 +77,9 @@ pub enum BuildEvent {
     /// Hay otro trabajo corriendo y la cocción de figuras quedó pendiente.
     BakeQueued,
     /// Arrancó una cocción: se están listando las figuras (una pasada del motor que no dibuja nada).
-    BakeListing { id: u64, fase: String },
+    BakeListing { id: u64, #[serde(rename = "phase")] fase: String },
     /// Terminó el listado (`listing_ms`): `listed` figuras en total, `total` para cocinar.
-    BakeStarted { id: u64, fase: String, total: u32, listed: u32, listing_ms: u64 },
+    BakeStarted { id: u64, #[serde(rename = "phase")] fase: String, total: u32, listed: u32, listing_ms: u64 },
     /// Una figura terminó (`ok`: salió bien y quedó verificada).
     BakeProgress { id: u64, done: u32, total: u32, name: String, ok: bool },
     /// La cocción terminó. `ceded`: cedió el paso a un build y queda `remaining` por cocinar; `error`: no pudo ni empezar.
@@ -109,7 +109,7 @@ fn perfil_valido(p: &str) -> Result<()> {
 }
 
 pub fn driver_rel(perfil: &str) -> String {
-    format!(".lv/drivers/lv-{perfil}.tex")
+    format!(".latexfrog/drivers/lv-{perfil}.tex")
 }
 
 /// El driver completo con que se compiló por última vez el perfil. Con el preámbulo precompilado (`Session::preambulo_precompilado`)
@@ -119,13 +119,13 @@ pub fn driver_rel(perfil: &str) -> String {
 pub fn driver_completo(root: &Path, perfil: &str) -> Option<String> {
     let t = std::fs::read_to_string(root.join(driver_rel(perfil))).ok()?;
     if t.starts_with("% preambulo ") {
-        return std::fs::read_to_string(root.join(format!(".lv/drivers/lv-{perfil}-pre.tex"))).ok();
+        return std::fs::read_to_string(root.join(format!(".latexfrog/drivers/lv-{perfil}-pre.tex"))).ok();
     }
     Some(t)
 }
 
 pub fn pdf_rel(perfil: &str) -> String {
-    format!(".lv/build/{perfil}/lv-{perfil}.pdf")
+    format!(".latexfrog/build/{perfil}/lv-{perfil}.pdf")
 }
 
 /// Qué lleva el driver de un perfil (4.2 del plan).
@@ -157,7 +157,7 @@ pub struct DriverSpec {
 }
 
 /// Dónde escribe la app el fragmento de la vista previa.
-pub const FRAGMENTO_REL: &str = ".lv/fragment/frag.tex";
+pub const FRAGMENTO_REL: &str = ".latexfrog/fragment/frag.tex";
 
 /// Lo que el modo `app` agrega al driver para externalizar las figuras de un proyecto que no tiene externalización propia.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -306,7 +306,7 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
     if s.fragmento {
         // `begindocument/end` corre al terminar `\begin{document}`: el fragmento es lo primero del cuerpo. Con `\includeonly{}` ninguna
         // parte entra, así que el PDF es sólo el fragmento (más lo que la raíz imprima fuera de las partes).
-        l.push("\\AddToHook{begindocument/end}{\\input{.lv/fragment/frag}}".into());
+        l.push("\\AddToHook{begindocument/end}{\\input{.latexfrog/fragment/frag}}".into());
     }
     let base = raiz.strip_suffix(".tex").or_else(|| raiz.strip_suffix(".TEX")).unwrap_or(&raiz);
     l.push(format!("\\input{{\"{base}\"}}"));
@@ -318,11 +318,11 @@ pub fn render_driver(perfil: &str, root_rel: &str) -> Result<String> {
     render_driver_spec(&DriverSpec { perfil: perfil.into(), root_rel: root_rel.into(), ..Default::default() })
 }
 
-/// `.lv/latexmkrc`: auxiliares y PDF por perfil (S1, opción A). Se lee después del del proyecto, que en el libro
+/// `.latexfrog/latexmkrc`: auxiliares y PDF por perfil (S1, opción A). Se lee después del del proyecto, que en el libro
 /// pone `$out_dir = '../PDF'`. Con el perfil en `LV_PERFIL` un solo rc sirve para todos.
 ///
 /// Dos variables de entorno, las dos por lo mismo (cada una la descubrió una prueba distinta):
-/// - `TEXINPUTS` con `.lv/drivers`: la subcompilación de pgf hace `\input{<driver>}` desde la raíz y sin esto no lo
+/// - `TEXINPUTS` con `.latexfrog/drivers`: la subcompilación de pgf hace `\input{<driver>}` desde la raíz y sin esto no lo
 ///   encuentra (S1).
 /// - `INDEXSTYLE` con la raíz: **latexmk corre makeindex desde el directorio de salida**, con nombres sueltos
 ///   (`makeindex -s StyleInd.ist -o "lv-completo.ind" "lv-completo.idx"`). El `$makeindex` del libro nombra su estilo
@@ -334,10 +334,10 @@ pub fn render_latexmkrc() -> String {
         "use Cwd;",
         "my $p = $ENV{LV_PERFIL} or die 'falta LV_PERFIL';",
         "my $sep = ($^O eq 'MSWin32') ? ';' : ':';",
-        "$out_dir = \".lv/build/$p\";",
-        "$aux_dir = \".lv/build/$p\";",
+        "$out_dir = \".latexfrog/build/$p\";",
+        "$aux_dir = \".latexfrog/build/$p\";",
         "$emulate_aux = 0;",
-        "$ENV{TEXINPUTS} = \".lv/drivers$sep\" . ($ENV{TEXINPUTS} // '');",
+        "$ENV{TEXINPUTS} = \".latexfrog/drivers$sep\" . ($ENV{TEXINPUTS} // '');",
         "$ENV{INDEXSTYLE} = getcwd() . ($ENV{INDEXSTYLE} ? $sep . $ENV{INDEXSTYLE} : '');",
         "",
     ]
@@ -367,7 +367,7 @@ pub fn latexmk_args_for(perfil: &str, engine: &str, shell_escape: bool) -> Resul
     Ok([motor]
         .into_iter()
         .chain(shell_escape.then_some("-shell-escape"))
-        .chain(["-synctex=1", "-interaction=nonstopmode", "-file-line-error", "-latexoption=-max-print-line=10000", "-r", ".lv/latexmkrc"])
+        .chain(["-synctex=1", "-interaction=nonstopmode", "-file-line-error", "-latexoption=-max-print-line=10000", "-r", ".latexfrog/latexmkrc"])
         .map(String::from)
         .chain([driver_rel(perfil)])
         .collect())
@@ -652,7 +652,7 @@ impl Builder {
         }
         antes()?;
         write_if_changed(&root.join(driver_rel(&spec.perfil)), &spec.driver)?;
-        write_if_changed(&root.join(".lv").join("latexmkrc"), &render_latexmkrc())?;
+        write_if_changed(&root.join(".latexfrog").join("latexmkrc"), &render_latexmkrc())?;
 
         let mut cmd = Command::new(&self.programa);
         cmd.args(&self.pre_args)
@@ -836,7 +836,7 @@ mod tests {
         let d = render_driver("completo", "Funciones de Aproximación.tex").unwrap();
         assert_eq!(
             d,
-            "% .lv/drivers/lv-completo.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{completo}\n\\def\\lvParcial{0}\n\\input{\"Funciones de Aproximación\"}\n"
+            "% .latexfrog/drivers/lv-completo.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{completo}\n\\def\\lvParcial{0}\n\\input{\"Funciones de Aproximación\"}\n"
         );
         assert!(!d.contains("CompilacionReducida"));
         assert!(render_driver("completo", "Secciones/x.tex").unwrap().contains("\\input{\"Secciones/x\"}"));
@@ -855,8 +855,8 @@ mod tests {
     #[test]
     fn el_rc_pone_la_salida_por_perfil_y_texinputs() {
         let rc = render_latexmkrc();
-        assert!(rc.contains("$out_dir = \".lv/build/$p\";"));
-        assert!(rc.contains("$aux_dir = \".lv/build/$p\";"));
+        assert!(rc.contains("$out_dir = \".latexfrog/build/$p\";"));
+        assert!(rc.contains("$aux_dir = \".latexfrog/build/$p\";"));
         assert!(rc.contains("TEXINPUTS"));
         // latexmk corre makeindex desde el directorio de salida: el estilo del proyecto se busca en la raíz.
         assert!(rc.contains("$ENV{INDEXSTYLE} = getcwd()"));
@@ -868,7 +868,7 @@ mod tests {
         let a = latexmk_args("completo");
         assert!(a.contains(&"-latexoption=-max-print-line=10000".to_string()));
         assert!(!a.iter().any(|x| x.contains("$pdflatex") || x.starts_with("-pdflatex")));
-        assert_eq!(a.last().unwrap(), ".lv/drivers/lv-completo.tex");
+        assert_eq!(a.last().unwrap(), ".latexfrog/drivers/lv-completo.tex");
     }
 
     #[test]
@@ -949,7 +949,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             d,
-            "% .lv/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\PassOptionsToPackage{draft}{graphicx}\n\\PassOptionsToPackage{draft}{graphics}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\def\\OpcionPie{autor}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Desnormalización,Secciones/Uno}}\n\\input{\"Funciones de Aproximación\"}\n"
+            "% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\PassOptionsToPackage{draft}{graphicx}\n\\PassOptionsToPackage{draft}{graphics}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\def\\OpcionPie{autor}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Desnormalización,Secciones/Uno}}\n\\input{\"Funciones de Aproximación\"}\n"
         );
     }
 
@@ -990,7 +990,7 @@ mod tests {
         let a = latexmk_args_for("rapido", "xelatex", true).unwrap();
         assert_eq!(a[0], "-xelatex");
         assert_eq!(a[1], "-shell-escape");
-        assert_eq!(a.last().unwrap(), ".lv/drivers/lv-rapido.tex");
+        assert_eq!(a.last().unwrap(), ".latexfrog/drivers/lv-rapido.tex");
         let a = latexmk_args_for("p", "lualatex", false).unwrap();
         assert_eq!(a[0], "-lualatex");
         assert!(!a.contains(&"-shell-escape".to_string()));

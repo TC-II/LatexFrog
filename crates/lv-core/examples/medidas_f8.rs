@@ -26,7 +26,7 @@ fn main() {
     let propia = std::env::args().nth(1).map(PathBuf::from);
     let tmp = tempfile::tempdir().expect("carpeta temporal");
     let raiz = propia.clone().unwrap_or_else(|| tmp.path().to_path_buf());
-    // El candado, sobre una carpeta aparte para no tocar el `.lv/lock` del proyecto que se mide.
+    // El candado, sobre una carpeta aparte para no tocar el `.latexfrog/lock` del proyecto que se mide.
     let sola = tempfile::tempdir().expect("carpeta temporal");
     let adquirir = medir(100, || match candado::adquirir(sola.path()) {
         Adquirido::Tomado(c) => drop(c),

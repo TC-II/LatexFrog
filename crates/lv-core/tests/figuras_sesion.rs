@@ -31,7 +31,7 @@ const CONFIG: &str = r#"{
 }"#;
 
 /// Un latexmk que cuenta una pasada y deja el PDF del perfil.
-const OK: &str = "$p = $env:LV_PERFIL\n$d = \".lv/build/$p\"\nNew-Item -ItemType Directory -Force $d | Out-Null\n\"Run number 1 of rule 'pdflatex'\"\nSet-Content \"$d/lv-$p.pdf\" 'x'\n";
+const OK: &str = "$p = $env:LV_PERFIL\n$d = \".latexfrog/build/$p\"\nNew-Item -ItemType Directory -Force $d | Out-Null\n\"Run number 1 of rule 'pdflatex'\"\nSet-Content \"$d/lv-$p.pdf\" 'x'\n";
 
 /// Un "pdflatex" falso. Con `-output-directory` es el listado: escribe la figlist con 4 figuras del sello que dice `sello.txt`
 /// (2 de `uno` y 2 de `dos`, los slugs de `\FigurasDe` de los capítulos) y el `.md5` de cada una (que cambia con `version.txt`).
@@ -102,7 +102,7 @@ fn caso_con_motor(motor_falso: &str) -> Caso {
     e("Secciones/Uno.tex", "\\FigurasDe{uno}\nuno\n");
     e("Secciones/Dos.tex", "\\FigurasDe{dos}\ndos\n");
     e("estilo.tex", "estilo 1\n");
-    e("latexviewer.json", CONFIG);
+    e("latexfrog.json", CONFIG);
     let sello = figcache::sello(d.path(), &["estilo.tex".to_string()]).unwrap();
     e("sello.txt", &sello);
     let r = Recolector::nuevo();
@@ -191,7 +191,7 @@ fn la_coccion_manual_lista_cocina_instala_los_md5_y_deja_el_estado_al_dia() {
         assert_eq!(fs::read_to_string(c.figura(n, "md5")).unwrap().trim(), format!("figuras-cache/{sello}-{n}-v1"), "se instala el md5 del listado, recién verificada la figura");
     }
     // El listado usó el driver de cocina con todas las partes y los tres flags.
-    let driver = fs::read_to_string(c.d.path().join(".lv/drivers/lv-cocina.tex")).unwrap();
+    let driver = fs::read_to_string(c.d.path().join(".latexfrog/drivers/lv-cocina.tex")).unwrap();
     assert!(driver.contains("\\def\\CompilacionReducida{}") && driver.contains("\\def\\TikzExternalizar{}") && driver.contains("\\def\\TikzListaYMake{}"), "{driver}");
     // Con la lista COMPLETA de partes (no sin `\includeonly`): una raíz con el suyo propio (`cap_actual.tex`) no la recorta (S6).
     assert!(driver.contains("\\includeonly{Secciones/Uno,Secciones/Dos}"), "el listado de todo el documento lleva todas las partes: {driver}");
@@ -250,7 +250,7 @@ fn un_cambio_de_estilo_cocina_primero_las_figuras_del_perfil_despues_el_build_y_
     let figuras: Vec<String> = c.lanzadas().into_iter().filter(|l| l.starts_with("FIGURA")).skip(4).collect();
     assert_eq!(figuras.len(), 4);
     assert!(figuras[0].contains("uno") && figuras[1].contains("uno") && figuras[2].contains("dos") && figuras[3].contains("dos"), "{figuras:?}");
-    let parcial = fs::read_to_string(c.d.path().join(".lv/drivers/lv-cocina.tex")).unwrap();
+    let parcial = fs::read_to_string(c.d.path().join(".latexfrog/drivers/lv-cocina.tex")).unwrap();
     assert!(parcial.contains("\\includeonly{Secciones/Uno,Secciones/Dos}"), "el último listado fue el de todo el documento: {parcial}");
     let st = c.s.figures_status().unwrap();
     assert_eq!((st.actuales, st.viejas), (4, 4), "las 4 del sello nuevo y las 4 viejas, todavía sin limpiar");
@@ -377,7 +377,7 @@ fn un_perfil_que_consume_el_cache_deja_en_el_historial_si_se_salteo_el_listado_y
 #[test]
 fn un_perfil_que_consume_el_cache_no_publica() {
     let c = caso();
-    c.escribir("latexviewer.json", &CONFIG.replace("\"parallelJobs\": 2 }", "\"parallelJobs\": 2 },\n  \"publish\": { \"dir\": \"PDF\" }"));
+    c.escribir("latexfrog.json", &CONFIG.replace("\"parallelJobs\": 2 }", "\"parallelJobs\": 2 },\n  \"publish\": { \"dir\": \"PDF\" }"));
     let s = Session::open_with_cocinero(
         c.d.path(),
         c.r.sink.clone(),
@@ -399,7 +399,7 @@ fn el_listado_del_perfil_lleva_el_includeonly_de_su_seleccion() {
     // El driver de cocina del listado parcial, antes de que el listado de todo lo pise.
     let mut visto = String::new();
     while t.elapsed() < Duration::from_secs(20) && !visto.contains("includeonly") {
-        visto = fs::read_to_string(c.d.path().join(".lv/drivers/lv-cocina.tex")).unwrap_or_default();
+        visto = fs::read_to_string(c.d.path().join(".latexfrog/drivers/lv-cocina.tex")).unwrap_or_default();
         std::thread::sleep(Duration::from_millis(5));
     }
     assert!(visto.contains("\\includeonly{Secciones/Uno}"), "{visto}");
@@ -419,11 +419,11 @@ fn sin_cambio_de_estilo_el_build_no_lleva_cocina_antes() {
 /// Lo de F8b (robustez, inspo): la figlist guarda raíz y partes, un perfil de todas las partes lleva la lista completa y a un perfil
 /// al que le faltan PDFs de sus partes se los cocina en paralelo antes, no de a una dentro de la pasada.
 fn figlist_json(c: &Caso) -> serde_json::Value {
-    serde_json::from_slice(&fs::read(c.d.path().join(".lv/figlist.json")).unwrap()).unwrap()
+    serde_json::from_slice(&fs::read(c.d.path().join(".latexfrog/figlist.json")).unwrap()).unwrap()
 }
 
 fn escribir_figlist_json(c: &Caso, v: &serde_json::Value) {
-    fs::write(c.d.path().join(".lv/figlist.json"), serde_json::to_string_pretty(v).unwrap()).unwrap();
+    fs::write(c.d.path().join(".latexfrog/figlist.json"), serde_json::to_string_pretty(v).unwrap()).unwrap();
 }
 
 /// Cocina todo, y borra los PDF (y md5, log, dpth) de las figuras de `uno`: lo que le pasaba al cache de inspo con `butter`.
@@ -486,7 +486,7 @@ fn sin_una_lista_que_valga_el_primer_build_la_establece_y_los_siguientes_no() {
     let c = caso();
     c.s.request_bake().unwrap();
     c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
-    fs::remove_file(c.d.path().join(".lv/figlist.json")).unwrap();
+    fs::remove_file(c.d.path().join(".latexfrog/figlist.json")).unwrap();
     c.s.request_build(Some("parcial")).unwrap();
     c.esperar("el ciclo", 90, |c| c.ocioso() && c.secuencia().len() >= 11);
     assert_eq!(c.secuencia()[3..5], ["listando(perfil parcial)", "cocinar(0)"], "sin lista no se sabe qué necesita el perfil: se lista (no hay nada que cocinar)");
@@ -535,7 +535,7 @@ fn una_raiz_con_su_propio_includeonly_no_recorta_el_listado_de_todo_ni_la_lista(
     c.s.request_bake().unwrap();
     c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
     assert_eq!(c.secuencia()[1], "cocinar(4)", "las figuras de las dos partes");
-    let driver = fs::read_to_string(c.d.path().join(".lv/drivers/lv-cocina.tex")).unwrap();
+    let driver = fs::read_to_string(c.d.path().join(".latexfrog/drivers/lv-cocina.tex")).unwrap();
     assert!(driver.contains("\\includeonly{Secciones/Uno,Secciones/Dos}"), "el driver pone la lista completa, que gana a la de la raíz (S6): {driver}");
     assert_eq!(figlist_json(&c)["partes"], serde_json::json!(["Secciones/Uno", "Secciones/Dos"]));
     assert!(c.s.figures_clean_preview().is_ok());
@@ -655,7 +655,7 @@ fn la_limpieza_con_el_parcial_activo_no_borra_las_figuras_de_las_partes_que_no_i
 fn con_el_cache_apagado_no_hay_coccion() {
     let c = caso();
     let cfg = CONFIG.replace("\"mode\": \"project\"", "\"mode\": \"off\"");
-    c.escribir("latexviewer.json", &cfg);
+    c.escribir("latexfrog.json", &cfg);
     let r = Recolector::nuevo();
     let latexmk = Builder::con_programa("powershell", args_de(&script(OK)));
     let s = Session::open_with_cocinero(c.d.path(), r.sink.clone(), latexmk, Cocinero::new()).unwrap();
@@ -669,31 +669,31 @@ fn el_listado_de_la_cocina_es_sospechoso_hasta_que_sale_bien() {
     let c = caso();
     c.s.request_bake().unwrap();
     c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
-    assert!(!c.d.path().join(".lv/build/cocina/.sospechoso").exists(), "el listado salió bien: sus .aux valen de último recurso");
+    assert!(!c.d.path().join(".latexfrog/build/cocina/.sospechoso").exists(), "el listado salió bien: sus .aux valen de último recurso");
     // Con errores (código distinto de 0) aunque haya llegado a escribir la lista: sigue sospechoso y no se siembra de ahí.
     let mal = caso_con_motor(&MOTOR_FALSO.replacen("exit 0", "exit 1", 1));
     mal.s.request_bake().unwrap();
     mal.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().iter().any(|e| e.starts_with("cocido(")));
-    assert!(mal.d.path().join(".lv/build/cocina/.sospechoso").exists(), "un listado con errores deja el marcador");
+    assert!(mal.d.path().join(".latexfrog/build/cocina/.sospechoso").exists(), "un listado con errores deja el marcador");
 }
 
 #[test]
 fn un_parcial_en_frio_siembra_de_la_cocina_cuando_ningun_perfil_tiene_el_aux_y_no_si_la_cocina_es_sospechosa() {
-    let aux_uno = |c: &Caso| c.d.path().join(".lv/build/parcial/Secciones/Uno.aux");
+    let aux_uno = |c: &Caso| c.d.path().join(".latexfrog/build/parcial/Secciones/Uno.aux");
     let c = caso();
     c.s.request_bake().unwrap();
     c.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
     // La cocina compiló todas las partes y dejó su .aux (el motor falso no lo escribe: se lo ponemos).
-    fs::create_dir_all(c.d.path().join(".lv/build/cocina/Secciones")).unwrap();
-    c.escribir(".lv/build/cocina/Secciones/Uno.aux", "\\relax\n\\@setckpt{Secciones/Uno}{\\setcounter{chapter}{8}}\n");
+    fs::create_dir_all(c.d.path().join(".latexfrog/build/cocina/Secciones")).unwrap();
+    c.escribir(".latexfrog/build/cocina/Secciones/Uno.aux", "\\relax\n\\@setckpt{Secciones/Uno}{\\setcounter{chapter}{8}}\n");
     c.s.set_state(lv_core::config::StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
     // Puede quedar en cola si algo de la cocción todavía no terminó: lo que importa es que el parcial llegue a correr.
     c.s.request_build(Some("parcial")).unwrap();
     c.esperar("el parcial", 60, |c| c.ocioso() && c.secuencia().iter().any(|e| e == "fin(parcial)"));
     let diag = || {
         let mut v = Vec::new();
-        for e in walk(&c.d.path().join(".lv/build")) { v.push(e); }
-        format!("secuencia {:?}; sospechoso cocina: {}; archivos: {:?}; driver: {}", c.secuencia(), c.d.path().join(".lv/build/cocina/.sospechoso").exists(), v, fs::read_to_string(c.d.path().join(".lv/drivers/lv-parcial.tex")).unwrap_or_default())
+        for e in walk(&c.d.path().join(".latexfrog/build")) { v.push(e); }
+        format!("secuencia {:?}; sospechoso cocina: {}; archivos: {:?}; driver: {}", c.secuencia(), c.d.path().join(".latexfrog/build/cocina/.sospechoso").exists(), v, fs::read_to_string(c.d.path().join(".latexfrog/drivers/lv-parcial.tex")).unwrap_or_default())
     };
     assert!(aux_uno(&c).is_file(), "ni el rápido ni el completo existen: la cocina es el último recurso; {}", diag());
     assert!(fs::read_to_string(aux_uno(&c)).unwrap().contains("setcounter{chapter}{8}"));
@@ -702,9 +702,9 @@ fn un_parcial_en_frio_siembra_de_la_cocina_cuando_ningun_perfil_tiene_el_aux_y_n
     let s = caso();
     s.s.request_bake().unwrap();
     s.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
-    fs::create_dir_all(s.d.path().join(".lv/build/cocina/Secciones")).unwrap();
-    s.escribir(".lv/build/cocina/Secciones/Uno.aux", "truncado");
-    s.escribir(".lv/build/cocina/.sospechoso", "x");
+    fs::create_dir_all(s.d.path().join(".latexfrog/build/cocina/Secciones")).unwrap();
+    s.escribir(".latexfrog/build/cocina/Secciones/Uno.aux", "truncado");
+    s.escribir(".latexfrog/build/cocina/.sospechoso", "x");
     s.s.set_state(lv_core::config::StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
     s.s.request_build(Some("parcial")).unwrap();
     s.esperar("el parcial", 60, |c| c.ocioso() && c.secuencia().iter().any(|e| e == "fin(parcial)"));
@@ -714,11 +714,11 @@ fn un_parcial_en_frio_siembra_de_la_cocina_cuando_ningun_perfil_tiene_el_aux_y_n
     let n = caso();
     n.s.request_bake().unwrap();
     n.esperar("la cocción", 60, |c| c.ocioso() && c.secuencia().len() == 3);
-    fs::create_dir_all(n.d.path().join(".lv/build/cocina/Secciones")).unwrap();
-    fs::create_dir_all(n.d.path().join(".lv/build/rapido/Secciones")).unwrap();
-    n.escribir(".lv/build/rapido/Secciones/Uno.aux", "del rapido");
+    fs::create_dir_all(n.d.path().join(".latexfrog/build/cocina/Secciones")).unwrap();
+    fs::create_dir_all(n.d.path().join(".latexfrog/build/rapido/Secciones")).unwrap();
+    n.escribir(".latexfrog/build/rapido/Secciones/Uno.aux", "del rapido");
     std::thread::sleep(Duration::from_millis(50));
-    n.escribir(".lv/build/cocina/Secciones/Uno.aux", "de la cocina, mas nueva");
+    n.escribir(".latexfrog/build/cocina/Secciones/Uno.aux", "de la cocina, mas nueva");
     n.s.set_state(lv_core::config::StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
     n.s.request_build(Some("parcial")).unwrap();
     n.esperar("el parcial", 60, |c| c.ocioso() && c.secuencia().iter().any(|e| e == "fin(parcial)"));

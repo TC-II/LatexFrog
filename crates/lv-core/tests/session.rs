@@ -29,7 +29,7 @@ const CONFIG: &str = r#"{
 }"#;
 
 /// Un latexmk que cuenta una pasada y deja el PDF del perfil.
-const OK: &str = "$p = $env:LV_PERFIL\n$d = \".lv/build/$p\"\nNew-Item -ItemType Directory -Force $d | Out-Null\n\"Run number 1 of rule 'pdflatex'\"\nSet-Content \"$d/lv-$p.pdf\" 'x'\n";
+const OK: &str = "$p = $env:LV_PERFIL\n$d = \".latexfrog/build/$p\"\nNew-Item -ItemType Directory -Force $d | Out-Null\n\"Run number 1 of rule 'pdflatex'\"\nSet-Content \"$d/lv-$p.pdf\" 'x'\n";
 
 fn proyecto() -> TempDir {
     let d = TempDir::new().unwrap();
@@ -41,7 +41,7 @@ fn proyecto() -> TempDir {
     e("main.tex", "\\documentclass{book}\n\\begin{document}\n\\include{Secciones/Uno}\n\\include{Secciones/Dos}\n\\end{document}\n");
     e("Secciones/Uno.tex", "uno\n");
     e("Secciones/Dos.tex", "dos\n");
-    e("latexviewer.json", CONFIG);
+    e("latexfrog.json", CONFIG);
     d
 }
 
@@ -96,15 +96,15 @@ fn abre_con_la_configuracion_del_proyecto_las_partes_y_un_estado_valido() {
     assert_eq!(c.profiles.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["parcial", "rapido", "completo"]);
     assert_eq!(v.state.active_profile.as_deref(), Some("parcial"), "el primero que compila al guardar");
     assert_eq!(v.state.selection, ["Secciones/Uno"], "sin selección previa: la primera parte");
-    // Abrir sólo toma el candado del proyecto (`.lv/lock`, F8): ni estado, ni drivers, ni nada del usuario.
-    let en_lv: Vec<String> = fs::read_dir(d.path().join(".lv")).map(|r| r.flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect()).unwrap_or_default();
+    // Abrir sólo toma el candado del proyecto (`.latexfrog/lock`, F8): ni estado, ni drivers, ni nada del usuario.
+    let en_lv: Vec<String> = fs::read_dir(d.path().join(".latexfrog")).map(|r| r.flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect()).unwrap_or_default();
     assert_eq!(en_lv, ["lock"], "abrir no escribe nada más que el candado");
 }
 
 #[test]
-fn sin_latexviewer_json_infiere_y_ofrece_guardarlo_y_un_json_roto_no_se_pisa() {
+fn sin_latexfrog_json_infiere_y_ofrece_guardarlo_y_un_json_roto_no_se_pisa() {
     let d = proyecto();
-    fs::remove_file(d.path().join("latexviewer.json")).unwrap();
+    fs::remove_file(d.path().join("latexfrog.json")).unwrap();
     let (s, _) = abrir(&d, OK);
     let v = s.view().unwrap();
     assert!(!v.config_saved);
@@ -113,16 +113,16 @@ fn sin_latexviewer_json_infiere_y_ofrece_guardarlo_y_un_json_roto_no_se_pisa() {
     assert_eq!(v.config.unwrap().profiles.len(), 3, "con partes: parcial, rápido y completo");
     let v = s.save_config().unwrap();
     assert!(v.config_saved);
-    let guardado = fs::read_to_string(d.path().join("latexviewer.json")).unwrap();
+    let guardado = fs::read_to_string(d.path().join("latexfrog.json")).unwrap();
     assert!(guardado.contains("\"root\": \"main.tex\""), "{guardado}");
 
     // Un JSON que no se entiende: se avisa y se trabaja con lo inferido, sin tocar el archivo.
-    fs::write(d.path().join("latexviewer.json"), "{ roto").unwrap();
+    fs::write(d.path().join("latexfrog.json"), "{ roto").unwrap();
     let (s2, _) = abrir(&d, OK);
     let v = s2.view().unwrap();
-    assert!(v.config_error.as_deref().is_some_and(|e| e.contains("latexviewer.json")));
+    assert!(v.config_error.as_deref().is_some_and(|e| e.contains("latexfrog.json")));
     assert!(!v.config_saved && v.config.is_some());
-    assert_eq!(fs::read_to_string(d.path().join("latexviewer.json")).unwrap(), "{ roto");
+    assert_eq!(fs::read_to_string(d.path().join("latexfrog.json")).unwrap(), "{ roto");
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn el_driver_del_parcial_lleva_flags_variables_e_includeonly_de_la_seleccion() {
     esperar_finales(&r, 1, 60);
     assert_eq!(
         driver(&d, "parcial"),
-        "% .lv/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\def\\OpcionPie{completo}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Dos}}\n\\input{\"main\"}\n"
+        "% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\def\\OpcionPie{completo}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Dos}}\n\\input{\"main\"}\n"
     );
     // Cambiar la variable y compilar el rápido: con el valor nuevo y, como es de todas las partes, con la lista COMPLETA en el \includeonly
     // (F8b: una raíz con su propio \includeonly no lo recorta, S6).
@@ -174,9 +174,9 @@ fn el_interruptor_de_borrador_pone_graphicx_y_graphics_pero_no_en_lo_que_se_entr
     let e = s.publish("rapido").unwrap_err().to_string();
     assert!(e.contains("imágenes en borrador") && !d.path().join("pub").exists(), "{e}");
     assert!(s.publish("completo").is_ok());
-    // El interruptor es de esta máquina: queda en `.lv/state.json`, no en `latexviewer.json`.
-    assert!(fs::read_to_string(d.path().join(".lv/state.json")).unwrap().contains("\"draftImages\": true"));
-    assert!(!fs::read_to_string(d.path().join("latexviewer.json")).unwrap().contains("draftImages"));
+    // El interruptor es de esta máquina: queda en `.latexfrog/state.json`, no en `latexfrog.json`.
+    assert!(fs::read_to_string(d.path().join(".latexfrog/state.json")).unwrap().contains("\"draftImages\": true"));
+    assert!(!fs::read_to_string(d.path().join("latexfrog.json")).unwrap().contains("draftImages"));
     // Apagado, el rápido vuelve a compilar completo y se puede publicar.
     s.set_state(StatePatch { draft_images: Some(false), ..Default::default() }).unwrap();
     s.request_build(Some("rapido")).unwrap();
@@ -188,7 +188,7 @@ fn el_interruptor_de_borrador_pone_graphicx_y_graphics_pero_no_en_lo_que_se_entr
 #[test]
 fn un_perfil_con_draft_images_en_la_configuracion_va_siempre_en_borrador_y_no_se_publica() {
     let d = proyecto();
-    fs::write(d.path().join("latexviewer.json"), CONFIG.replace(r#""rapido":   { "partial": true,"#, r#""rapido":   { "draftImages": true, "partial": true,"#)).unwrap();
+    fs::write(d.path().join("latexfrog.json"), CONFIG.replace(r#""rapido":   { "partial": true,"#, r#""rapido":   { "draftImages": true, "partial": true,"#)).unwrap();
     let (s, r) = abrir(&d, OK);
     s.request_build(Some("rapido")).unwrap();
     esperar_finales(&r, 1, 60);
@@ -231,9 +231,9 @@ fn un_perfil_de_partes_sin_seleccion_o_desconocido_no_lanza_nada() {
 fn siembra_los_aux_de_las_partes_excluidas_y_el_marcador_vive_durante_el_build() {
     let d = proyecto();
     let p = d.path();
-    fs::create_dir_all(p.join(".lv/build/rapido/Secciones")).unwrap();
-    fs::write(p.join(".lv/build/rapido/Secciones/Dos.aux"), "\\newlabel{x}{{1}{2}}").unwrap();
-    fs::write(p.join(".lv/build/rapido/Secciones/Uno.aux"), "propio de la parte elegida").unwrap();
+    fs::create_dir_all(p.join(".latexfrog/build/rapido/Secciones")).unwrap();
+    fs::write(p.join(".latexfrog/build/rapido/Secciones/Dos.aux"), "\\newlabel{x}{{1}{2}}").unwrap();
+    fs::write(p.join(".latexfrog/build/rapido/Secciones/Uno.aux"), "propio de la parte elegida").unwrap();
     // El script mira qué hay en su directorio cuando corre.
     let script = format!(
         "{OK}$t = Test-Path \"$d/.sospechoso\"; \"MARCADOR=$t\"\n$t = Test-Path \"$d/Secciones/Dos.aux\"; \"DOS=$t\"\n$t = Test-Path \"$d/Secciones/Uno.aux\"; \"UNO=$t\"\n"
@@ -245,14 +245,14 @@ fn siembra_los_aux_de_las_partes_excluidas_y_el_marcador_vive_durante_el_build()
     assert!(log.contains("MARCADOR=True"), "el perfil es sospechoso mientras compila: {log}");
     assert!(log.contains("DOS=True"), "la parte excluida se sembró: {log}");
     assert!(log.contains("UNO=False"), "la parte elegida no se siembra: {log}");
-    assert!(!p.join(".lv/build/parcial/.sospechoso").exists(), "un build ok lo saca");
+    assert!(!p.join(".latexfrog/build/parcial/.sospechoso").exists(), "un build ok lo saca");
 }
 
 #[test]
 fn las_carpetas_del_cache_existen_cuando_arranca_latexmk() {
     let d = proyecto();
     // El latexmk falso informa si las dos carpetas (TeX Live no las crea) ya estaban al arrancar.
-    let script = "$p = $env:LV_PERFIL\n$d = \".lv/build/$p\"\nNew-Item -ItemType Directory -Force $d | Out-Null\n\"RAIZ=$(Test-Path 'figuras-cache') PERFIL=$(Test-Path \"$d/figuras-cache\")\"\nSet-Content \"$d/lv-$p.pdf\" 'x'\n";
+    let script = "$p = $env:LV_PERFIL\n$d = \".latexfrog/build/$p\"\nNew-Item -ItemType Directory -Force $d | Out-Null\n\"RAIZ=$(Test-Path 'figuras-cache') PERFIL=$(Test-Path \"$d/figuras-cache\")\"\nSet-Content \"$d/lv-$p.pdf\" 'x'\n";
     let (s, r) = abrir(&d, script);
     s.request_build(Some("rapido")).unwrap();
     esperar_finales(&r, 1, 60);
@@ -263,17 +263,17 @@ fn las_carpetas_del_cache_existen_cuando_arranca_latexmk() {
 fn el_completo_limpia_sus_auxiliares_antes_de_compilar() {
     let d = proyecto();
     let p = d.path();
-    fs::create_dir_all(p.join(".lv/build/completo")).unwrap();
-    fs::write(p.join(".lv/build/completo/lv-completo.aux"), "viejo").unwrap();
-    fs::write(p.join(".lv/build/completo/lv-completo.fdb_latexmk"), "viejo").unwrap();
+    fs::create_dir_all(p.join(".latexfrog/build/completo")).unwrap();
+    fs::write(p.join(".latexfrog/build/completo/lv-completo.aux"), "viejo").unwrap();
+    fs::write(p.join(".latexfrog/build/completo/lv-completo.fdb_latexmk"), "viejo").unwrap();
     let script = format!("{OK}$t = Test-Path \"$d/lv-$p.aux\"; \"AUX=$t\"\n");
     let (s, r) = abrir(&d, &script);
     s.request_build(Some("completo")).unwrap();
     esperar_finales(&r, 1, 60);
     assert!(r.log().contains("AUX=False"), "{}", r.log());
     // El rápido no tiene cleanBefore: lo suyo se conserva.
-    fs::create_dir_all(p.join(".lv/build/rapido")).unwrap();
-    fs::write(p.join(".lv/build/rapido/lv-rapido.aux"), "a").unwrap();
+    fs::create_dir_all(p.join(".latexfrog/build/rapido")).unwrap();
+    fs::write(p.join(".latexfrog/build/rapido/lv-rapido.aux"), "a").unwrap();
     s.request_build(Some("rapido")).unwrap();
     esperar_finales(&r, 2, 60);
     assert!(r.log().contains("AUX=True"));
@@ -315,7 +315,7 @@ fn cancelar_descarta_el_pendiente_y_deja_el_perfil_sospechoso() {
     std::thread::sleep(Duration::from_millis(500));
     assert_eq!(finales(&r).len(), 1, "el pendiente no corre después de cancelar");
     assert!(matches!(&finales(&r)[0], BuildEvent::Finished { cancelled: true, ok: false, .. }));
-    assert!(d.path().join(".lv/build/rapido/.sospechoso").exists());
+    assert!(d.path().join(".latexfrog/build/rapido/.sospechoso").exists());
     assert!(!s.is_building());
 }
 
@@ -323,11 +323,11 @@ fn cancelar_descarta_el_pendiente_y_deja_el_perfil_sospechoso() {
 fn un_aux_truncado_se_repara_y_se_reintenta_una_sola_vez() {
     let d = proyecto();
     let p = d.path();
-    fs::create_dir_all(p.join(".lv/build/rapido/Secciones")).unwrap();
-    fs::write(p.join(".lv/build/rapido/Secciones/Uno.aux"), "truncado").unwrap();
+    fs::create_dir_all(p.join(".latexfrog/build/rapido/Secciones")).unwrap();
+    fs::write(p.join(".latexfrog/build/rapido/Secciones/Uno.aux"), "truncado").unwrap();
     // La primera vez falla como el libro cuando queda un .aux cortado; la segunda, con los auxiliares borrados, sale bien.
     let script = format!(
-        "$m = '.lv/intento.txt'\nNew-Item -ItemType Directory -Force '.lv' | Out-Null\nif (-not (Test-Path $m)) {{\n  Set-Content $m '1'\n  $t = Test-Path '.lv/build/rapido/Secciones/Uno.aux'; \"AUX_ANTES=$t\"\n  '! File ended while scanning use of \\@newl@bel.'\n  exit 12\n}}\n$t = Test-Path '.lv/build/rapido/Secciones/Uno.aux'; \"AUX_EN_EL_REINTENTO=$t\"\n{OK}"
+        "$m = '.latexfrog/intento.txt'\nNew-Item -ItemType Directory -Force '.latexfrog' | Out-Null\nif (-not (Test-Path $m)) {{\n  Set-Content $m '1'\n  $t = Test-Path '.latexfrog/build/rapido/Secciones/Uno.aux'; \"AUX_ANTES=$t\"\n  '! File ended while scanning use of \\@newl@bel.'\n  exit 12\n}}\n$t = Test-Path '.latexfrog/build/rapido/Secciones/Uno.aux'; \"AUX_EN_EL_REINTENTO=$t\"\n{OK}"
     );
     let (s, r) = abrir(&d, &script);
     s.request_build(Some("rapido")).unwrap();
@@ -347,7 +347,7 @@ fn un_aux_truncado_se_repara_y_se_reintenta_una_sola_vez() {
     assert!(log.contains("auxiliares borrados"));
     assert_eq!(contar(&r, |e| matches!(e, BuildEvent::Started { retry: true, .. })), 1);
     assert_eq!(contar(&r, |e| matches!(e, BuildEvent::Started { .. })), 2);
-    assert!(!p.join(".lv/build/rapido/.sospechoso").exists());
+    assert!(!p.join(".latexfrog/build/rapido/.sospechoso").exists());
     // El historial tiene UNA línea (los dos intentos son un solo trabajo) y dice que se reparó.
     let h = s.history(10);
     assert_eq!(h.len(), 1, "{h:#?}");
@@ -367,7 +367,7 @@ fn si_el_reintento_tambien_falla_no_hay_un_tercer_intento() {
         BuildEvent::Finished { ok, repaired, truncated_aux, .. } => assert!(!ok && *repaired && *truncated_aux),
         _ => unreachable!(),
     }
-    assert!(d.path().join(".lv/build/rapido/.sospechoso").exists());
+    assert!(d.path().join(".latexfrog/build/rapido/.sospechoso").exists());
 }
 
 #[test]
@@ -383,7 +383,7 @@ fn un_error_comun_no_dispara_la_reparacion() {
 #[test]
 fn cuenta_las_pasadas_que_informa_latexmk() {
     let d = proyecto();
-    let script = "$p = $env:LV_PERFIL\nNew-Item -ItemType Directory -Force \".lv/build/$p\" | Out-Null\n\"Run number 1 of rule 'pdflatex'\"\n\"Run number 1 of rule 'biber'\"\n\"Run number 2 of rule 'pdflatex'\"\nSet-Content \".lv/build/$p/lv-$p.pdf\" 'x'\n";
+    let script = "$p = $env:LV_PERFIL\nNew-Item -ItemType Directory -Force \".latexfrog/build/$p\" | Out-Null\n\"Run number 1 of rule 'pdflatex'\"\n\"Run number 1 of rule 'biber'\"\n\"Run number 2 of rule 'pdflatex'\"\nSet-Content \".latexfrog/build/$p/lv-$p.pdf\" 'x'\n";
     let (s, r) = abrir(&d, script);
     s.request_build(Some("rapido")).unwrap();
     esperar_finales(&r, 1, 60);
@@ -394,7 +394,7 @@ fn cuenta_las_pasadas_que_informa_latexmk() {
 fn el_build_avisa_cada_pasada_y_cada_figura_de_pgf_mientras_pasa_y_antes_del_final() {
     let d = proyecto();
     // La herramienta que corre, la figura que pgf lanza adentro de la pasada, y otra pasada.
-    let script = "$p = $env:LV_PERFIL\nNew-Item -ItemType Directory -Force \".lv/build/$p\" | Out-Null\n\"Run number 1 of rule 'pdflatex'\"\n\"Invoking: pdflatex -jobname \"\"figuras-cache/C7C9E7-butter-2\"\" x\"\n\"Run number 1 of rule 'biber'\"\n\"Run number 2 of rule 'pdflatex'\"\nSet-Content \".lv/build/$p/lv-$p.pdf\" 'x'\n";
+    let script = "$p = $env:LV_PERFIL\nNew-Item -ItemType Directory -Force \".latexfrog/build/$p\" | Out-Null\n\"Run number 1 of rule 'pdflatex'\"\n\"Invoking: pdflatex -jobname \"\"figuras-cache/C7C9E7-butter-2\"\" x\"\n\"Run number 1 of rule 'biber'\"\n\"Run number 2 of rule 'pdflatex'\"\nSet-Content \".latexfrog/build/$p/lv-$p.pdf\" 'x'\n";
     let (s, r) = abrir(&d, script);
     s.request_build(Some("rapido")).unwrap();
     esperar_finales(&r, 1, 60);
@@ -442,11 +442,11 @@ fn escribir_synctex(root: &Path, perfil: &str) {
     use std::io::Write;
     let r = root.display().to_string().replace('\\', "/");
     let texto = format!(
-        "SyncTeX Version:1\nInput:1:{r}/main.tex\nInput:2:{r}/Secciones/Uno.tex\nInput:3:{r}/.lv/drivers/lv-{perfil}.tex\nOutput:pdf\nMagnification:1000\nUnit:1\nContent:\n{{1\n[1,1:4736286,4736286:30000000,40000000,0\n(1,3:4736286,9000000:30000000,500000,100000\nk1,3:4736286,9000000:100000\n)\n(2,1:4736286,12000000:30000000,500000,100000\nk2,1:4736286,12000000:100000\n)\n]\n}}1\nPostamble:\n"
+        "SyncTeX Version:1\nInput:1:{r}/main.tex\nInput:2:{r}/Secciones/Uno.tex\nInput:3:{r}/.latexfrog/drivers/lv-{perfil}.tex\nOutput:pdf\nMagnification:1000\nUnit:1\nContent:\n{{1\n[1,1:4736286,4736286:30000000,40000000,0\n(1,3:4736286,9000000:30000000,500000,100000\nk1,3:4736286,9000000:100000\n)\n(2,1:4736286,12000000:30000000,500000,100000\nk2,1:4736286,12000000:100000\n)\n]\n}}1\nPostamble:\n"
     );
     let mut e = GzEncoder::new(Vec::new(), Compression::default());
     e.write_all(texto.as_bytes()).unwrap();
-    let dir = root.join(format!(".lv/build/{perfil}"));
+    let dir = root.join(format!(".latexfrog/build/{perfil}"));
     fs::create_dir_all(&dir).unwrap();
     fs::write(dir.join(format!("lv-{perfil}.synctex.gz")), e.finish().unwrap()).unwrap();
 }
@@ -490,7 +490,7 @@ fn el_salto_va_y_vuelve_con_las_rutas_relativas_a_la_raiz() {
     let (s, _) = abrir(&d, OK);
     escribir_synctex(&s.root, "rapido");
     let f = s.synctex_forward("main.tex", 3).unwrap().expect("la línea 3 tiene caja");
-    assert_eq!((f.perfil.as_str(), f.pdf.as_str(), f.page), ("rapido", ".lv/build/rapido/lv-rapido.pdf", 1));
+    assert_eq!((f.perfil.as_str(), f.pdf.as_str(), f.page), ("rapido", ".latexfrog/build/rapido/lv-rapido.pdf", 1));
     assert_eq!((f.line_used, f.rects.len()), (3, 1));
     // Ida y vuelta por el centro de la caja.
     let r = f.rects[0];
@@ -515,7 +515,7 @@ fn un_build_nuevo_invalida_el_synctex_cacheado() {
     assert!(s.synctex_forward("main.tex", 3).unwrap().is_some());
     // Se reemplaza por uno sin `main.tex` (otro contenido, otro mtime): el cache no puede devolver el viejo.
     pausa_mtime();
-    let dir = s.root.join(".lv/build/rapido");
+    let dir = s.root.join(".latexfrog/build/rapido");
     fs::write(dir.join("lv-rapido.synctex.gz"), b"").unwrap();
     assert!(s.synctex_forward("main.tex", 3).is_err(), "un gz vacío no es un SyncTeX válido");
     pausa_mtime();
@@ -529,19 +529,19 @@ fn mueve_los_md5_del_perfil_al_cache_compartido_al_terminar() {
     let p = d.path();
     fs::create_dir_all(p.join("figuras-cache")).unwrap();
     fs::write(p.join("figuras-cache/A-0.md5"), "viejo").unwrap();
-    let script = format!("{OK}New-Item -ItemType Directory -Force \".lv/build/$p/figuras-cache\" | Out-Null\nSet-Content \".lv/build/$p/figuras-cache/A-0.md5\" 'nuevo' -NoNewline\n");
+    let script = format!("{OK}New-Item -ItemType Directory -Force \".latexfrog/build/$p/figuras-cache\" | Out-Null\nSet-Content \".latexfrog/build/$p/figuras-cache/A-0.md5\" 'nuevo' -NoNewline\n");
     let (s, r) = abrir(&d, &script);
     s.request_build(Some("rapido")).unwrap();
     esperar_finales(&r, 1, 60);
     assert_eq!(fs::read_to_string(p.join("figuras-cache/A-0.md5")).unwrap(), "nuevo");
-    assert!(!p.join(".lv/build/rapido/figuras-cache/A-0.md5").exists());
+    assert!(!p.join(".latexfrog/build/rapido/figuras-cache/A-0.md5").exists());
 }
 
 #[test]
 fn publicar_copia_el_pdf_y_el_synctex_con_el_nombre_configurado() {
     let d = proyecto();
     let p = d.path();
-    let script = format!("{OK}Set-Content \".lv/build/$p/lv-$p.synctex.gz\" 'gz'\n");
+    let script = format!("{OK}Set-Content \".latexfrog/build/$p/lv-$p.synctex.gz\" 'gz'\n");
     let (s, r) = abrir(&d, &script);
     assert!(s.publish("completo").is_err(), "sin build no hay qué publicar");
     s.request_build(Some("completo")).unwrap();
@@ -551,13 +551,13 @@ fn publicar_copia_el_pdf_y_el_synctex_con_el_nombre_configurado() {
     assert_eq!(fs::read_to_string(p.join("pub/Libro final.pdf")).unwrap().trim(), "x");
     assert_eq!(fs::read_to_string(p.join("pub/Libro final.synctex.gz")).unwrap().trim(), "gz");
     // El PDF de trabajo no se renombra jamás: sigue donde estaba.
-    assert!(p.join(".lv/build/completo/lv-completo.pdf").exists());
+    assert!(p.join(".latexfrog/build/completo/lv-completo.pdf").exists());
     // Sin nombre configurado: sale con el de la raíz.
     s.request_build(Some("rapido")).unwrap();
     esperar_finales(&r, 2, 60);
     assert!(s.publish("rapido").unwrap().pdf.ends_with("main (rapido).pdf"));
     // Un perfil sospechoso no se publica.
-    fs::write(p.join(".lv/build/rapido/.sospechoso"), "x").unwrap();
+    fs::write(p.join(".latexfrog/build/rapido/.sospechoso"), "x").unwrap();
     assert!(s.publish("rapido").unwrap_err().to_string().contains("no terminó bien"));
 }
 
@@ -596,8 +596,8 @@ fn cambiar_la_raiz_no_se_puede_con_un_build_en_curso() {
     esperar_finales(&r, 1, 60);
     let v = s.set_root("otro.tex").unwrap();
     assert_eq!(v.root_file.as_deref(), Some("otro.tex"));
-    // La raíz de la sesión no se guarda en `state.json` (F8b): se persiste desde la pantalla Proyecto, en `latexviewer.json`.
-    let estado = fs::read_to_string(d.path().join(".lv/state.json")).unwrap_or_default();
+    // La raíz de la sesión no se guarda en `state.json` (F8b): se persiste desde la pantalla Proyecto, en `latexfrog.json`.
+    let estado = fs::read_to_string(d.path().join(".latexfrog/state.json")).unwrap_or_default();
     assert!(!estado.contains("otro.tex") && !estado.contains("\"root\""), "{estado}");
     assert!(s.set_root("../afuera.tex").is_err());
     assert!(s.set_root("no-existe.tex").is_err());
@@ -608,7 +608,7 @@ fn cambiar_la_raiz_no_se_puede_con_un_build_en_curso() {
 /// Un latexmk que lanza dos figuras: la A sale bien y la B tiene un error fatal en su log (con un PDF viejo al lado, como
 /// lo deja pgf). El build termina "bien": latexmk sale con 0 y hay PDF.
 const DOS_FIGURAS: &str = r##"$p = $env:LV_PERFIL
-$d = ".lv/build/$p"
+$d = ".latexfrog/build/$p"
 New-Item -ItemType Directory -Force "$d/figuras-cache", "figuras-cache" | Out-Null
 Set-Content "$d/figuras-cache/A-uno-0.md5" 'nuevo'
 Set-Content "$d/figuras-cache/B-dos-0.md5" 'nuevo'
@@ -635,20 +635,20 @@ fn las_figuras_verificadas_pasan_al_cache_y_la_rota_se_informa_sin_pasar_su_md5(
     assert_eq!(fs::read_to_string(raiz.join("figuras-cache/A-uno-0.md5")).unwrap().trim(), "nuevo", "la verificada pasa al cache compartido");
     assert!(raiz.join("figuras-cache/A-uno-0.pdf").is_file());
     assert!(!raiz.join("figuras-cache/B-dos-0.md5").exists(), "el .md5 que miente no llega al cache");
-    assert!(!raiz.join(".lv/build/rapido/figuras-cache/B-dos-0.md5").exists());
+    assert!(!raiz.join(".latexfrog/build/rapido/figuras-cache/B-dos-0.md5").exists());
     assert!(!raiz.join("figuras-cache/B-dos-0.pdf").exists(), "ni el PDF viejo");
     let figuras: Vec<_> = s.problems("rapido").into_iter().filter(|p| p.kind == "figure").collect();
     assert_eq!(figuras.len(), 1, "{figuras:#?}");
     assert!(figuras[0].message.contains("B-dos-0") && figuras[0].message.contains("Undefined control sequence"));
     assert_eq!((figuras[0].file.as_deref(), figuras[0].line), (Some("main.tex"), Some(3)));
-    assert!(raiz.join(".lv/build/rapido/.sospechoso").exists(), "con una figura rota el PDF no es de fiar: no se publica ni se siembra");
+    assert!(raiz.join(".latexfrog/build/rapido/.sospechoso").exists(), "con una figura rota el PDF no es de fiar: no se publica ni se siembra");
 }
 
 #[test]
 fn cancelar_a_mitad_de_una_figura_no_deja_pdf_cortado_ni_md5_que_la_de_por_buena() {
     let d = proyecto();
     let script = r##"$p = $env:LV_PERFIL
-$d = ".lv/build/$p"
+$d = ".latexfrog/build/$p"
 New-Item -ItemType Directory -Force "$d/figuras-cache", "figuras-cache" | Out-Null
 Set-Content "$d/figuras-cache/A-uno-0.md5" 'nuevo'
 Set-Content "figuras-cache/A-uno-0.pdf" '%PDF-1.5 cortado'
@@ -666,11 +666,11 @@ Start-Sleep -Seconds 30
     assert!(s.cancel());
     esperar_finales(&r, 1, 15);
     let raiz = d.path();
-    for rel in ["figuras-cache/A-uno-0.md5", "figuras-cache/A-uno-0.pdf", ".lv/build/rapido/figuras-cache/A-uno-0.md5"] {
+    for rel in ["figuras-cache/A-uno-0.md5", "figuras-cache/A-uno-0.pdf", ".latexfrog/build/rapido/figuras-cache/A-uno-0.md5"] {
         assert!(!raiz.join(rel).exists(), "{rel} tenía que borrarse: la figura quedó a medio hacer");
     }
     assert!(s.problems("rapido").iter().all(|p| p.kind != "figure"), "cancelar no es un error del proyecto");
-    assert!(raiz.join(".lv/build/rapido/.sospechoso").exists());
+    assert!(raiz.join(".latexfrog/build/rapido/.sospechoso").exists());
 }
 
 #[test]

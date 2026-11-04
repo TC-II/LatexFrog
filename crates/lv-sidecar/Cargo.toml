@@ -2,9 +2,12 @@
 name = "lv-sidecar"
 version = "0.1.0"
 edition = "2021"
-description = "lv-core como proceso aparte: una sesión viva que habla JSON por línea. Sin dependencias de Tauri ni de Electron."
+description = "lv-core as a separate process: a live session speaking JSON lines."
 
 [dependencies]
 lv-core = { path = "../lv-core" }
 serde = "1"
 serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"

@@ -7,7 +7,7 @@
 //! otros perfiles, como en cualquier build parcial (5.4), así que las referencias y los números salen bien. Una parte que falla no
 //! corta las demás.
 //!
-//! **Vista previa de un fragmento**: el texto se escribe en `.lv/fragment/frag.tex` y el driver lo carga al principio del cuerpo
+//! **Vista previa de un fragmento**: el texto se escribe en `.latexfrog/fragment/frag.tex` y el driver lo carga al principio del cuerpo
 //! con `\includeonly{}` (ninguna parte). Comparte el cache de figuras y su sello; las figuras del fragmento se nombran con su propio
 //! slug (`frag`), así no pisan las del capítulo.
 
@@ -67,7 +67,7 @@ impl Session {
         let ex = config.export_cfg();
         validar_destino(&ex.dir)?;
         if todas.is_empty() {
-            return Err(otro("el proyecto no tiene partes que exportar (¿falta `parts.commands` en latexviewer.json?)"));
+            return Err(otro("el proyecto no tiene partes que exportar (¿falta `parts.commands` en latexfrog.json?)"));
         }
         let partes = match partes.filter(|p| !p.is_empty()) {
             Some(p) => {
@@ -117,7 +117,7 @@ impl Session {
     }
 
     /// Compila `texto` (un fragmento: un entorno, una selección) con el documento de contexto y deja el PDF en
-    /// `.lv/build/fragmento/lv-fragmento.pdf`. Con otro trabajo en curso queda pendiente (gana el último pedido).
+    /// `.latexfrog/build/fragmento/lv-fragmento.pdf`. Con otro trabajo en curso queda pendiente (gana el último pedido).
     pub fn request_fragment(self: &Arc<Self>, texto: String) -> Result<BuildAck> {
         self.guardia()?;
         if texto.trim().is_empty() {
@@ -149,7 +149,7 @@ impl Session {
             let archivos = self.lock()?.index.as_ref().map(crate::formato::archivos_del_preambulo);
             if let Some(archivos) = archivos {
                 let huella = crate::formato::huella(&self.root, &plan.spec.driver, &archivos);
-                if let Some(fmt) = crate::formato::asegurar(&self.root, ".lv/build/fragmento", &plan.spec.driver, &huella) {
+                if let Some(fmt) = crate::formato::asegurar(&self.root, ".latexfrog/build/fragmento", &plan.spec.driver, &huella) {
                     plan.spec.driver = crate::formato::CUERPO.to_string();
                     plan.spec.formato = Some(fmt);
                 }

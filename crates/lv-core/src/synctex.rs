@@ -290,7 +290,7 @@ impl Synctex {
         }).map(|(t, _)| *t)
     }
 
-    /// La ruta de un archivo de entrada, relativa a la raíz y con `/`. `None` si es del driver (`.lv/`), del sistema o de
+    /// La ruta de un archivo de entrada, relativa a la raíz y con `/`. `None` si es del driver (`.latexfrog/`), del sistema o de
     /// fuera del proyecto.
     pub fn rel_of_tag(&self, root: &Path, tag: u16) -> Option<String> {
         let ruta = self.inputs.iter().find(|(t, _)| *t == tag)?.1.replace('\\', "/");
@@ -305,7 +305,7 @@ impl Synctex {
         } else {
             ruta.trim_start_matches("./").to_string()
         };
-        (!rel.is_empty() && !rel.starts_with(".lv/") && !rel.split('/').any(|c| c == "..")).then_some(rel)
+        (!rel.is_empty() && !rel.starts_with(".latexfrog/") && !rel.split('/').any(|c| c == "..")).then_some(rel)
     }
 
     // --- consultas ---------------------------------------------------------------------------------------------------------
@@ -481,7 +481,7 @@ mod tests {
         [
             "SyncTeX Version:1",
             "Input:1:C:/Proyecto con espacios/main.tex",
-            "Input:2:C:/Proyecto con espacios/.lv/drivers/lv-parcial.tex",
+            "Input:2:C:/Proyecto con espacios/.latexfrog/drivers/lv-parcial.tex",
             "Output:pdf",
             "Magnification:1000",
             "Unit:1",

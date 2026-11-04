@@ -31,8 +31,8 @@ fn una_segunda_instancia_ve_el_candado_de_la_primera_y_un_cierre_brusco_no_traba
     let pid = ajeno.id();
     std::thread::sleep(std::time::Duration::from_millis(500));
     // El «dueño» tomó el candado: su PID y el nombre de su ejecutable.
-    fs::create_dir_all(d.path().join(".lv")).unwrap();
-    fs::write(d.path().join(".lv/lock"), format!(r#"{{ "pid": {pid}, "app": "powershell.exe", "token": 1, "desde_ms": 1 }}"#)).unwrap();
+    fs::create_dir_all(d.path().join(".latexfrog")).unwrap();
+    fs::write(d.path().join(".latexfrog/lock"), format!(r#"{{ "pid": {pid}, "app": "powershell.exe", "token": 1, "desde_ms": 1 }}"#)).unwrap();
 
     let s = sesion(d.path());
     assert_eq!(s.view().unwrap().locked_by, Some(pid), "la vista del proyecto dice quién lo tiene");
@@ -44,9 +44,9 @@ fn una_segunda_instancia_ve_el_candado_de_la_primera_y_un_cierre_brusco_no_traba
     // Editar sigue andando: es lo único que hace una instancia sin el candado.
     assert!(s.symbols().is_ok());
     // El archivo del dueño no se tocó (la segunda instancia no lo pisa ni lo suelta).
-    assert!(fs::read_to_string(d.path().join(".lv/lock")).unwrap().contains(&pid.to_string()));
+    assert!(fs::read_to_string(d.path().join(".latexfrog/lock")).unwrap().contains(&pid.to_string()));
     drop(s);
-    assert!(d.path().join(".lv/lock").is_file(), "soltar la sesión sin candado no borra el del dueño");
+    assert!(d.path().join(".latexfrog/lock").is_file(), "soltar la sesión sin candado no borra el del dueño");
 
     // El dueño muere sin soltarlo (cierre brusco): el candado queda en disco pero ya no vale.
     ajeno.kill().unwrap();
@@ -55,7 +55,7 @@ fn una_segunda_instancia_ve_el_candado_de_la_primera_y_un_cierre_brusco_no_traba
     assert_eq!(s2.view().unwrap().locked_by, None, "un PID que ya no existe no traba el proyecto");
     // (`figures_clean` no lanza ningún trabajo: falla por otra cosa, que no es el candado.)
     assert_eq!(bloqueada(s2.figures_clean()), None);
-    assert!(fs::read_to_string(d.path().join(".lv/lock")).unwrap().contains(&std::process::id().to_string()), "ahora el candado es de esta instancia");
+    assert!(fs::read_to_string(d.path().join(".latexfrog/lock")).unwrap().contains(&std::process::id().to_string()), "ahora el candado es de esta instancia");
     drop(s2);
-    assert!(!d.path().join(".lv/lock").exists(), "y se suelta al cerrar la sesión");
+    assert!(!d.path().join(".latexfrog/lock").exists(), "y se suelta al cerrar la sesión");
 }

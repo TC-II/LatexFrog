@@ -3,7 +3,7 @@
 //!   cargo run -p lv-core --example detectar -- <carpeta> [--root <raíz.tex>] [--json]
 //!
 //! Imprime las raíces candidatas con su motivo, las partes, los flags, las figuras, los perfiles, las salidas y las variables, y el
-//! `latexviewer.json` propuesto (o sólo ese JSON con `--json`). No escribe nada en la carpeta. Sirve para revisar una detección antes de
+//! `latexfrog.json` propuesto (o sólo ese JSON con `--json`). No escribe nada en la carpeta. Sirve para revisar una detección antes de
 //! escribir su prueba y para medir cuánto tarda (en el libro, unos 100 ms).
 
 use lv_core::detectar::detectar;

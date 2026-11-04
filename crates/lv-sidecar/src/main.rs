@@ -1,10 +1,4 @@
-//! lv-core como proceso aparte, para anfitriones que no son la app de Tauri (Texpile): una sesión viva y JSON por línea.
-//!
-//! Por stdin llegan pedidos `{"id":1,"pedido":"build",...}`; por stdout salen la respuesta `{"tipo":"respuesta","id":1,"ok":true,...}`
-//! y los eventos de compilación `{"tipo":"evento","evento":{...}}`. El primer mensaje es `{"tipo":"hola","protocolo":1,...}`.
-//! Cerrar stdin cancela lo que esté corriendo y termina: si el anfitrión muere, no queda nada compilando.
-//!
-//! Por ahora trae lo que necesita el experimento de compilar de H1; el resto de los pedidos llega después de esa decisión.
+//! lv-core as a separate process: one live session speaking JSON lines. `docs/protocol.md` is the contract.
 
 use lv_core::build::Sink;
 use lv_core::config::StatePatch;
@@ -14,92 +8,175 @@ use std::io::{BufRead, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-const PROTOCOLO: u32 = 1;
+const PROTOCOL: u32 = 2;
 
-/// stdout lo comparten el lector de pedidos y los hilos del motor: cada línea se escribe entera, con el candado tomado.
-type Salida = Arc<Mutex<std::io::Stdout>>;
+/// stdout is shared by the request reader, async commands and engine threads: each line is written whole, under the lock.
+type Out = Arc<Mutex<std::io::Stdout>>;
 
-fn emitir(salida: &Salida, v: &Value) {
-    let mut o = salida.lock().unwrap_or_else(|e| e.into_inner());
+fn emit(out: &Out, v: &Value) {
+    let mut o = out.lock().unwrap_or_else(|e| e.into_inner());
     let _ = writeln!(o, "{v}");
     let _ = o.flush();
 }
 
-fn texto<'a>(p: &'a Value, clave: &str) -> Result<&'a str, String> {
-    p.get(clave).and_then(Value::as_str).ok_or_else(|| format!("falta `{clave}`"))
+fn respond(out: &Out, id: Value, res: Result<Value, String>) {
+    let r = match res {
+        Ok(data) => json!({ "type": "response", "id": id, "ok": true, "data": data }),
+        Err(error) => json!({ "type": "response", "id": id, "ok": false, "error": error }),
+    };
+    emit(out, &r);
 }
 
-fn json_de<T: serde::Serialize>(v: T) -> Result<Value, String> {
+fn text<'a>(p: &'a Value, key: &str) -> Result<&'a str, String> {
+    p.get(key).and_then(Value::as_str).ok_or_else(|| format!("missing `{key}`"))
+}
+
+fn number(p: &Value, key: &str) -> Result<f64, String> {
+    p.get(key).and_then(Value::as_f64).ok_or_else(|| format!("missing `{key}`"))
+}
+
+fn to_json<T: serde::Serialize>(v: T) -> Result<Value, String> {
     serde_json::to_value(v).map_err(|e| e.to_string())
 }
 
-fn atender(p: &Value, sesion: &mut Option<Arc<Session>>, salida: &Salida) -> Result<Value, String> {
-    let pedido = texto(p, "pedido")?;
-    if pedido == "abrir" {
-        let raiz = texto(p, "raiz")?;
-        // Primero se suelta la anterior: su candado no tiene que trabar la apertura de la misma carpeta.
-        *sesion = None;
-        let eventos = salida.clone();
-        let sink: Sink = Arc::new(move |ev| match serde_json::to_value(&ev) {
-            Ok(evento) => emitir(&eventos, &json!({ "tipo": "evento", "evento": evento })),
-            Err(e) => eprintln!("evento sin serializar: {e}"),
-        });
-        let s = Session::open(Path::new(raiz), sink).map_err(|e| e.to_string())?;
-        let vista = s.view().map_err(|e| e.to_string())?;
-        *sesion = Some(s);
-        return json_de(vista);
+fn field<T: serde::de::DeserializeOwned>(p: &Value, key: &str) -> Result<Option<T>, String> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => serde_json::from_value(v.clone()).map(Some).map_err(|e| format!("bad `{key}`: {e}")),
     }
-    let s = sesion.as_ref().ok_or("no hay un proyecto abierto")?;
-    let error = |e: lv_core::error::Error| e.to_string();
-    match pedido {
-        "vista" => json_de(s.view().map_err(error)?),
-        "estado" => {
-            let mut patch = StatePatch::default();
-            if let Some(v) = p.get("perfil").and_then(Value::as_str) {
-                patch.active_profile = Some(v.to_string());
+}
+
+fn err(e: lv_core::error::Error) -> String {
+    e.to_string()
+}
+
+fn open(p: &Value, session: &mut Option<Arc<Session>>, out: &Out) -> Result<Value, String> {
+    let root = text(p, "root")?;
+    // The previous one goes first: its lock must not stop reopening the same folder.
+    *session = None;
+    let events = out.clone();
+    let sink: Sink = Arc::new(move |ev| match serde_json::to_value(&ev) {
+        Ok(event) => emit(&events, &json!({ "type": "event", "event": event })),
+        Err(e) => eprintln!("event not serialized: {e}"),
+    });
+    let s = Session::open(Path::new(root), sink).map_err(err)?;
+    let project = s.view().map_err(err)?;
+    let migration = to_json(&s.migration)?;
+    *session = Some(s);
+    Ok(json!({ "project": project, "migration": migration }))
+}
+
+fn patch(p: &Value) -> Result<StatePatch, String> {
+    Ok(StatePatch {
+        active_profile: field(p, "profile")?,
+        selection: field(p, "selection")?,
+        variables: field(p, "variables")?,
+        auto_compile: field(p, "autoCompile")?,
+        idle_ms: field(p, "idleMs")?,
+        outside_save: field(p, "outsideSave")?,
+        draft_images: field(p, "draftImages")?,
+    })
+}
+
+/// Commands that can take seconds. They run on their own thread so `cancel` is never behind them.
+fn is_async(cmd: &str) -> bool {
+    matches!(cmd, "symbols" | "figures-status" | "figures-clean-preview" | "figures-clean" | "doctor" | "orphans" | "kill-orphans" | "detect" | "config-probe")
+}
+
+fn run(p: &Value, cmd: &str, s: &Arc<Session>) -> Result<Value, String> {
+    match cmd {
+        "view" => to_json(s.view().map_err(err)?),
+        "refresh" => to_json(s.refresh().map_err(err)?),
+        "set-root" => to_json(s.set_root(text(p, "file")?).map_err(err)?),
+        "set-state" => to_json(s.set_state(patch(p)?).map_err(err)?),
+        "file-info" => to_json(s.file_info(text(p, "file")?).map_err(err)?),
+        "compile" => {
+            if let Some(root) = p.get("root").and_then(Value::as_str) {
+                s.set_root(root).map_err(err)?;
             }
-            if let Some(v) = p.get("seleccion").and_then(Value::as_array) {
-                patch.selection = Some(v.iter().filter_map(Value::as_str).map(str::to_string).collect());
+            if let Some(selection) = field::<Vec<String>>(p, "parts")? {
+                s.set_state(StatePatch { selection: Some(selection), ..Default::default() }).map_err(err)?;
             }
-            json_de(s.set_state(patch).map_err(error)?)
+            to_json(s.request_build(p.get("profile").and_then(Value::as_str)).map_err(err)?)
         }
-        "archivo-actual" => json_de(s.file_info(texto(p, "archivo")?).map_err(error)?),
-        "build" => json_de(s.request_build(p.get("perfil").and_then(Value::as_str)).map_err(error)?),
-        "cancelar" => Ok(json!({ "cancelado": s.cancel() })),
-        "synctex-forward" => {
-            let linea = p.get("linea").and_then(Value::as_u64).ok_or("falta `linea`")? as u32;
-            json_de(s.synctex_forward(texto(p, "archivo")?, linea).map_err(error)?)
+        "cancel" => Ok(json!({ "cancelled": s.cancel() })),
+        "status" => Ok(json!({ "building": s.is_building(), "lockedBy": s.view().map_err(err)?.locked_by })),
+        "problems" => to_json(s.problems(text(p, "profile")?)),
+        "symbols" => to_json(s.symbols().map_err(err)?),
+        "synctex-forward" => to_json(s.synctex_forward(text(p, "file")?, number(p, "line")? as u32).map_err(err)?),
+        "synctex-inverse" => to_json(s.synctex_inverse(text(p, "profile")?, number(p, "page")? as u32, number(p, "x")?, number(p, "y")?).map_err(err)?),
+        "pdf-for" => to_json(s.elegir_pdf(text(p, "file")?).map_err(err)?),
+        "figures-status" => to_json(s.figures_status().map_err(err)?),
+        "figures-bake" => to_json(s.request_bake().map_err(err)?),
+        "figures-clean-preview" => to_json(s.figures_clean_preview().map_err(err)?),
+        "figures-clean" => to_json(s.figures_clean().map_err(err)?),
+        "export" => to_json(s.request_export(field(p, "parts")?).map_err(err)?),
+        "fragment" => to_json(s.request_fragment(text(p, "text")?.to_string()).map_err(err)?),
+        "publish" => to_json(s.publish(text(p, "profile")?).map_err(err)?),
+        "output-dir" => {
+            let which = match text(p, "which")? {
+                "publish" => "publicar",
+                other => other,
+            };
+            to_json(s.carpeta_de_salida(which).map_err(err)?)
         }
-        "synctex-inverse" => {
-            let num = |c: &str| p.get(c).and_then(Value::as_f64).ok_or_else(|| format!("falta `{c}`"));
-            json_de(s.synctex_inverse(texto(p, "perfil")?, num("pagina")? as u32, num("x")?, num("y")?).map_err(error)?)
+        "history" => to_json(s.history(field::<usize>(p, "limit")?.unwrap_or(100))),
+        "typical-times" => to_json(s.typical_times()),
+        "doctor" => to_json(s.doctor().map_err(err)?),
+        "orphans" => to_json(s.huerfanos()),
+        "kill-orphans" => to_json(s.matar_huerfanos(&field::<Vec<u32>>(p, "pids")?.ok_or("missing `pids`")?).map_err(err)?),
+        "detect" => to_json(s.detect_project(p.get("root").and_then(Value::as_str)).map_err(err)?),
+        "config-read" => to_json(s.config_on_disk().map_err(err)?),
+        "config-validate" => to_json(s.validate_config(text(p, "text")?)),
+        "config-write" => to_json(s.write_config(text(p, "text")?).map_err(err)?),
+        "config-probe" => to_json(s.probe_config(text(p, "text")?, p.get("part").and_then(Value::as_str)).map_err(err)?),
+        other => Err(format!("unknown command: {other}")),
+    }
+}
+
+fn handle(p: Value, session: &mut Option<Arc<Session>>, out: &Out) {
+    let id = p.get("id").cloned().unwrap_or(Value::Null);
+    let cmd = match text(&p, "cmd") {
+        Ok(c) => c.to_string(),
+        Err(e) => return respond(out, id, Err(e)),
+    };
+    match cmd.as_str() {
+        "open" => respond(out, id, open(&p, session, out)),
+        "close" => {
+            if let Some(s) = session.take() {
+                s.cancel();
+            }
+            respond(out, id, Ok(Value::Null))
         }
-        otro => Err(format!("pedido desconocido: {otro}")),
+        _ => {
+            let Some(s) = session.clone() else { return respond(out, id, Err("no project is open".into())) };
+            if is_async(&cmd) {
+                let out = out.clone();
+                std::thread::spawn(move || respond(&out, id, run(&p, &cmd, &s)));
+            } else {
+                respond(out, id, run(&p, &cmd, &s));
+            }
+        }
     }
 }
 
 fn main() {
-    let salida: Salida = Arc::new(Mutex::new(std::io::stdout()));
-    emitir(&salida, &json!({ "tipo": "hola", "protocolo": PROTOCOLO, "version": env!("CARGO_PKG_VERSION") }));
-    let mut sesion: Option<Arc<Session>> = None;
-    for linea in std::io::stdin().lock().lines() {
-        let Ok(linea) = linea else { break };
-        if linea.trim().is_empty() {
+    let out: Out = Arc::new(Mutex::new(std::io::stdout()));
+    emit(&out, &json!({ "type": "hello", "protocol": PROTOCOL, "version": env!("CARGO_PKG_VERSION") }));
+    let mut session: Option<Arc<Session>> = None;
+    for line in std::io::stdin().lock().lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
             continue;
         }
-        let (id, res) = match serde_json::from_str::<Value>(&linea) {
-            Ok(p) => (p.get("id").cloned().unwrap_or(Value::Null), atender(&p, &mut sesion, &salida)),
-            Err(e) => (Value::Null, Err(format!("JSON inválido: {e}"))),
-        };
-        let r = match res {
-            Ok(datos) => json!({ "tipo": "respuesta", "id": id, "ok": true, "datos": datos }),
-            Err(error) => json!({ "tipo": "respuesta", "id": id, "ok": false, "error": error }),
-        };
-        emitir(&salida, &r);
+        match serde_json::from_str::<Value>(&line) {
+            Ok(p) => handle(p, &mut session, &out),
+            Err(e) => respond(&out, Value::Null, Err(format!("invalid JSON: {e}"))),
+        }
     }
-    if let Some(s) = sesion {
+    if let Some(s) = session {
         s.cancel();
     }
-    // Sale con exit y no esperando hilos: al morir el proceso se cierran los Job Objects y KILL_ON_JOB_CLOSE se lleva el árbol.
+    // Exit rather than wait for threads: when the process dies the Job Objects close and KILL_ON_JOB_CLOSE takes the tree.
     std::process::exit(0);
 }

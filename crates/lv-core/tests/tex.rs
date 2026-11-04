@@ -22,7 +22,7 @@ fn copiar(de: &Path, a: &Path) {
         let n = e.file_name().to_string_lossy().to_string();
         let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("");
         if p.is_dir() {
-            if n != "figuras-cache" && n != ".lv" {
+            if n != "figuras-cache" && n != ".latexfrog" {
                 copiar(&p, &a.join(&n));
             }
         } else if !["aux", "log", "pdf", "fls", "fdb_latexmk", "gz", "bbl", "bcf", "blg", "idx", "ind", "ilg", "toc", "out", "xdv", "auxlock", "md5", "dpth"].contains(&ext)
@@ -56,7 +56,7 @@ fn solo_lv_y_fuentes(proyecto: &Path, permitidos: &[&str]) {
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().to_string())
-        .filter(|n| n != ".lv" && !permitidos.contains(&n.as_str()))
+        .filter(|n| n != ".latexfrog" && !permitidos.contains(&n.as_str()))
         .collect();
     assert!(sobras.is_empty(), "el build ensució la raíz del proyecto: {sobras:?}");
 }
@@ -66,9 +66,9 @@ fn articulo_simple_en_una_carpeta_con_espacios_y_enie() {
     let (_t, p, r, fin) = compilar("articulo-simple", "main.tex");
     let (ok, pdf) = ok_de(&fin);
     assert!(ok, "{}", r.log());
-    assert_eq!(pdf.as_deref(), Some(".lv/build/completo/lv-completo.pdf"));
-    assert!(p.join(".lv/build/completo/lv-completo.pdf").is_file());
-    assert!(p.join(".lv/build/completo/lv-completo.synctex.gz").is_file());
+    assert_eq!(pdf.as_deref(), Some(".latexfrog/build/completo/lv-completo.pdf"));
+    assert!(p.join(".latexfrog/build/completo/lv-completo.pdf").is_file());
+    assert!(p.join(".latexfrog/build/completo/lv-completo.synctex.gz").is_file());
     assert!(r.log().contains("Output written on"), "el log crudo llega completo");
     solo_lv_y_fuentes(&p, &["main.tex", "README.md"]);
 }
@@ -77,12 +77,12 @@ fn articulo_simple_en_una_carpeta_con_espacios_y_enie() {
 fn libro_con_include_en_subcarpetas_con_tildes_deja_los_aux_en_el_perfil() {
     let (_t, p, r, fin) = compilar("libro-include", "main.tex");
     assert!(ok_de(&fin).0, "{}", r.log());
-    let aux = p.join(".lv/build/completo/Capítulos");
+    let aux = p.join(".latexfrog/build/completo/Capítulos");
     assert!(aux.join("Introducción general.aux").is_file(), "los .aux de \\include van al directorio del perfil");
     assert!(aux.join("Desarrollo").join("Análisis de datos.aux").is_file());
     // Sin referencias sin resolver al final: las pasadas siguientes resolvieron las cruzadas entre capítulos. Se mira
     // el .log de la ÚLTIMA pasada: el log crudo de latexmk trae también la primera, donde todavía no están.
-    let ultimo = fs::read_to_string(p.join(".lv/build/completo/lv-completo.log")).unwrap();
+    let ultimo = fs::read_to_string(p.join(".latexfrog/build/completo/lv-completo.log")).unwrap();
     assert!(!ultimo.contains("There were undefined references"), "quedaron referencias sin resolver");
     assert!(r.log().contains("Run number 2"), "tenía que hacer más de una pasada");
     solo_lv_y_fuentes(&p, &["main.tex", "README.md", "Capítulos"]);
@@ -96,8 +96,8 @@ fn indice_con_estilo_del_proyecto_y_bibliografia() {
     let (ok, _) = ok_de(&fin);
     assert!(ok, "{}", r.log());
     assert!(!r.log().contains("Index style file StyleInd.ist not found"));
-    assert!(p.join(".lv/build/completo/lv-completo.ind").is_file(), "makeindex generó el índice");
-    assert!(p.join(".lv/build/completo/lv-completo.bbl").is_file(), "biber generó la bibliografía");
+    assert!(p.join(".latexfrog/build/completo/lv-completo.ind").is_file(), "makeindex generó el índice");
+    assert!(p.join(".latexfrog/build/completo/lv-completo.bbl").is_file(), "biber generó la bibliografía");
 }
 
 /// El comportamiento de S1 con el motor de F2 y TeX de verdad: perfiles parcial y rápido sobre las mismas partes, con
@@ -133,13 +133,13 @@ fn la_sesion_alterna_parcial_y_rapido_sin_pasadas_extra_y_con_las_referencias_re
     // `\includeonly` por hook: el parcial imprime menos páginas que el rápido (el `.fls` no sirve, porque `\include` abre
     // los `.tex` excluidos para comprobar que existen).
     let paginas = |perfil: &str| -> u32 {
-        let log = fs::read_to_string(p.join(format!(".lv/build/{perfil}/lv-{perfil}.log"))).unwrap();
+        let log = fs::read_to_string(p.join(format!(".latexfrog/build/{perfil}/lv-{perfil}.log"))).unwrap();
         let salida = &log[log.find("Output written on").expect("el log dice qué escribió")..];
         let fin = salida.find(" page").expect("y cuántas páginas");
         salida[..fin].rsplit('(').next().unwrap().trim().parse().unwrap()
     };
     assert!(paginas("parcial") < paginas("rapido"), "parcial {} contra rápido {}", paginas("parcial"), paginas("rapido"));
-    let ultimo = fs::read_to_string(p.join(".lv/build/parcial/lv-parcial.log")).unwrap();
+    let ultimo = fs::read_to_string(p.join(".latexfrog/build/parcial/lv-parcial.log")).unwrap();
     assert!(!ultimo.contains("There were undefined references"), "el sembrado resuelve las referencias a partes excluidas");
 
     // Alternar sin tocar nada: ninguna pasada (S1: 0 en las cuatro).
@@ -147,8 +147,8 @@ fn la_sesion_alterna_parcial_y_rapido_sin_pasadas_extra_y_con_las_referencias_re
         let (ok, n, updated) = correr(perfil);
         assert!(ok && n == 0 && !updated, "{perfil}: ok={ok} pasadas={n} actualizado={updated}");
     }
-    assert!(p.join(".lv/build/rapido/lv-rapido.pdf").is_file() && p.join(".lv/build/parcial/lv-parcial.pdf").is_file());
-    assert!(!p.join(".lv/build/rapido/.sospechoso").exists() && !p.join(".lv/build/parcial/.sospechoso").exists());
+    assert!(p.join(".latexfrog/build/rapido/lv-rapido.pdf").is_file() && p.join(".latexfrog/build/parcial/lv-parcial.pdf").is_file());
+    assert!(!p.join(".latexfrog/build/rapido/.sospechoso").exists() && !p.join(".latexfrog/build/parcial/.sospechoso").exists());
 }
 
 #[test]

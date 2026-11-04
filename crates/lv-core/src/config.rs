@@ -1,6 +1,6 @@
-//! `latexviewer.json` (versionado, del proyecto) y `.lv/state.json` (de esta máquina). Ver 4.1 del plan.
+//! `latexfrog.json` (versionado, del proyecto) y `.latexfrog/state.json` (de esta máquina). Ver 4.1 del plan.
 //!
-//! Los dos archivos conservan los campos que esta versión no conoce (`extra`): un `latexviewer.json` escrito por otra
+//! Los dos archivos conservan los campos que esta versión no conoce (`extra`): un `latexfrog.json` escrito por otra
 //! versión de la app, o con campos de fases que todavía no existen (`figureCache`, `export`), no se pierde al guardarlo.
 
 use crate::error::{Error, Result};
@@ -11,8 +11,8 @@ use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-pub const CONFIG_FILE: &str = "latexviewer.json";
-pub const STATE_FILE: &str = ".lv/state.json";
+pub const CONFIG_FILE: &str = "latexfrog.json";
+pub const STATE_FILE: &str = ".latexfrog/state.json";
 
 pub const ENGINES: [&str; 3] = ["pdflatex", "xelatex", "lualatex"];
 
@@ -24,7 +24,7 @@ fn verdadero() -> bool {
     true
 }
 
-// Lo que vale lo mismo que el valor por omisión no se escribe: el `latexviewer.json` que sale de la app queda como el que se escribe a mano.
+// Lo que vale lo mismo que el valor por omisión no se escribe: el `latexfrog.json` que sale de la app queda como el que se escribe a mano.
 fn es_falso(b: &bool) -> bool {
     !*b
 }
@@ -76,7 +76,7 @@ pub struct VariableCfg {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PartsSel {
-    /// Las que el usuario tiene tildadas (`.lv/state.json`).
+    /// Las que el usuario tiene tildadas (`.latexfrog/state.json`).
     Selection,
     /// Todas (sin `\includeonly`).
     #[default]
@@ -155,7 +155,7 @@ pub struct OutputCfg {
 }
 
 impl PartsSel {
-    /// «Todas» es el valor por omisión: no se escribe en `latexviewer.json`.
+    /// «Todas» es el valor por omisión: no se escribe en `latexfrog.json`.
     pub fn es_todas(&self) -> bool {
         *self == PartsSel::All
     }
@@ -222,7 +222,7 @@ pub struct ProjectConfig {
 pub const PERFIL_EXPORT: &str = "export";
 pub const PERFIL_FRAGMENTO: &str = "fragmento";
 
-/// `export` de `latexviewer.json` (8.1 del plan): dónde van los PDF de las partes y cómo se llaman.
+/// `export` de `latexfrog.json` (8.1 del plan): dónde van los PDF de las partes y cómo se llaman.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportCfg {
     /// Relativa a la raíz; puede salir de ella (`../PDF/Capítulos`): es una decisión explícita del proyecto, como `publish.dir`.
@@ -384,7 +384,7 @@ impl ProjectConfig {
     }
 }
 
-/// Configuración que se arma sin `latexviewer.json`. Si el proyecto tiene partes se ofrecen los tres perfiles del
+/// Configuración que se arma sin `latexfrog.json`. Si el proyecto tiene partes se ofrecen los tres perfiles del
 /// plan; si no (un artículo), alcanza con uno. El completo no es candidato a auto-compilar cuando hay otros: sería un
 /// build de minutos en cada guardado.
 pub fn infer_config(root_file: &str, hay_partes: bool) -> ProjectConfig {
@@ -474,7 +474,7 @@ pub enum OutsideSave {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct State {
-    // La raíz ya no está acá (F8b): la elige la pantalla Proyecto y vive en `latexviewer.json`. Con una en `state.json`, que pisaba
+    // La raíz ya no está acá (F8b): la elige la pantalla Proyecto y vive en `latexfrog.json`. Con una en `state.json`, que pisaba
     // a la del proyecto, la cocina del libro de inspo se listó con `cap_actual.tex` (que recorta capítulos) como raíz. Un
     // `state.json` viejo con `root` se ignora (queda en `extra`, sin usarse).
     pub active_profile: Option<String>,
@@ -490,13 +490,6 @@ pub struct State {
     /// La parte del último archivo guardado que pertenece a una: la que compila un perfil `parts: "current"`. Se guarda para que
     /// al volver a abrir el proyecto ese perfil siga compilando lo mismo.
     pub current_part: Option<String>,
-    /// La vista previa en vivo con TeXpresso (en WSL) prendida en esta máquina. Es de la máquina y no del proyecto: depende de que
-    /// haya WSL y TeXpresso instalados. Al abrir el proyecto, si está prendida, se vuelve a lanzar.
-    pub texpresso: bool,
-    /// La distro de WSL donde está TeXpresso (`None`: la por omisión que no sea de Docker) y la ruta del binario adentro (`None`: se
-    /// busca en el PATH, `~/.local/bin` y `~/texpresso/build`). No hay interfaz para cambiarlas: se editan en `.lv/state.json`.
-    pub texpresso_distro: Option<String>,
-    pub texpresso_binario: Option<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
@@ -512,9 +505,6 @@ impl Default for State {
             outside_save: OutsideSave::Warn,
             draft_images: false,
             current_part: None,
-            texpresso: false,
-            texpresso_distro: None,
-            texpresso_binario: None,
             extra: Map::new(),
         }
     }
@@ -548,7 +538,7 @@ pub fn write_state(root: &Path, st: &State) -> Result<()> {
     Ok(())
 }
 
-/// El plan dice que la app agrega `.lv/` al `.gitignore`. Sólo si el proyecto es un repositorio (hay `.git` o ya hay un
+/// El plan dice que la app agrega `.latexfrog/` al `.gitignore`. Sólo si el proyecto es un repositorio (hay `.git` o ya hay un
 /// `.gitignore`), y conservando el salto de línea del archivo. Devuelve si escribió.
 pub fn ensure_gitignore(root: &Path) -> Result<bool> {
     let path = root.join(".gitignore");
@@ -558,7 +548,7 @@ pub fn ensure_gitignore(root: &Path) -> Result<bool> {
     }
     let bytes = actual.unwrap_or_default();
     let texto = String::from_utf8_lossy(&bytes);
-    if texto.lines().any(|l| matches!(l.trim(), ".lv" | ".lv/" | "/.lv" | "/.lv/")) {
+    if texto.lines().any(|l| matches!(l.trim(), ".latexfrog" | ".latexfrog/" | "/.latexfrog" | "/.latexfrog/")) {
         return Ok(false);
     }
     let eol = if texto.contains("\r\n") { "\r\n" } else { "\n" };
@@ -566,7 +556,7 @@ pub fn ensure_gitignore(root: &Path) -> Result<bool> {
     if !nuevo.is_empty() && !nuevo.ends_with(b"\n") {
         nuevo.extend_from_slice(eol.as_bytes());
     }
-    nuevo.extend_from_slice(format!(".lv/{eol}").as_bytes());
+    nuevo.extend_from_slice(format!(".latexfrog/{eol}").as_bytes());
     fsio::escribir_atomico(&path, &nuevo).map_err(|e| Error::Io(format!(".gitignore: {e}")))?;
     Ok(true)
 }
@@ -649,7 +639,7 @@ mod tests {
     fn el_estado_viejo_o_roto_no_impide_abrir() {
         let d = tempfile::tempdir().unwrap();
         assert_eq!(read_state(d.path()), State::default());
-        std::fs::create_dir_all(d.path().join(".lv")).unwrap();
+        std::fs::create_dir_all(d.path().join(".latexfrog")).unwrap();
         std::fs::write(d.path().join(STATE_FILE), "{ esto no es json").unwrap();
         assert_eq!(read_state(d.path()), State::default());
         std::fs::write(d.path().join(STATE_FILE), r#"{"activeProfile":"parcial","autoCompile":"idle","algoNuevo":true}"#).unwrap();
@@ -721,12 +711,12 @@ mod tests {
         assert!(!d.path().join(".gitignore").exists());
         std::fs::create_dir(d.path().join(".git")).unwrap();
         assert!(ensure_gitignore(d.path()).unwrap());
-        assert_eq!(std::fs::read(d.path().join(".gitignore")).unwrap(), b".lv/\n");
+        assert_eq!(std::fs::read(d.path().join(".gitignore")).unwrap(), b".latexfrog/\n");
         std::fs::write(d.path().join(".gitignore"), b"*.aux\r\n*.log").unwrap();
         assert!(ensure_gitignore(d.path()).unwrap());
-        assert_eq!(std::fs::read(d.path().join(".gitignore")).unwrap(), b"*.aux\r\n*.log\r\n.lv/\r\n");
+        assert_eq!(std::fs::read(d.path().join(".gitignore")).unwrap(), b"*.aux\r\n*.log\r\n.latexfrog/\r\n");
         assert!(!ensure_gitignore(d.path()).unwrap(), "ya estaba");
-        std::fs::write(d.path().join(".gitignore"), b"/.lv\n").unwrap();
+        std::fs::write(d.path().join(".gitignore"), b"/.latexfrog\n").unwrap();
         assert!(!ensure_gitignore(d.path()).unwrap());
     }
 }

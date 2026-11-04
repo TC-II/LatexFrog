@@ -5,7 +5,7 @@
 //!    no dibuja ninguna figura y escribe `lv-cocina.figlist` (un nombre por línea) y el `.md5` de cada una.
 //! 2. **Cocción:** una subcompilación por figura pendiente, de a `jobs`, con la misma línea de comandos que usa pgf
 //!    (`-jobname "<cache>/<figura>" "\def\tikzexternalrealjob{<job>}\input{<job>}"`), cwd en la raíz y sin `-output-directory`.
-//!    Como no pasan por latexmk, la app les pone `TEXINPUTS` con `.lv/drivers` (lo que en un build hace `.lv/latexmkrc`).
+//!    Como no pasan por latexmk, la app les pone `TEXINPUTS` con `.latexfrog/drivers` (lo que en un build hace `.latexfrog/latexmkrc`).
 //!
 //! Cada figura que termina pasa por `figures::verificar`; sólo si sale bien su `.md5` nuevo (el del listado) pasa al cache
 //! compartido. Cancelar mata el árbol entero (Job Object) y borra lo que quedó cortado. La cocción cede el paso: si `cede()`
@@ -128,8 +128,8 @@ impl Cocinero {
         }
     }
 
-    /// El listado: una pasada del motor sobre `.lv/drivers/lv-cocina.tex` (que quien llama ya escribió). Devuelve los nombres de
-    /// la figlist. Los `.md5` que pgf escribe quedan en `.lv/build/cocina/<cache>/`: `figcache::pendientes` los compara con los del
+    /// El listado: una pasada del motor sobre `.latexfrog/drivers/lv-cocina.tex` (que quien llama ya escribió). Devuelve los nombres de
+    /// la figlist. Los `.md5` que pgf escribe quedan en `.latexfrog/build/cocina/<cache>/`: `figcache::pendientes` los compara con los del
     /// cache compartido y recién una figura verificada los instala.
     pub fn listar(&self, o: &Opciones, job: &Arc<Job>, cancelado: &AtomicBool) -> Result<Vec<String>> {
         let salida = build_dir(&o.root, PERFIL_COCINA);
@@ -142,8 +142,8 @@ impl Cocinero {
         }
         let mut cmd = self.comando(o);
         cmd.args(["-shell-escape", "-interaction=nonstopmode", "-file-line-error"])
-            .arg(format!("-output-directory=.lv/build/{PERFIL_COCINA}"))
-            .arg(format!(".lv/drivers/{JOB_COCINA}.tex"));
+            .arg(format!("-output-directory=.latexfrog/build/{PERFIL_COCINA}"))
+            .arg(format!(".latexfrog/drivers/{JOB_COCINA}.tex"));
         // Sospechoso hasta que el listado salga bien, como cualquier build (el marcador sobrevive a un cierre brusco): los `.aux` de la
         // cocina sirven de último recurso para sembrar un parcial (`auxiliares::seed`) y uno de un listado cortado puede estar truncado.
         mark_suspect(&o.root, PERFIL_COCINA)?;
@@ -165,7 +165,7 @@ impl Cocinero {
         let figlist = salida.join(format!("{JOB_COCINA}.figlist"));
         let texto = fs::read_to_string(&figlist).map_err(|_| {
             Error::Other(format!(
-                "el listado de figuras no generó {JOB_COCINA}.figlist: el documento no compila hasta ahí (revisá .lv/build/{PERFIL_COCINA}/{JOB_COCINA}.log)"
+                "el listado de figuras no generó {JOB_COCINA}.figlist: el documento no compila hasta ahí (revisá .latexfrog/build/{PERFIL_COCINA}/{JOB_COCINA}.log)"
             ))
         })?;
         // Con errores (código distinto de 0) sigue sospechoso aunque haya llegado a escribir la lista de figuras.
@@ -180,7 +180,7 @@ impl Cocinero {
         cmd.args(["-shell-escape", "-halt-on-error", "-interaction=batchmode"])
             .arg(format!("-jobname={nombre}"))
             .arg(format!("\\def\\tikzexternalrealjob{{{JOB_COCINA}}}\\input{{{JOB_COCINA}}}"))
-            .env("TEXINPUTS", format!(".lv/drivers{}{}", sep_de_rutas(), std::env::var("TEXINPUTS").unwrap_or_default()));
+            .env("TEXINPUTS", format!(".latexfrog/drivers{}{}", sep_de_rutas(), std::env::var("TEXINPUTS").unwrap_or_default()));
         let hijo = cmd.spawn().map_err(|e| self.error_de_lanzamiento(o, e))?;
         job.assign(&hijo);
         Ok(hijo)
@@ -288,7 +288,7 @@ impl Cocinero {
 
 /// Ruta del driver de la cocción, relativa a la raíz.
 pub fn driver_cocina_rel() -> String {
-    format!(".lv/drivers/{JOB_COCINA}.tex")
+    format!(".latexfrog/drivers/{JOB_COCINA}.tex")
 }
 
 #[cfg(all(test, windows))]
@@ -371,7 +371,7 @@ Set-Content "$job.log" 'This is pdfTeX'
         let (d, o, _) = proyecto();
         let c = Cocinero::con_programa("powershell", ["-NoProfile", "-Command", "exit 0"].iter().map(OsString::from).collect());
         let e = c.listar(&o, &job(), &sin_cancelar()).unwrap_err().to_string();
-        assert!(e.contains("lv-cocina.figlist") && e.contains(".lv/build/cocina"), "{e}");
+        assert!(e.contains("lv-cocina.figlist") && e.contains(".latexfrog/build/cocina"), "{e}");
         let _ = d;
     }
 
@@ -405,7 +405,7 @@ Set-Content "$job.log" 'This is pdfTeX'
         let max_a_la_vez = intervalos.iter().map(|(ini, _)| intervalos.iter().filter(|(a, b)| a <= ini && ini < b).count()).max().unwrap();
         assert_eq!(max_a_la_vez, 2, "{intervalos:?}");
         let env = fs::read_to_string(d.path().join("marcas/S-a-0.env")).unwrap();
-        assert!(env.contains("TEXINPUTS=.lv/drivers;"), "las subcompilaciones no pasan por latexmk: la app pone TEXINPUTS ({env})");
+        assert!(env.contains("TEXINPUTS=.latexfrog/drivers;"), "las subcompilaciones no pasan por latexmk: la app pone TEXINPUTS ({env})");
     }
 
     #[test]

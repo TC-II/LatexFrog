@@ -8,7 +8,7 @@ fn arbol() -> TempDir {
     let r = d.path();
     fs::create_dir_all(r.join("Secciones")).unwrap();
     fs::create_dir_all(r.join("sub/hondo/mas")).unwrap();
-    fs::create_dir_all(r.join(".lv/build")).unwrap();
+    fs::create_dir_all(r.join(".latexfrog/build")).unwrap();
     fs::create_dir_all(r.join(".git")).unwrap();
     fs::create_dir_all(r.join("figuras-cache")).unwrap();
     fs::write(r.join("principal.tex"), "% comentario\n\\documentclass{book}\n\\begin{document}\nhola\n\\end{document}\n").unwrap();
@@ -17,7 +17,7 @@ fn arbol() -> TempDir {
     fs::write(r.join("Secciones/Capítulo uno.tex"), "\\chapter{x}\n").unwrap();
     fs::write(r.join("sub/c.tex"), "\\documentclass{article}\n").unwrap();
     fs::write(r.join("sub/hondo/mas/d.tex"), "\\documentclass{article}\n").unwrap(); // nivel 3: no se mira
-    fs::write(r.join(".lv/build/lv-completo.tex"), "\\documentclass{article}\n").unwrap();
+    fs::write(r.join(".latexfrog/build/lv-completo.tex"), "\\documentclass{article}\n").unwrap();
     fs::write(r.join(".lvtmp-1-0.tmp"), "x").unwrap();
     d
 }

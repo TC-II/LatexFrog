@@ -65,8 +65,8 @@ fn cli(args: &[&str]) -> String {
 #[test]
 fn el_parser_coincide_con_el_cli_en_los_parrafos_de_texto() {
     let (_t, p) = compilar();
-    let pdf = p.join(".lv/build/completo/lv-completo.pdf");
-    let s = Synctex::load(&p.join(".lv/build/completo/lv-completo.synctex.gz")).expect("leer el synctex");
+    let pdf = p.join(".latexfrog/build/completo/lv-completo.pdf");
+    let s = Synctex::load(&p.join(".latexfrog/build/completo/lv-completo.synctex.gz")).expect("leer el synctex");
     let tag = s.tag_of(&p, "main.tex").expect("main.tex está entre las entradas");
     assert!(s.rel_of_tag(&p, tag).as_deref() == Some("main.tex"));
 
@@ -127,8 +127,8 @@ fn las_lineas_que_no_son_texto_se_resuelven_sin_romper_y_se_miden() {
     // Ecuación, tabla, nota al pie, lista: no se exige igualdad con el CLI (S2: el criterio de qué hijo elegir difiere),
     // sólo que el parser conteste algo razonable (alguna caja en una página que existe) y que se pueda medir el acuerdo.
     let (_t, p) = compilar();
-    let pdf = p.join(".lv/build/completo/lv-completo.pdf");
-    let s = Synctex::load(&p.join(".lv/build/completo/lv-completo.synctex.gz")).unwrap();
+    let pdf = p.join(".latexfrog/build/completo/lv-completo.pdf");
+    let s = Synctex::load(&p.join(".latexfrog/build/completo/lv-completo.synctex.gz")).unwrap();
     let tag = s.tag_of(&p, "main.tex").unwrap();
     let fuente = fs::read_to_string(p.join("main.tex")).unwrap();
     let (mut raras, mut acuerdo) = (0, 0);

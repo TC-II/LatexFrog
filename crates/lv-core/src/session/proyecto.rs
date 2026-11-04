@@ -9,7 +9,7 @@ use crate::figcache::{FigureCfg, Modo};
 use crate::procs::Job as JobSistema;
 use std::sync::atomic::AtomicBool;
 
-/// El resultado de validar un `latexviewer.json` que todavía no se guardó.
+/// El resultado de validar un `latexfrog.json` que todavía no se guardó.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Validacion {
@@ -61,7 +61,7 @@ impl Session {
         detectar::detectar(&self.root, raiz, actual.as_ref(), &historial::tipicos(&self.root))
     }
 
-    /// El texto de `latexviewer.json` tal como está en el disco (sin el BOM), o `None` si no existe.
+    /// El texto de `latexfrog.json` tal como está en el disco (sin el BOM), o `None` si no existe.
     pub fn config_on_disk(&self) -> Result<Option<String>> {
         match std::fs::read(self.root.join(config::CONFIG_FILE)) {
             Ok(b) => Ok(Some(String::from_utf8_lossy(b.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&b)).into_owned())),
@@ -92,7 +92,7 @@ impl Session {
         Validacion { ok: errores.is_empty(), errores, normalizado, ejemplo_nombre }
     }
 
-    /// Escribe `latexviewer.json` (el texto ya validado, con el formato de la app) y deja la sesión con esa configuración: raíz, partes y
+    /// Escribe `latexfrog.json` (el texto ya validado, con el formato de la app) y deja la sesión con esa configuración: raíz, partes y
     /// perfiles nuevos. Con un trabajo en curso se niega (cambiar la raíz o los perfiles a mitad de un build confundiría a la cola).
     pub fn write_config(&self, texto: &str) -> Result<ProjectView> {
         self.guardia()?;
@@ -115,7 +115,7 @@ impl Session {
     }
 
     /// «Probar»: el doctor y el listado de las figuras de una parte con la configuración propuesta (todavía sin guardar). Necesita la cola
-    /// quieta: el listado es una pasada del motor en `.lv/build/cocina/`, la misma carpeta que usa la cocción.
+    /// quieta: el listado es una pasada del motor en `.latexfrog/build/cocina/`, la misma carpeta que usa la cocción.
     pub fn probe_config(&self, texto: &str, parte: Option<&str>) -> Result<Probada> {
         self.probe_config_con(texto, parte, &doctor::sonda_real)
     }

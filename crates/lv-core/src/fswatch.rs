@@ -2,7 +2,7 @@
 //! los eventos en ráfagas y avisa qué archivos cambiaron. Para el libro importa: los scripts de `Herramientas/` reescriben
 //! `Secciones/fig_*.tex` mientras la app está abierta.
 //!
-//! **Tiene que ignorar todo lo que escribe la propia compilación**, o cada build dispararía otro: `.lv/` (drivers, builds, estado), el
+//! **Tiene que ignorar todo lo que escribe la propia compilación**, o cada build dispararía otro: `.latexfrog/` (drivers, builds, estado), el
 //! cache de figuras, los auxiliares de TeX (`.aux`, `.log`, `.toc`, `.fdb_latexmk`, `.bbl`, `.synctex.gz`...), el `.run.xml` de biblatex
 //! que queda en la raíz, los `.md5` y `.dpth` de pgf, la carpeta de exportación y la de publicación si están dentro del proyecto, y los
 //! temporales de la escritura atómica de la app. Lo que queda son los archivos del usuario (fuentes, imágenes, `.bib`, los `.tex` que
@@ -50,7 +50,7 @@ pub fn esta_en(rel: &str, carpetas: &[String]) -> bool {
 
 /// Lo que se ignora siempre, además de lo que pide cada proyecto (`carpetas`: el cache de figuras, la exportación, la publicación).
 pub fn ignorar_de_proyecto(rel: &str, carpetas: &[String]) -> bool {
-    rel == ".lv" || rel.starts_with(".lv/") || rel == ".git" || rel.starts_with(".git/") || esta_en(rel, carpetas) || es_residuo_de_build(rel)
+    rel == ".latexfrog" || rel.starts_with(".latexfrog/") || rel == ".git" || rel.starts_with(".git/") || esta_en(rel, carpetas) || es_residuo_de_build(rel)
 }
 
 /// El observador vive mientras viva este valor: al soltarlo se deja de observar.
@@ -134,8 +134,8 @@ mod tests {
     fn lo_que_escribe_la_compilacion_no_cuenta_y_lo_del_usuario_si() {
         let carpetas = vec!["figuras-cache".to_string(), "../PDF".to_string(), "export".to_string()];
         for ignorado in [
-            ".lv/state.json",
-            ".lv/build/rapido/lv-rapido.pdf",
+            ".latexfrog/state.json",
+            ".latexfrog/build/rapido/lv-rapido.pdf",
             "figuras-cache/A-0.pdf",
             "export/08 - X.pdf",
             "Secciones/Uno.aux",
@@ -174,12 +174,12 @@ mod tests {
     fn una_rafaga_de_cambios_sale_en_un_solo_aviso_sin_lo_que_se_ignora() {
         let d = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(d.path().join("Secciones")).unwrap();
-        std::fs::create_dir_all(d.path().join(".lv/build")).unwrap();
+        std::fs::create_dir_all(d.path().join(".latexfrog/build")).unwrap();
         std::fs::create_dir_all(d.path().join("figuras-cache")).unwrap();
         let (_o, rx) = con_observador(d.path());
         for i in 0..5 {
             std::fs::write(d.path().join("Secciones/fig_a.tex"), format!("v{i}")).unwrap();
-            std::fs::write(d.path().join(".lv/build/x.log"), format!("{i}")).unwrap();
+            std::fs::write(d.path().join(".latexfrog/build/x.log"), format!("{i}")).unwrap();
             std::fs::write(d.path().join("figuras-cache/A-0.pdf"), format!("{i}")).unwrap();
             std::fs::write(d.path().join("main.aux"), format!("{i}")).unwrap();
         }

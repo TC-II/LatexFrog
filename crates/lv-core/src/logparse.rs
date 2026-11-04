@@ -87,7 +87,7 @@ fn atribuir(root: &Path, raw: &str) -> Option<String> {
         None if s.contains(':') || s.starts_with('/') => return None, // absoluta fuera del proyecto
         None => s,
     };
-    if rel.is_empty() || rel.starts_with(".lv/") || rel.split('/').any(|c| c == "..") {
+    if rel.is_empty() || rel.starts_with(".latexfrog/") || rel.split('/').any(|c| c == "..") {
         return None;
     }
     root.join(&rel).is_file().then_some(rel)
