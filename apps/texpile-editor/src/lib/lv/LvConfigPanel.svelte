@@ -9,22 +9,19 @@
 	import LvFrog from './LvFrog.svelte';
 	import LvProfileEditor from './LvProfileEditor.svelte';
 	import {
+		choiceLabel,
 		configText,
-		emptyProfile,
-		exportName,
+		defaultProfiles,
+		inEnglish,
 		figuresOf,
 		flagUse,
 		MACRO_NAME,
-		outputsOf,
 		parseConfig,
 		partCommands,
-		profileId,
 		removeVariable,
 		setFigures,
 		setFlag,
-		setOutputs,
 		setPartCommands,
-		setProfile,
 		setVariable,
 		shortName,
 		useDetected,
@@ -51,7 +48,6 @@
 		variables: DetectedVariable[];
 	};
 	type Validation = { ok: boolean; errores: string[]; normalizado: string | null; ejemploNombre: string | null };
-	type Probe = { doctor: { hallazgos: { id: string; nivel: string; titulo: string }[] }; listado: { figuras: number; ms: number; omitido: string | null } };
 
 	let { onClose }: { onClose: () => void } = $props();
 
@@ -59,7 +55,8 @@
 	let onDisk = $state<string | null>(null);
 	let text = $state('');
 	let validation = $state<Validation | null>(null);
-	let probe = $state<Probe | null>(null);
+	/** the profile open in the editor: Run Now compiles it */
+	let editing = $state('');
 	let busy = $state(true);
 	let error = $state('');
 	let validateRun = 0;
@@ -69,8 +66,10 @@
 	function withDefaultProfile(proposed: string): string {
 		const config = JSON.parse(proposed) as ConfigJson;
 		if (Object.keys(config.profiles ?? {}).length > 0) return proposed;
-		return configText(setProfile(config, 'full', { label: m.lv_config_default_profile() }));
+		return configText(withDefaults(config));
 	}
+
+	const withDefaults = (config: ConfigJson) => defaultProfiles(config, pieces, parts.length > 0, { full: m.lv_profiles_default_name(), current: m.lv_profiles_current_name() });
 
 	// the form and the JSON are one text: what the form changes the JSON shows, and a JSON that does not parse leaves the form closed
 	const config = $derived(parseConfig(text));
@@ -80,7 +79,6 @@
 	const list = (value: string) => value.split(',').map((x) => x.trim()).filter(Boolean);
 	const detected = $derived(proposal ? parseConfig(proposal.texto) : null);
 	const figures = $derived(config ? figuresOf(config) : null);
-	const outputs = $derived(config ? outputsOf(config) : null);
 	const usedFlags = $derived((proposal?.flags ?? []).filter((f) => f.uso !== 'ninguno'));
 	const otherFlags = $derived((proposal?.flags ?? []).filter((f) => f.uso === 'ninguno'));
 	const USES = $derived<[FlagUse, string][]>([
@@ -90,7 +88,6 @@
 		['ninguno', m.lv_config_use_none()]
 	]);
 	const ROLES = $derived<Record<Candidate['rol'], string>>({ principal: m.lv_config_role_main(), auxiliar: m.lv_config_role_aux(), otra: m.lv_config_role_included() });
-	const example = $derived(outputs && proposal?.partes[0] ? exportName(outputs.pattern, '1', shortName(proposal.partes[0])) : '');
 	let otherFlagsOpen = $state(false);
 	let newVariable = $state('');
 
@@ -111,6 +108,12 @@
 			if (onDisk === null) edit(withDefaultProfile(proposal.texto));
 			else update((c) => ({ ...c, root }));
 		});
+
+	/** the names shown for each value, in the values' order; a name left as the value itself is not stored */
+	function shownLabels(choices: string[], shown: string[]): Record<string, string> | undefined {
+		const out = Object.fromEntries(choices.map((c, i) => [c, shown[i] ?? '']).filter(([c, l]) => l && l !== c));
+		return Object.keys(out).length ? out : undefined;
+	}
 
 	function addVariable() {
 		const name = newVariable;
@@ -139,7 +142,6 @@
 
 	function edit(next: string) {
 		text = next;
-		probe = null;
 		void validate().catch((e) => (error = message(e)));
 	}
 
@@ -149,24 +151,23 @@
 			edit(withDefaultProfile(proposal.texto));
 		});
 
-	const tryIt = () =>
-		guarded(async () => {
-			probe = await lvProject.request<Probe>('config-probe', { text });
-		});
-
-	// a project with no profile opens with an empty one to fill, not with a notice
+	// a project with no profile opens with Default and Current, not with a notice
 	$effect(() => {
 		if (!config || !proposal || Object.keys(config.profiles ?? {}).length > 0) return;
-		const label = m.lv_profiles_new({ number: 1 });
-		change(setProfile(config, profileId(label, []), emptyProfile(config, pieces, 1, label)));
+		change(withDefaults(config));
 	});
 
-	const save = () =>
+	const save = (run = false) =>
 		guarded(async () => {
 			if (!validation?.normalizado) return;
 			await lvProject.request('config-write', { text: validation.normalizado });
 			saved = true;
 			await lvProject.resync();
+			// Run Now: the profile on screen becomes the chosen one and compiles; what Doctor finds goes to its tab
+			if (run && lvProject.active && editing) {
+				await lvProject.setState({ profile: editing });
+				lvProject.onCompile?.();
+			}
 			onClose();
 		});
 
@@ -193,7 +194,7 @@
 	<div class="flex max-h-[85vh] w-full max-w-5xl flex-col gap-3 overflow-y-auto rounded-lg bg-surface-50-950 p-4 text-sm shadow-xl" role="dialog" aria-modal="true" aria-label={m.lv_config_title()} data-testid="lv-config" aria-busy={busy}>
 		<h2 class="flex items-center gap-2 text-base font-semibold"><LvFrog size={14} />{m.lv_config_title()}</h2>
 		{#if config}
-			<LvProfileEditor {config} {pieces} {parts} root={lvProject.view?.root ?? lvProject.folderRoot ?? ''} onChange={change} />
+			<LvProfileEditor {config} {pieces} {parts} bind:selected={editing} root={lvProject.view?.root ?? lvProject.folderRoot ?? ''} onChange={change} />
 		{/if}
 		{#snippet section(title: string, help: string, key: ConfigSection | null, body: Snippet)}
 			<section class="flex flex-col gap-1 rounded border border-surface-300-700 p-2" data-testid="lv-config-section">
@@ -213,7 +214,7 @@
 					{#each proposal.avisos as warning (warning)}
 						<p class="text-warning-500">{warning}</p>
 					{/each}
-					{#if config && figures && outputs}
+					{#if config && figures}
 						{#snippet rootBody()}
 							<div role="radiogroup" aria-label={m.lv_config_root()}>
 								{#each proposal?.candidatas ?? [] as c (c.archivo)}
@@ -279,20 +280,13 @@
 						{/snippet}
 						{@render section(m.lv_config_figures_title(), proposal.figuras.motivo, 'figures', figuresBody)}
 
-						{#snippet outputsBody()}
-							<label class="flex items-center gap-2"><span class={LABEL}>{m.lv_config_publish_dir()}</span><input class={INPUT} value={outputs?.publish} placeholder={m.lv_config_publish_none()} onchange={(e) => outputs && update((c) => setOutputs(c, { ...outputs, publish: e.currentTarget.value }))} /></label>
-							<label class="flex items-center gap-2"><span class={LABEL}>{m.lv_config_export_dir()}</span><input class={INPUT} value={outputs?.exportDir} placeholder="export" onchange={(e) => outputs && update((c) => setOutputs(c, { ...outputs, exportDir: e.currentTarget.value }))} /></label>
-							<label class="flex items-center gap-2" title={m.lv_config_export_hint()}><span class={LABEL}>{m.lv_config_export_pattern()}</span><input class={INPUT} value={outputs?.pattern} onchange={(e) => outputs && update((c) => setOutputs(c, { ...outputs, pattern: e.currentTarget.value }))} /></label>
-							{#if example}<p class="text-xs opacity-70">{m.lv_config_export_example({ name: example })}</p>{/if}
-						{/snippet}
-						{@render section(m.lv_config_outputs_title(), m.lv_config_outputs_help(), 'outputs', outputsBody)}
-
 						{#snippet variablesBody()}
 							{#each Object.entries(config?.variables ?? {}) as [name, v] (name)}
 								<div class="flex items-center gap-1" data-testid="lv-config-variable">
 									<code class="w-28 shrink-0 truncate">\{name}</code>
 									<input class={INPUT} value={v.label ?? ''} placeholder={m.lv_config_variable_label()} aria-label={m.lv_config_variable_label()} onchange={(e) => update((c) => setVariable(c, name, { ...v, label: e.currentTarget.value }))} />
 									<input class={INPUT} value={(v.choices ?? []).join(', ')} placeholder={m.lv_config_variable_choices()} aria-label={m.lv_config_variable_choices()} data-testid="lv-config-variable-choices" onchange={(e) => update((c) => setVariable(c, name, { ...v, choices: list(e.currentTarget.value) }))} />
+									<input class={INPUT} value={(v.choices ?? []).map((ch) => choiceLabel(v, ch)).join(', ')} placeholder={m.lv_config_variable_shown()} aria-label={m.lv_config_variable_shown()} title={m.lv_config_variable_shown_hint()} data-testid="lv-config-variable-shown" onchange={(e) => update((c) => setVariable(c, name, { ...v, choiceLabels: shownLabels(v.choices ?? [], list(e.currentTarget.value)) }))} />
 									<select class="rounded border border-surface-300-700 bg-transparent px-1 py-0.5" value={v.default ?? ''} aria-label={m.lv_config_variable_default()} onchange={(e) => update((c) => setVariable(c, name, { ...v, default: e.currentTarget.value || undefined }))}>
 										<option value="">{m.lv_config_variable_no_value()}</option>
 										{#each v.choices ?? [] as choice (choice)}<option value={choice}>{choice}</option>{/each}
@@ -303,11 +297,11 @@
 							{#each (proposal?.variables ?? []).filter((v) => !(v.nombre in (config?.variables ?? {}))) as v (v.nombre)}
 								<div class="flex items-center gap-2">
 									<p class="min-w-0 flex-1 text-xs opacity-70">{v.frase}</p>
-									<button class="hover:preset-tonal shrink-0 rounded px-1.5 py-0.5 text-xs" onclick={() => update((c) => setVariable(c, v.nombre, { label: v.label, choices: v.choices, default: v.default }))}>{m.lv_config_variable_add_detected({ name: v.nombre })}</button>
+									<button class="hover:preset-tonal shrink-0 rounded px-1.5 py-0.5 text-xs" onclick={() => update((c) => setVariable(c, v.nombre, { label: inEnglish(v.label) ?? v.label, choices: v.choices, default: v.default }))}>{m.lv_config_variable_add_detected({ name: v.nombre })}</button>
 								</div>
 							{/each}
 							{#each (proposal?.variables ?? []).filter((v) => v.nombre in (config?.variables ?? {}) && v.defSinGuardia.length > 0) as v (v.nombre)}
-								<p class="text-warning-500 text-xs" data-testid="lv-config-variable-warning">{v.frase}</p>
+								<p class="text-xs opacity-70" data-testid="lv-config-variable-warning">{v.frase}</p>
 							{/each}
 							<div class="flex items-center gap-2">
 								<input class={INPUT} bind:value={newVariable} placeholder={m.lv_config_variable_new()} aria-label={m.lv_config_variable_new()} data-testid="lv-config-variable-new" />
@@ -327,7 +321,7 @@
 			</label>
 		</details>
 		{#if validation?.ok}
-			<p class="text-success-500" data-testid="lv-config-valid">{m.lv_config_valid()}{validation.ejemploNombre ? `. ${m.lv_config_example({ name: validation.ejemploNombre })}` : ''}</p>
+			<p class="text-success-500" data-testid="lv-config-valid">{m.lv_config_valid()}</p>
 		{/if}
 		{#each validation?.errores ?? [] as problem (problem)}
 			<p class="text-error-500" data-testid="lv-config-error">{problem}</p>
@@ -340,21 +334,13 @@
 				{/if}
 			</div>
 		{/if}
-		{#if probe}
-			<div data-testid="lv-config-probe">
-				<p class="opacity-70">{probe.listado.omitido ?? m.lv_config_probe_result({ figures: probe.listado.figuras, ms: probe.listado.ms })}</p>
-				{#each probe.doctor.hallazgos.filter((f) => f.nivel === 'error' || f.nivel === 'aviso') as f (f.id)}
-					<p class={f.nivel === 'error' ? 'text-error-500' : 'text-warning-500'}>{f.titulo}</p>
-				{/each}
-			</div>
-		{/if}
 		{#if error}
 			<p class="text-error-500" data-testid="lv-config-failure">{error}</p>
 		{/if}
 		<div class="flex justify-end gap-2">
-			<button class="rounded px-2 py-1 hover:bg-surface-200-800" disabled={busy || !validation?.ok} onclick={tryIt}>{m.lv_config_probe()}</button>
 			<button class="rounded px-2 py-1 hover:bg-surface-200-800" onclick={close}>{m.lv_close()}</button>
-			<button class="rounded bg-primary-500 px-3 py-1 text-white" data-testid="lv-config-save" disabled={busy || !validation?.ok} onclick={save}>{m.lv_config_save()}</button>
+			<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-save" disabled={busy || !validation?.ok} onclick={() => save()}>{m.lv_config_save()}</button>
+			<button class="rounded bg-primary-500 px-3 py-1 text-white" data-testid="lv-config-run" title={m.lv_config_run_title()} disabled={busy || !validation?.ok || !editing} onclick={() => save(true)}>{m.lv_config_run()}</button>
 		</div>
 	</div>
 </div>

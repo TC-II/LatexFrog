@@ -713,6 +713,35 @@ impl Session {
 
     // --- estado y limpieza --------------------------------------------------------------------------------------------------------------
 
+    /// Las figuras externalizadas de un archivo del proyecto, en orden y con su PDF si ya está cocinado: el editor visual las muestra
+    /// como imagen (`figimages`). Vacío si el proyecto no usa cache de figuras o el archivo no tiene slug.
+    pub fn figure_images(&self, rel: &str) -> Result<Vec<crate::figimages::FiguraEnArchivo>> {
+        let (cfg, rf) = {
+            let d = self.lock()?;
+            (d.config.clone().ok_or_else(|| otro("no configuration"))?, d.root_file.clone())
+        };
+        let fcfg = FigureCfg::de(&cfg);
+        let (Some(rf), Some(sello)) = (rf, figcache::sello(&self.root, &fcfg.stamp_files)) else { return Ok(vec![]) };
+        if fcfg.modo == Modo::Off {
+            return Ok(vec![]);
+        }
+        let rel = rel.replace('\\', "/");
+        let ix = ProjectIndex::build(&self.root, &rf, &cfg.parts.commands);
+        let por_archivo: BTreeMap<String, String> = if fcfg.modo == Modo::App {
+            figcache::slugs_app(&ix.reachable)
+        } else {
+            figcache::slugs_por_archivo(&self.root, &ix.reachable).into_iter().map(|(slug, archivo)| (archivo, slug)).collect()
+        };
+        // Un archivo sin slug propio usa el de su parte (las figuras de un `\input` dentro de un capítulo llevan el del capítulo).
+        let slug = por_archivo.get(&rel).cloned().or_else(|| {
+            let parte = ix.part_of(&rel)?;
+            ix.parts[parte].file.as_ref().and_then(|f| por_archivo.get(f)).cloned()
+        });
+        let Some(slug) = slug else { return Ok(vec![]) };
+        let texto = std::fs::read_to_string(self.root.join(&rel)).map_err(|e| Error::Io(format!("{rel}: {e}")))?;
+        Ok(crate::figimages::figuras_del_archivo(&self.root, &rel, &texto, &fcfg.dir, &sello, &slug, fcfg.only_in_figure_env))
+    }
+
     pub fn figures_status(&self) -> Result<FiguresStatus> {
         let (cfg, rf) = {
             let d = self.lock()?;

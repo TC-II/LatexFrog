@@ -79,6 +79,9 @@ export class PDFViewerCore {
 	private pinchTimer: ReturnType<typeof setTimeout> | null = null;
 	private onPageClick?: (page: number, x: number, y: number, selectText?: string) => void;
 	private readonly topInset: number;
+	/** LatexFrog: the pages fill the pane's width, also as it is resized, until a zoom by hand picks a scale of its own */
+	keepFitWidth = true;
+	private resizeObserver: ResizeObserver | null = null;
 
 	private linkService: SimpleLinkService;
 
@@ -105,6 +108,26 @@ export class PDFViewerCore {
 		this.setupScrollListener();
 		this.setupInverseClick();
 		this.setupPinchZoom();
+		this.setupFitOnResize();
+	}
+
+	private setupFitOnResize(): void {
+		if (typeof ResizeObserver === 'undefined') return;
+		let frame = 0;
+		let lastWidth = this.container.clientWidth;
+		this.resizeObserver = new ResizeObserver(() => {
+			const width = this.container.clientWidth;
+			if (width === lastWidth || frame) return;
+			lastWidth = width;
+			frame = requestAnimationFrame(() => {
+				frame = 0;
+				if (!this.keepFitWidth || !this.pages.length) return;
+				const anchor = this.getScrollAnchor();
+				this.applyFitWidth();
+				if (anchor) this.restoreScrollAnchor(anchor);
+			});
+		});
+		this.resizeObserver.observe(this.container);
 	}
 
 	// a trackpad pinch arrives as ctrl+wheel
@@ -310,6 +333,7 @@ export class PDFViewerCore {
 
 		this.eventBus.dispatch('pagesloaded', { pagesCount: numPages });
 
+		if (this.keepFitWidth) this.applyFitWidth();
 		this.updateVisiblePages();
 	}
 
@@ -493,6 +517,7 @@ export class PDFViewerCore {
 
 	/** a pinch: the pages resize around the point at once, and are drawn sharp once it pauses */
 	zoomAt(value: number, x: number, y: number): void {
+		this.keepFitWidth = false;
 		const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, value));
 		if (newScale === this.currentScale) return;
 		keepPointUnder(
@@ -520,15 +545,22 @@ export class PDFViewerCore {
 	}
 
 	zoomIn(): void {
+		this.keepFitWidth = false;
 		this.scale = this.currentScale + DEFAULT_SCALE_DELTA;
 	}
 
 	zoomOut(): void {
+		this.keepFitWidth = false;
 		this.scale = this.currentScale - DEFAULT_SCALE_DELTA;
 	}
 
 	/** scale so the top-visible page fills the container width (minus the page padding). */
 	fitWidth(): void {
+		this.keepFitWidth = true;
+		this.applyFitWidth();
+	}
+
+	private applyFitWidth(): void {
 		if (!this.pages.length) return;
 		const anchor = this.getScrollAnchor();
 		const page = this.pages[(anchor ? anchor.page : 1) - 1] ?? this.pages[0];
@@ -539,6 +571,7 @@ export class PDFViewerCore {
 
 	/** scale so the top-visible page fits both ways, and land on its top: fit page means see it whole */
 	fitPage(): void {
+		this.keepFitWidth = false;
 		if (!this.pages.length) return;
 		const anchor = this.getScrollAnchor();
 		const pageNo = anchor ? anchor.page : 1;
@@ -649,6 +682,7 @@ export class PDFViewerCore {
 
 	destroy(): void {
 		if (this.pinchTimer) clearTimeout(this.pinchTimer);
+		this.resizeObserver?.disconnect();
 		this.scrollAbortController?.abort();
 		this.cleanup();
 		this.eventBus.destroy();

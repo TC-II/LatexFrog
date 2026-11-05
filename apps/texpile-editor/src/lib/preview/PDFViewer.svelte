@@ -161,7 +161,7 @@
      disappear into the "..." when the pane narrows -->
 {#snippet trailing()}
 	{#if lvProject.active}
-		<button class="btn btn-xs gap-1 {lvProject.follow ? 'preset-tonal-primary' : ''}" style="width: auto; padding-inline: 0.375rem" aria-pressed={lvProject.follow} aria-label={m.lv_follow()} use:tip={m.lv_follow_title()} data-testid="lv-follow" onclick={() => lvProject.setFollow(!lvProject.follow)}>
+		<button class="btn btn-xs gap-1 {lvProject.follow ? 'preset-filled-primary-500' : 'opacity-60'}" style="width: auto; padding-inline: 0.375rem" aria-pressed={lvProject.follow} aria-label={m.lv_follow()} use:tip={m.lv_follow_title()} data-testid="lv-follow" onclick={() => lvProject.setFollow(!lvProject.follow)}>
 			<LvFrog />
 			<LocateFixed size={14} />
 			<span class="cap-center @max-[40rem]:hidden">{m.lv_follow()}</span>

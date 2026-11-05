@@ -1,5 +1,5 @@
 <script lang="ts">
-	// The project's figure cache, in the bottom dock: each figure by file, what failed and why. Nothing is deleted without the preview:
+	// The project's figure cache, in the sidebar's Project outline: each figure by file, what failed and why. Nothing is deleted without the preview:
 	// Clean asks the engine what it would remove, shows it, and only the second button removes it.
 	import { onDestroy } from 'svelte';
 	import { m } from '$lib/paraglide/messages';

@@ -40,6 +40,12 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 - [x] Figures panel per figure, as a tab of the bottom dock.
 - [x] Inverse SyncTeX with the neighbour search; a selection of lines refines each line.
 - [x] Engine text in English; the keys kept in `history.jsonl` stay as they were.
+- [x] When to compile (On save, When idle, Manual) is a button beside Compile, per project; profiles no longer carry it.
+- [x] Saving parts is a profile output: one PDF, or one per part from a name pattern. The Delivery menu is gone. A saved PDF is named after the profile and announced with Reveal.
+- [x] A new project starts with Default (everything) and Current (the open file's part). Config: Run Now saves and compiles the profile.
+- [x] Profile variables override the document: the engine compiles copies without the unguarded definitions. A profile that leaves parts out defines the partial flags.
+- [x] Figures and Parts are tabs of the sidebar's Project outline. Baked figures show as their picture in the visual editor, with a button to their code.
+- [x] The PDF keeps fitting its pane's width; Follow shows its state and starts on; inverse SyncTeX centres the line and finds the word in the visual editor too.
 
 ### M4. Release
 - [ ] Installer that bundles the sidecar (`extraResources`).

@@ -70,6 +70,9 @@ pub struct VariableCfg {
     pub choices: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,
+    /// El nombre que la interfaz muestra para cada valor (`completo` → `Full`). El valor es lo que recibe el proyecto y no cambia.
+    #[serde(rename = "choiceLabels", default, skip_serializing_if = "IndexMap::is_empty")]
+    pub choice_labels: IndexMap<String, String>,
 }
 
 /// Qué partes entran en el perfil.
@@ -240,7 +243,8 @@ pub fn nombre_de_exportacion(patron: &str, num: &str, nombre: &str) -> String {
 }
 
 /// El nombre de un PDF de la salida de un perfil. Acepta los campos de la exportación (`{num}`, `{name}`) y los de la pantalla de
-/// perfiles: `{n}` (consecutivo), `{cap}` (número impreso), `{nombre}` y `{perfil}`, con `:0N` para completar con ceros.
+/// perfiles: `{n}` (consecutivo), `{cap}` (número impreso), `{nombre}` y `{profile}` (o `{perfil}`: el nombre visible del perfil), con
+/// `:0N` para completar con ceros.
 pub fn nombre_de_salida(patron: &str, n: &str, cap: &str, nombre: &str, perfil: &str) -> String {
     let limpio = |t: &str| -> String {
         let s: String = t.chars().map(|c| if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || c.is_control() { '-' } else { c }).collect();
@@ -264,7 +268,7 @@ pub fn nombre_de_salida(patron: &str, n: &str, cap: &str, nombre: &str, perfil: 
             "name" | "nombre" => Some(nombre),
             "num" | "cap" => Some(cap),
             "n" => Some(n),
-            "perfil" => Some(perfil),
+            "perfil" | "profile" => Some(perfil),
             _ => None,
         };
         match (valor, ancho) {
@@ -379,6 +383,11 @@ impl ProjectConfig {
         }
     }
 
+    /// El nombre visible de un perfil: su `label`, o su identificador si no tiene.
+    pub fn profile_label(&self, id: &str) -> String {
+        self.profiles.get(id).and_then(|p| p.label.clone()).filter(|l| !l.trim().is_empty()).unwrap_or_else(|| id.to_string())
+    }
+
     pub fn visible_profiles(&self) -> impl Iterator<Item = (&String, &ProfileCfg)> {
         self.profiles.iter().filter(|(_, p)| !p.hidden)
     }
@@ -392,7 +401,7 @@ pub fn infer_config(root_file: &str, hay_partes: bool) -> ProjectConfig {
     if hay_partes {
         profiles.insert(
             "parcial".to_string(),
-            ProfileCfg { label: Some("Partes elegidas".into()), partial: true, parts: PartsSel::Selection, ..Default::default() },
+            ProfileCfg { label: Some("Chosen parts".into()), partial: true, parts: PartsSel::Selection, ..Default::default() },
         );
         profiles.insert(
             "rapido".to_string(),
@@ -400,10 +409,10 @@ pub fn infer_config(root_file: &str, hay_partes: bool) -> ProjectConfig {
         );
         profiles.insert(
             "completo".to_string(),
-            ProfileCfg { label: Some("Documento completo".into()), auto_compile: false, ..Default::default() },
+            ProfileCfg { label: Some("Full document".into()), auto_compile: false, ..Default::default() },
         );
     } else {
-        profiles.insert("completo".to_string(), ProfileCfg { label: Some("Documento".into()), ..Default::default() });
+        profiles.insert("completo".to_string(), ProfileCfg { label: Some("Default".into()), ..Default::default() });
     }
     ProjectConfig {
         root: root_file.to_string(),

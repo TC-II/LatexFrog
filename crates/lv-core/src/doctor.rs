@@ -453,11 +453,10 @@ pub fn chequeos_de_proyecto(e: &EntradaDeProyecto) -> Vec<Hallazgo> {
                 h.push(
                     Hallazgo::nuevo(
                         "variable-def",
-                        Nivel::Aviso,
-                        format!("\\{nombre} is defined without a guard: a profile cannot change it"),
-                        format!("The variable is in latexfrog.json and the app defines it before loading the main file, but {rel}:{linea} defines it again unconditionally and always wins."),
+                        Nivel::Info,
+                        format!("\\{nombre} is defined without a guard: profiles override it"),
+                        format!("{rel}:{linea} defines it again unconditionally. A profile that sets it compiles a copy of that file without the definition, so the profile's value wins and the project is not touched."),
                     )
-                    .con_arreglo(format!("Give the default value a guard: \\ifdefined\\{nombre}\\else\\def\\{nombre}{{...}}\\fi"))
                     .en(rel, linea),
                 );
             }
@@ -773,8 +772,9 @@ mod tests {
         let ix = ProjectIndex::build(d.path(), "main.tex", &cfg.parts.commands);
         let h = chequeos_de_proyecto(&EntradaDeProyecto { root: d.path(), root_file: "main.tex", config: &cfg, ix: &ix });
         let v = &ver(&h, "variable-def")[0];
-        assert_eq!((v.nivel, v.archivo.as_deref(), v.linea), (Nivel::Aviso, Some("structure.tex"), Some(1)), "{h:#?}");
-        assert!(v.titulo.contains("OpcionPie") && v.arreglo.as_deref().is_some_and(|a| a.contains("\\ifdefined\\OpcionPie")));
+        // Ya no es un aviso: el perfil que la fija compila una copia sin esa definición.
+        assert_eq!((v.nivel, v.archivo.as_deref(), v.linea), (Nivel::Info, Some("structure.tex"), Some(1)), "{h:#?}");
+        assert!(v.titulo.contains("OpcionPie") && v.titulo.contains("override") && v.arreglo.is_none());
         assert_eq!(ver(&h, "bom-input")[0].archivo.as_deref(), Some("conbom.tex"));
         assert!(ver(&h, "autoclean")[0].detalle.contains("onBuilt"));
         // `\Capitulo` se define con `\input`: `\includeonly` no sirve para sus partes.

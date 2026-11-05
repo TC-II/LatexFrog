@@ -9,8 +9,7 @@
 	import type { ReplaceSpec } from '$lib/search/replaceInFiles';
 	import SourceControlPanel from '$lib/workspace/scm/ui/SourceControlPanel.svelte';
 	import TableOfContents from './TableOfContents.svelte';
-	import LvOutline from '$lib/lv/LvOutline.svelte';
-	import LvPartsPanel from '$lib/lv/LvPartsPanel.svelte';
+	import LvProjectOutline from '$lib/lv/LvProjectOutline.svelte';
 	import { lvProject } from '$lib/lv/lvEngine.svelte';
 	import SidebarIconButton from './SidebarIconButton.svelte';
 	import { isBuildArtifact } from '$lib/workspace/buildArtifacts';
@@ -44,12 +43,12 @@
 	import { combo } from '$lib/chrome/shortcutText';
 	import { canKeepLocalHistory } from '$lib/workspace/localHistory/localHistory.svelte';
 	import { Popover, Portal } from '@skeletonlabs/skeleton-svelte';
-	import { FilePlus, FolderPlus, RefreshCw, GitBranch, Search, MoreHorizontal, ListTree, BookOpen } from '@lucide/svelte';
+	import { FilePlus, FolderPlus, RefreshCw, GitBranch, Search, MoreHorizontal, ListTree } from '@lucide/svelte';
 
 	type Props = {
 		width: number;
 		guest: boolean;
-		view: 'explorer' | 'scm' | 'search' | 'outline' | 'parts';
+		view: 'explorer' | 'scm' | 'search' | 'outline';
 		scmBusy: boolean;
 		/** what the Contents pane under the tree lists */
 		toc: TocList;
@@ -211,13 +210,6 @@
 									label: m.lv_outline_title(),
 									active: view === 'outline',
 									run: () => (view = view === 'outline' ? 'explorer' : 'outline')
-								},
-								{
-									key: 'parts',
-									icon: BookOpen,
-									label: m.lv_parts_title(),
-									active: view === 'parts',
-									run: () => (view = view === 'parts' ? 'explorer' : 'parts')
 								}
 							]
 						: []),
@@ -367,9 +359,7 @@
 			onReplace={onReplaceInFolder}
 		/>
 	{:else if view === 'outline'}
-		<LvOutline {onOpenFileAt} />
-	{:else if view === 'parts'}
-		<LvPartsPanel onOpenFile={onOpenFileAt} />
+		<LvProjectOutline {onOpenFileAt} />
 	{:else if view === 'scm'}
 		<!-- the panel owns its own scrolling: it is two regions with a splitter between them, each
 		     scrolling on its own, and an outer scroller here would fight both -->

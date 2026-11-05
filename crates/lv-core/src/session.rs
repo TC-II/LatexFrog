@@ -611,8 +611,11 @@ impl Session {
             // Todas las partes van con la lista completa (no `None`): un `\includeonly` propio de la raíz no lo recorta (S6).
             Self::includeonly_de(&d, perfil, &pc, &nombres)?
         };
+        // Un perfil que deja partes afuera es parcial aunque no lo diga: el documento decide con esos flags lo que cambia en una
+        // compilación reducida (el pie, la tapa), y sin ellos las variables de esa compilación no hacen nada.
+        let parcial = pc.partial || includeonly.as_ref().is_some_and(|sel| nombres.iter().any(|n| !sel.contains(n)));
         let mut flags = Vec::new();
-        if pc.partial {
+        if parcial {
             flags.extend(cfg.flags.partial.iter().cloned());
         }
         if pc.externalize {
@@ -639,19 +642,45 @@ impl Session {
             f.slugs.push((crate::build::FRAGMENTO_REL.to_string(), "frag".to_string()));
         }
         // Las piezas que el perfil saca: copias de los archivos que las tienen, con su bloque comentado, en `.latexfrog/piezas/<perfil>/`.
-        let mut sustituciones = Vec::new();
+        let mut copias: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
         if !pc.omit.is_empty() {
             let piezas = crate::piezas::detectar(&self.root, &ix);
-            for (rel, contenido) in crate::piezas::copias(&self.root, &piezas, &pc.omit) {
-                let copia = format!(".latexfrog/piezas/{perfil}/{rel}");
-                crate::build::write_if_changed(&self.root.join(&copia), &contenido)?;
-                sustituciones.push((rel, copia));
+            copias.extend(crate::piezas::copias(&self.root, &piezas, &pc.omit));
+        }
+        // Las variables que el perfil (o esta máquina) fija pisan al proyecto: sin las definiciones sin guardia que las volverían a pisar.
+        let fijadas: Vec<String> = cfg.variables.keys().filter(|n| pc.vars.get(*n).or(d.state.variables.get(*n)).is_some_and(|v| !v.is_empty())).cloned().collect();
+        if !fijadas.is_empty() {
+            let mut archivos: Vec<String> = ix.reachable.iter().filter(|r| r.to_ascii_lowercase().ends_with(".tex") || r.to_ascii_lowercase().ends_with(".sty")).cloned().collect();
+            for rel in archivos.clone() {
+                if let Ok(t) = std::fs::read_to_string(self.root.join(&rel)) {
+                    archivos.extend(crate::piezas::opcionales(&self.root, &t).into_iter().filter(|o| !ix.reachable.contains(o)));
+                }
             }
+            archivos.sort();
+            archivos.dedup();
+            for rel in archivos {
+                let texto = match copias.get(&rel) {
+                    Some(t) => t.clone(),
+                    None => match std::fs::read_to_string(self.root.join(&rel)) {
+                        Ok(t) => t,
+                        Err(_) => continue,
+                    },
+                };
+                if let Some(nuevo) = crate::piezas::sin_definiciones(&texto, &fijadas) {
+                    copias.insert(rel, nuevo);
+                }
+            }
+        }
+        let mut sustituciones = Vec::new();
+        for (rel, contenido) in copias {
+            let copia = format!(".latexfrog/piezas/{perfil}/{rel}");
+            crate::build::write_if_changed(&self.root.join(&copia), &contenido)?;
+            sustituciones.push((rel, copia));
         }
         let driver = render_driver_spec(&DriverSpec {
             perfil: perfil.to_string(),
             root_rel: rf.clone(),
-            partial: pc.partial,
+            partial: parcial,
             flags,
             vars,
             includeonly,
@@ -874,8 +903,10 @@ impl Session {
                 me.al_terminar(ev, &perfil, &cache_dir, retry, desde, &ctx);
                 // Con la verificación hecha (una figura rota deja el perfil sospechoso), la copia a la salida del perfil.
                 if ok && !aux::is_suspect(&me.root, &perfil) {
-                    if let Err(e) = me.copiar_a_la_salida(&perfil) {
-                        (me.sink)(BuildEvent::Error { message: e.to_string() });
+                    match me.copiar_a_la_salida(&perfil) {
+                        Ok(Some(file)) => (me.sink)(BuildEvent::Saved { perfil: perfil.clone(), file }),
+                        Ok(None) => {}
+                        Err(e) => (me.sink)(BuildEvent::Error { message: e.to_string() }),
                     }
                 }
             }
@@ -885,22 +916,26 @@ impl Session {
 
     /// Copia el PDF de un perfil con `output` (de un solo PDF) a su carpeta, con el nombre del patrón. Un perfil sin `output` es sólo
     /// para ver en la app y no copia nada. El PDF con imágenes en borrador también se copia: es lo que el perfil dice que quiere.
-    fn copiar_a_la_salida(&self, perfil: &str) -> Result<()> {
-        let (out, rf) = {
+    /// Devuelve el archivo escrito, relativo a la raíz.
+    fn copiar_a_la_salida(&self, perfil: &str) -> Result<Option<String>> {
+        let (out, label) = {
             let d = self.lock()?;
             let out = d.config.as_ref().and_then(|c| c.profiles.get(perfil)).and_then(|p| p.output.clone());
-            (out, d.root_file.clone().unwrap_or_default())
+            let label = d.config.as_ref().map(|c| c.profile_label(perfil)).unwrap_or_else(|| perfil.to_string());
+            (out, label)
         };
-        let Some(out) = out.filter(|o| !o.per_part) else { return Ok(()) };
+        let Some(out) = out.filter(|o| !o.per_part) else { return Ok(None) };
         export::validar_destino(&out.dir)?;
-        let stem = Path::new(&rf).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "documento".into());
-        let nombre = config::nombre_de_salida(&out.pattern, "1", "", &stem, perfil);
+        // `{name}` es el nombre del perfil, no el del documento: con el del documento, un perfil parcial que guarda en la carpeta
+        // del PDF completo lo pisaba.
+        let nombre = config::nombre_de_salida(&out.pattern, "1", "", &label, &label);
         let dir = self.root.join(&out.dir);
         std::fs::create_dir_all(&dir).map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
         let origen = self.root.join(crate::build::pdf_rel(perfil));
         let bytes = std::fs::read(&origen).map_err(|e| Error::Io(format!("{}: {e}", origen.display())))?;
         let destino = dir.join(&nombre);
-        fsio::escribir_atomico(&destino, &bytes).map_err(|e| Error::Io(format!("could not copy the PDF to {}: {e}", destino.display())))
+        fsio::escribir_atomico(&destino, &bytes).map_err(|e| Error::Io(format!("could not copy the PDF to {}: {e}", destino.display())))?;
+        Ok(Some(format!("{}/{}", out.dir.trim_end_matches('/'), nombre)))
     }
 
     /// Lo que hay que hacer con las figuras después de cualquier build (7 del plan, "Figuras que fallan o se cortan"): se verifican

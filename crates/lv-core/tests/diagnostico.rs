@@ -37,12 +37,13 @@ fn el_doctor_de_la_sesion_ve_el_def_sin_guardia_al_abrir_una_copia_sin_parchear(
     let i = s.doctor_con(&sonda_sana).unwrap();
     let v: Vec<_> = i.hallazgos.iter().filter(|h| h.id == "variable-def").collect();
     assert_eq!(v.len(), 1, "{:#?}", i.hallazgos);
-    assert_eq!((v[0].nivel, v[0].archivo.as_deref(), v[0].linea), (Nivel::Aviso, Some("structure.tex"), Some(1)));
+    // Una nota y no un aviso: el perfil que fija la variable compila una copia de structure.tex sin esa definición.
+    assert_eq!((v[0].nivel, v[0].archivo.as_deref(), v[0].linea), (Nivel::Info, Some("structure.tex"), Some(1)));
     assert_eq!(i.distribucion.as_deref(), Some("MiKTeX 26.5"));
-    // Lo grave va primero: no hay errores, así que el primero es un aviso.
+    // Lo grave va primero: no hay errores, y lo que sigue nunca es más grave que lo anterior.
     assert!(i.hallazgos.iter().all(|h| h.nivel != Nivel::Error), "{:#?}", i.hallazgos);
-    assert_eq!(i.hallazgos[0].nivel, Nivel::Aviso);
-    // Con la guardia puesta, el aviso desaparece.
+    assert!(i.hallazgos.windows(2).all(|w| w[0].nivel >= w[1].nivel), "{:#?}", i.hallazgos);
+    // Con la guardia puesta, la nota desaparece.
     fs::write(d.path().join("structure.tex"), "\\ifdefined\\OpcionPie\\else\\def\\OpcionPie{completo}\\fi\n").unwrap();
     s.refresh().unwrap();
     let i = s.doctor_con(&sonda_sana).unwrap();

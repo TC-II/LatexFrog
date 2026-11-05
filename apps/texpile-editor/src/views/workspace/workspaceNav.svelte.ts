@@ -12,7 +12,7 @@ import { resolveGotoTarget } from '$lib/editor/source/sourceGotoTarget';
 import { fileMode } from '$lib/workspace/fileMode.svelte';
 import { projectIntelStore } from '$lib/stores/projectIntel';
 import { updateLayout } from '$lib/storage/layout';
-import { SyncTexNav, sessionRelativeTarget, needsActivate } from '$lib/workspace/syncTexNav';
+import { SyncTexNav, sessionRelativeTarget, needsActivate, sourceCaret } from '$lib/workspace/syncTexNav';
 import { offsetAtPm } from '$lib/editor/visual/sourceMap';
 import { firstWordEndOnLine } from '$lib/languages/typst/preview/caretRescue';
 import { restoreVisualPosition } from '$lib/workspace/visualPositions';
@@ -21,6 +21,7 @@ import { hasVisualMode, type DocumentBuffer, type FileKind } from '$lib/workspac
 import type { ViewModeSwitch } from '$lib/workspace/viewModeSwitch.svelte';
 import { samePath } from '$lib/workspace/fileSystem';
 import { labelLine, definitionLine } from './definitionLines';
+import { selectInVisual, visualCaret, watchVisualCaret } from '$lib/lv/lvVisualSync';
 
 type NavDeps = {
 	doc: DocumentBuffer;
@@ -50,10 +51,12 @@ export class WorkspaceNav {
 
 	constructor(private d: NavDeps) {
 		lvProject.onFollow = () => void this.syncTex.forwardFromCursor(true);
+		watchVisualCaret(() => (this.inVisual() ? editorViewStore.current : null));
 		lvProject.onOpenAt = (file, line) => {
 			const root = lvProject.view?.root ?? '';
 			this.syncJumpToFileLine(joinPath(root, file), line);
 		};
+		lvProject.onShowSource = (file, line) => this.openFileAtLine(joinPath(lvProject.view?.root ?? '', file), line);
 		this.syncTex = new SyncTexNav({
 			isGuest: d.guest,
 			getLoadedPath: () => d.doc.path,
@@ -64,8 +67,14 @@ export class WorkspaceNav {
 			scrollPdfTo: (page, x, y, w, h) => this.jumpPdf(page, x, y, w, h),
 			syncDraftTo: d.syncDraftTo,
 			// inverse clicks land in whichever mode the user is in; see syncJumpToFileLine
-			openFileAtLine: (file, line, selectText, column, columnEnd) => this.syncJumpToFileLine(file, line, selectText, column, columnEnd)
+			openFileAtLine: (file, line, selectText, column, columnEnd) => this.syncJumpToFileLine(file, line, selectText, column, columnEnd),
+			caret: () => (this.inVisual() ? visualCaret(editorViewStore.current, d.doc.texSource, d.doc.sourceMap) : sourceCaret()),
+			buffer: () => (d.doc.path ? d.doc.texSource : null)
 		});
+	}
+
+	private inVisual(): boolean {
+		return this.d.modes.mode === 'visual' && hasVisualMode(this.d.kind());
 	}
 
 	/** the visual caret as a zero-based source line/character, through the source map. Never
@@ -106,9 +115,11 @@ export class WorkspaceNav {
 					: here && selectText
 						? offsetToRowCol(doc.texSource, resolveGotoTarget(Text.of(doc.texSource.split('\n')), { line, selectText }).from)
 						: { row: line - 1, column: 0 };
+			const v = editorViewStore.current;
+			// LatexFrog: the clicked word itself, selected and centred
+			if (here && v && column !== undefined && lvProject.active && selectInVisual(v, doc.texSource, doc.sourceMap, line - 1, column, columnEnd ?? column)) return;
 			docPositions.set(target, { ...at, firstVisibleLine: at.row + 1 }, { jump: true });
 			if (here) {
-				const v = editorViewStore.current;
 				if (v) restoreVisualPosition(v, here, doc.texSource, doc.sourceMap);
 			} else if (needsActivate(target)) {
 				openFile(target);

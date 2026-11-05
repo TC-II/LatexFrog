@@ -590,6 +590,30 @@ fn humanizar(nombre: &str) -> String {
     s
 }
 
+/// La interfaz va en inglés y los nombres de las variables salen de las macros del proyecto, que suelen estar en castellano: las
+/// palabras de opción más comunes tienen su nombre en inglés. Lo que no está acá queda como está (y se puede editar en Variables).
+pub fn en_ingles(palabra: &str) -> Option<&'static str> {
+    let p = palabra.trim().to_lowercase();
+    Some(match p.as_str() {
+        "pie" | "pie de pagina" | "pie de página" => "Footer",
+        "encabezado" | "cabecera" => "Header",
+        "completo" | "completa" => "Full",
+        "autor" => "Author",
+        "ninguno" | "ninguna" | "nada" => "None",
+        "borrador" => "Draft",
+        "final" => "Final",
+        "si" | "sí" => "Yes",
+        "no" => "No",
+        "corto" | "corta" => "Short",
+        "largo" | "larga" => "Long",
+        "fecha" => "Date",
+        "marca de agua" => "Watermark",
+        "idioma" => "Language",
+        "version" | "versión" => "Version",
+        _ => return None,
+    })
+}
+
 fn variables_detectadas(archivos: &[Archivo], flags: &BTreeSet<String>) -> Vec<VariableDetectada> {
     static DEF: OnceLock<Regex> = OnceLock::new();
     static IFX: OnceLock<Regex> = OnceLock::new();
@@ -639,7 +663,7 @@ fn variables_detectadas(archivos: &[Archivo], flags: &BTreeSet<String>) -> Vec<V
         let mut frase = format!("\\{x} takes one of these values: {} (default \"{valor}\"). Each profile can set it without touching the project.", choices.join(", "));
         if let Some(u) = sin_guardia.first() {
             frase.push_str(&format!(
-                " Careful: {}:{} defines it without a guard and always wins, so a profile cannot change it. Give the default a guard: \\ifdefined\\{x}\\else\\def\\{x}{{{valor}}}\\fi.",
+                " {}:{} defines it without a guard: LatexFrog compiles a copy without that definition, so the profile's value wins and the project is not touched.",
                 u.archivo, u.linea
             ));
         }
@@ -742,7 +766,11 @@ pub fn detectar(root: &Path, raiz: Option<&str>, actual: Option<&ProjectConfig>,
     };
     let variables_cfg: IndexMap<String, VariableCfg> = variables
         .iter()
-        .map(|v| (v.nombre.clone(), VariableCfg { label: Some(v.label.clone()), choices: v.choices.clone(), default: Some(v.default.clone()) }))
+        .map(|v| {
+            let choice_labels = v.choices.iter().filter_map(|c| en_ingles(c).map(|e| (c.clone(), e.to_string()))).collect();
+            let label = en_ingles(&v.label).map(str::to_string).unwrap_or_else(|| v.label.clone());
+            (v.nombre.clone(), VariableCfg { label: Some(label), choices: v.choices.clone(), default: Some(v.default.clone()), choice_labels })
+        })
         .collect();
     let cfg = ProjectConfig {
         root: raiz.clone(),
@@ -850,12 +878,12 @@ mod tests {
         assert_eq!(v[0].choices, ["completo", "autor", "ninguno"]);
         // El `\def` del valor por omisión de este texto no tiene guardia (línea 1): la frase lo explica.
         assert_eq!(v[0].def_sin_guardia.iter().map(|u| (u.archivo.as_str(), u.linea)).collect::<Vec<_>>(), [("x.tex", 1)]);
-        assert!(v[0].frase.contains("without a guard") && v[0].frase.contains("\\ifdefined\\OpcionPie\\else"), "{}", v[0].frase);
+        assert!(v[0].frase.contains("without a guard") && v[0].frase.contains("profile's value wins"), "{}", v[0].frase);
         assert_eq!(humanizar("OpcionPieDePagina"), "Pie de pagina");
         // Con la guardia, no hay nada que avisar.
         let a = ns("\\ifdefined\\OpcionPie\\else\\def\\OpcionPie{completo}\\fi\n\\def\\PieOpcionAutor{autor}\n\\ifx\\OpcionPie\\PieOpcionAutor x\\fi\n");
         let v = variables_detectadas(&[a], &BTreeSet::new());
-        assert!(v[0].def_sin_guardia.is_empty() && !v[0].frase.contains("Careful"), "{:?}", v[0]);
+        assert!(v[0].def_sin_guardia.is_empty() && !v[0].frase.contains("without a guard"), "{:?}", v[0]);
     }
 
     #[test]

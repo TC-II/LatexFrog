@@ -10,6 +10,7 @@
 	import CompileOptionsMenu from './CompileOptionsMenu.svelte';
 	import LvProgress from '$lib/lv/LvProgress.svelte';
 	import LvTarget from '$lib/lv/LvTarget.svelte';
+	import LvCompileWhen from '$lib/lv/LvCompileWhen.svelte';
 	import { AnchoredMenu } from '$lib/pdf-view/anchoredMenu.svelte';
 	import type { ComponentProps } from 'svelte';
 	import { m } from '$lib/paraglide/messages';
@@ -223,6 +224,7 @@
 					{outputAvailable}
 				/>
 			</div>
+			<LvCompileWhen {compact} />
 		{/if}
 		{#if guest && !showPdf}
 			<!-- guest: ask the host to compile (its toolchain), in the same spot and style as the

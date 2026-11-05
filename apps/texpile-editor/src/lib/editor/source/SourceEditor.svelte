@@ -337,7 +337,8 @@
 		if (req.path && docPath && !samePath(req.path, docPath)) return;
 		lastGotoToken = req.token;
 		const { from, to } = resolveGotoTarget(view.state.doc, req);
-		view.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true, effects: flashLineEffect.of(from) });
+		// LatexFrog: the line lands near the middle of the editor, not at its edge (CodeMirror keeps the first and last lines in reach)
+		view.dispatch({ selection: { anchor: from, head: to }, effects: [EditorView.scrollIntoView(from, { y: 'center' }), flashLineEffect.of(from)] });
 		view.focus();
 	});
 

@@ -1,2 +1,2 @@
 /** the bottom dock's tabs */
-export type DockView = 'terminal' | 'problems' | 'comments' | 'agent' | 'history' | 'doctor' | 'leftover' | 'figures';
+export type DockView = 'terminal' | 'problems' | 'comments' | 'agent' | 'history' | 'doctor' | 'leftover';

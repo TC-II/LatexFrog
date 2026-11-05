@@ -51,6 +51,7 @@ fn main() {
         BuildEvent::Pass { n, tool, .. } => eprintln!("   [{tool} {n}]"),
         BuildEvent::Figure { n, name, .. } => eprintln!("   [pgf lanzó la figura {n}: {name}]"),
         BuildEvent::Queued { perfil } => eprintln!("== en cola: {perfil}"),
+        BuildEvent::Saved { file, .. } => eprintln!("== guardado en {file}"),
         BuildEvent::Error { message } => eprintln!("== error: {message}"),
         BuildEvent::BakeQueued => eprintln!("== cocción de figuras en cola"),
         BuildEvent::BakeListing { fase, .. } => eprintln!("== listando las figuras ({fase})"),

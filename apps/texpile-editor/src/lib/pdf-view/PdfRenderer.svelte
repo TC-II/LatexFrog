@@ -260,7 +260,9 @@
 		fitWidth: () => viewer?.fitWidth(),
 		fitPage: () => viewer?.fitPage(),
 		setScale: (scale: number) => {
-			if (viewer) viewer.scale = scale;
+			if (!viewer) return;
+			viewer.keepFitWidth = false;
+			viewer.scale = scale;
 		},
 		rotateClockwise: () => viewer?.rotateClockwise(),
 		rotateCounterClockwise: () => viewer?.rotateCounterClockwise(),

@@ -72,6 +72,8 @@ pub enum BuildEvent {
         #[serde(skip)]
         herramientas: Vec<(String, u64)>,
     },
+    /// El PDF de un perfil con salida quedó guardado en `file` (relativo a la raíz; puede salir de ella).
+    Saved { #[serde(rename = "profile")] perfil: String, file: String },
     /// Algo que no es un build (por ejemplo, el pendiente no se pudo lanzar).
     Error { message: String },
     /// Hay otro trabajo corriendo y la cocción de figuras quedó pendiente.

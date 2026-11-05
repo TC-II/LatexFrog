@@ -20,15 +20,31 @@ import { askForProgram } from '$lib/modals/window/missingProgram/missingProgram.
 /** a selection reaches this many source lines: a paragraph of the book is one line, so this is already ten paragraphs */
 const MAX_SELECTED_LINES = 10;
 
-/** the word under the cursor, or each selected line with its stretch; a line the cursor is not on keeps its boxes */
-async function refineAtCursor(viewer: WordSource, boxes: Rect[], line: number, path: string): Promise<Rect[]> {
+/** where the caret is in the file's text, as columns of one line: the source editor's, or the visual editor's through its map */
+export type CaretSpot = { line: number; text: string; from: number; to: number; fromSource?: boolean };
+
+/** the source editor's caret, when it is the one on screen; a selection is cut at the end of its first line */
+export function sourceCaret(): CaretSpot | null {
 	const cm = sourceCmView.current;
-	if (!cm) return boxes;
+	if (!cm?.dom.isConnected) return null;
 	const { from, to, empty, head } = cm.state.selection.main;
+	const at = cm.state.doc.lineAt(empty ? head : from);
+	const start = (empty ? head : from) - at.from;
+	return { line: at.number, text: at.text, from: start, to: empty ? start : Math.min(to, at.to) - at.from, fromSource: true };
+}
+
+/** the word under the cursor, or each selected line with its stretch; a line the cursor is not on keeps its boxes */
+async function refineAtCursor(viewer: WordSource, boxes: Rect[], line: number, path: string, caret: CaretSpot | null): Promise<Rect[]> {
+	if (!caret || caret.line !== line) return boxes;
+	const cm = caret.fromSource ? sourceCmView.current : null;
+	const sel = cm?.state.selection.main;
+	if (!cm || !sel || sel.empty) {
+		if (caret.from === caret.to) return refineWord(viewer, boxes, caret.text, caret.from);
+		return refineRange(viewer, boxes, caret.text, caret.from, caret.to);
+	}
+	// a selection in the source editor can span lines: each one is refined on its own
+	const { from, to } = sel;
 	const doc = cm.state.doc;
-	const at = doc.lineAt(empty ? head : from);
-	if (at.number !== line) return boxes;
-	if (empty) return refineWord(viewer, boxes, at.text, head - at.from);
 	const rects: Rect[] = [];
 	const last = Math.min(doc.lineAt(to).number, line + MAX_SELECTED_LINES - 1);
 	for (let n = line; n <= last; n++) {
@@ -43,8 +59,9 @@ async function refineAtCursor(viewer: WordSource, boxes: Rect[], line: number, p
 	return rects.length ? rects : boxes;
 }
 
-/** the buffer when the file is the one open, so a word typed since the last save is still there */
-async function sourceOf(file: string, loaded: string | null): Promise<string | null> {
+/** the buffer when the file is the one open, so a word typed since the last save is still there (in either editor) */
+async function sourceOf(file: string, loaded: string | null, buffer: string | null): Promise<string | null> {
+	if (loaded && samePath(file, loaded) && buffer !== null) return buffer;
 	const cm = sourceCmView.current;
 	if (cm?.dom.isConnected && loaded && samePath(file, loaded)) return cm.state.doc.toString();
 	return readTextFile(file).catch(() => null);
@@ -64,6 +81,10 @@ export type SyncTexDeps = {
 	/** draft mode highlights inside DraftView instead of the standalone pane */
 	syncDraftTo(page: number, x: number, y: number, w: number, h: number): void;
 	openFileAtLine(file: string, line: number, selectText?: string, column?: number, columnEnd?: number): void;
+	/** LatexFrog: the caret in whichever editor is on screen, for SyncTeX to the word */
+	caret?(): CaretSpot | null;
+	/** LatexFrog: the open file's text as edited, unsaved changes included */
+	buffer?(): string | null;
 };
 
 /** normalize a path out of synctex to the workspace separator so it matches the open file */
@@ -98,7 +119,8 @@ export class SyncTexNav {
 					return;
 				}
 				if (!follow) d.setPdfPaneOpen(true);
-				refineNextJump({ rects: (viewer) => refineAtCursor(viewer, res.rects, line, path), mark: follow, scroll: true });
+				const caret = d.caret ? d.caret() : sourceCaret();
+				refineNextJump({ rects: (viewer) => refineAtCursor(viewer, res.rects, line, path, caret), mark: follow, scroll: true });
 				d.scrollPdfTo(res.page, res.h, res.v, res.width, res.height);
 			} catch (e) {
 				if (!follow) toaster.error({ title: 'SyncTeX', description: e instanceof Error ? e.message : String(e) });
@@ -126,10 +148,8 @@ export class SyncTexNav {
 
 	/** forward from the current cursor (the header "Sync to PDF" button) */
 	async forwardFromCursor(follow = false): Promise<void> {
-		const cm = sourceCmView.current;
-		if (!cm || !cm.dom.isConnected) return;
-		const { from, empty, head } = cm.state.selection.main;
-		await this.forwardToLine(cm.state.doc.lineAt(empty ? head : from).number, follow);
+		const caret = this.deps.caret ? this.deps.caret() : sourceCaret();
+		if (caret) await this.forwardToLine(caret.line, follow);
 	}
 
 	/** inverse: a double-click in the PDF opens the source at the matching line. selectText lets
@@ -146,7 +166,7 @@ export class SyncTexNav {
 			if (!res) return;
 			const file = normSyncPath(res.file);
 			const viewer = clickedViewer();
-			const source = viewer ? await sourceOf(file, d.getLoadedPath()) : null;
+			const source = viewer ? await sourceOf(file, d.getLoadedPath(), d.buffer?.() ?? null) : null;
 			const spot: SourceSpot = viewer && source !== null ? await refineClick(viewer, { page, x, y }, res.line, source).catch(() => ({ line: res.line })) : { line: res.line };
 			if (spot.from !== undefined) d.openFileAtLine(file, spot.line, undefined, spot.from, spot.to);
 			else d.openFileAtLine(file, spot.line, selectText);

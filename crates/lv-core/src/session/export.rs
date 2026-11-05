@@ -218,6 +218,7 @@ impl Session {
         }
         // La numeración de las partes que no tienen capítulo numerado: su posición en el documento.
         let todas = self.lock().ok().and_then(|d| d.index.as_ref().map(|i| i.part_names())).unwrap_or_default();
+        let label = self.lock().ok().and_then(|d| d.config.as_ref().map(|c| c.profile_label(perfil))).unwrap_or_else(|| perfil.to_string());
         let inicio_ms = historia::ahora_ms();
         let mut hechas: Vec<crate::historial::ParteExportada> = Vec::new();
         if error.is_none() {
@@ -233,7 +234,7 @@ impl Session {
                             .or_else(|| todas.iter().position(|n| n == parte).map(|p| (p + 1).to_string()))
                             .unwrap_or_else(|| (i + 1).to_string());
                         let nombre_parte = parte.rsplit('/').next().unwrap_or(parte);
-                        let nombre = crate::config::nombre_de_salida(&ex.pattern, &(i + 1).to_string(), &num, nombre_parte, perfil);
+                        let nombre = crate::config::nombre_de_salida(&ex.pattern, &(i + 1).to_string(), &num, nombre_parte, &label);
                         let archivo = format!("{}/{}", ex.dir.trim_end_matches('/'), nombre);
                         let copia = std::fs::copy(self.root.join(crate::build::pdf_rel(perfil)), self.root.join(&archivo));
                         match copia {

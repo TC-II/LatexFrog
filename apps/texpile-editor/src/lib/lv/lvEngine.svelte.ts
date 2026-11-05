@@ -4,15 +4,17 @@ import { m } from '$lib/paraglide/messages';
 import type { LogEntry } from '$lib/compileLog/compileLog';
 import type { CompileLogState } from '$lib/stores/compileLogStore';
 import { pdfStore } from '$lib/stores/pdfStore';
-import { fileUrl, joinPath, relativeTo } from '$lib/workspace/fileSystem';
+import { fileUrl, joinPath, relativeTo, revealItem } from '$lib/workspace/fileSystem';
 import { activeFilePath, mainFile, setMainFile } from '$lib/workspace/workspaceStore';
 import { clearFollowMark } from './lvSync';
+import { toaster } from '$lib/modals/toaster-svelte';
 
-export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; compileOn: string | null };
+export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; compileOn: string | null; output?: { dir: string; pattern: string; perPart?: boolean } | null };
 export type Variable = { name: string; label: string; choices: string[]; default: string | null };
 export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean };
+export type OutlineTab = 'contents' | 'parts' | 'figures';
 export type Typical = { ms: number; pasadas: number; n: number };
-export type Progress = { profile: string; startedAt: number; tool: string | null; pass: number };
+export type Progress = { profile: string; startedAt: number; tool: string | null; pass: number; parts?: { done: number; total: number } };
 export type ProjectView = {
 	root: string;
 	rootFile: string | null;
@@ -39,7 +41,18 @@ export type Rect = { page: number; x: number; y: number; w: number; h: number };
 type SyncForward = { perfil: string; pdf: string; page: number; rects: Rect[]; line_used: number };
 type SyncInverse = { file: string | null; line: number; inside: boolean };
 export type Finished = { type: 'finished'; profile: string; ok: boolean; cancelled: boolean; pdf: string | null; updated: boolean };
-type EngineEvent = Finished | { type: 'pass'; n: number; tool: string } | { type: 'started'; profile: string } | { type: 'error'; message: string };
+type ExportEvent =
+	| { type: 'export-started'; total: number }
+	| { type: 'export-progress'; done: number; total: number }
+	| { type: 'export-finished'; ok: boolean; cancelled: boolean; exported: number; failed: number; dir: string; error: string | null };
+type EngineEvent =
+	| Finished
+	| ExportEvent
+	| { type: 'pass'; n: number; tool: string }
+	| { type: 'started'; profile: string }
+	| { type: 'saved'; profile: string; file: string }
+	| { type: 'bake-finished' }
+	| { type: 'error'; message: string };
 
 /** builds the engine runs for other jobs: their results never replace the document's PDF or problems */
 const SERVICE_PROFILES = new Set(['export', 'fragmento', 'cocina']);
@@ -82,18 +95,26 @@ class LvProject {
 	doctor = $state<DoctorReport | null>(null);
 	doctorWarnings = $derived((this.doctor?.hallazgos ?? []).filter((f) => f.nivel === 'aviso' || f.nivel === 'error').length);
 	/** the PDF follows the editor's cursor */
-	follow = $state(false);
+	follow = $state(true);
 	/** settles once the current folder is known to be an engine project or not; Compile waits for it */
 	ready: Promise<void> = Promise.resolve();
 	onFinished: ((ev: Finished) => void) | null = null;
 	onError: ((message: string) => void) | null = null;
 	onCompile: (() => void) | null = null;
-	onShowDock: ((view: 'leftover' | 'figures') => void) | null = null;
+	onShowDock: ((view: 'leftover') => void) | null = null;
+	/** which list the sidebar's Project outline shows */
+	outlineTab = $state<OutlineTab>('contents');
 	/** opens a project-relative file at a line */
 	onOpenAt: ((file: string, line: number) => void) | null = null;
+	/** the source editor at a project-relative file and line, whatever view is showing */
+	onShowSource: ((file: string, line: number) => void) | null = null;
+	/** bumped when the figure cache may have changed */
+	figureRevision = $state(0);
 	onFollow: (() => void) | null = null;
 	isBusy: () => boolean = () => false;
 	private pinnedPart = false;
+	/** the profile saving one PDF per part, while it runs: its parts' builds report as one run */
+	private exportingProfile: string | null = null;
 	private idleTimer: ReturnType<typeof setTimeout> | null = null;
 	private followTimer: ReturnType<typeof setTimeout> | null = null;
 	private listeners = new Set<(event: unknown) => void>();
@@ -246,21 +267,34 @@ class LvProject {
 		await this.compilePart(this.fileInfo.part);
 	}
 
-	/** a build the profile asks for by itself: never over a running one, and only when the file is part of what it builds */
+	/** how this project compiles by itself, chosen beside Compile: on saving, once typing stops, or only by hand */
+	get compileWhen(): 'save' | 'idle' | 'manual' {
+		const when = this.view?.state.autoCompile;
+		return when === 'idle' || when === 'manual' ? when : 'save';
+	}
+
+	setCompileWhen(when: 'save' | 'idle' | 'manual') {
+		return this.setState({ autoCompile: when });
+	}
+
+	/** a build the project asks for by itself, with the chosen profile: never over a running one */
 	private async autoBuild() {
-		if (!this.view || this.view.state.autoCompile === 'manual' || this.isBusy()) return;
+		if (!this.view || this.compileWhen === 'manual' || this.isBusy()) return;
+		// one PDF per part compiles every part: too much to run on each save
+		if (this.activeProfile?.output?.perPart) return;
 		await this.noteActiveFile();
-		if (this.fileInfo?.profileAuto && !this.isBusy()) this.onCompile?.();
+		// a file the profile does not build would compile the same PDF again
+		if (this.fileInfo?.affects !== 'unrelated' && !this.isBusy()) this.onCompile?.();
 	}
 
-	/** Ctrl+S: a profile that compiles on saving does, unless it waits for typing to stop */
+	/** Ctrl+S compiles when the project compiles on saving */
 	noteSaved() {
-		if (this.view && this.activeProfile?.compileOn !== 'idle') void this.autoBuild();
+		if (this.view && this.compileWhen === 'save') void this.autoBuild();
 	}
 
-	/** a file reached the disk: autosave runs while typing, so only a profile that compiles on idle cares, once typing has stopped */
+	/** a file reached the disk: autosave runs while typing, so only compiling on idle cares, once typing has stopped */
 	noteWritten() {
-		if (this.activeProfile?.compileOn !== 'idle') return;
+		if (this.compileWhen !== 'idle') return;
 		if (this.idleTimer) clearTimeout(this.idleTimer);
 		this.idleTimer = setTimeout(() => {
 			this.idleTimer = null;
@@ -336,14 +370,40 @@ class LvProject {
 		return res?.file && res.line >= 1 ? { file: joinPath(v.root, res.file), line: res.line } : null;
 	}
 
+	/** a saved file, relative to the root (it may leave it), with a button that shows it in its folder */
+	private announceSaved(title: string, file: string) {
+		const root = this.view?.root;
+		const path = root ? joinPath(root, file) : file;
+		toaster.success({ title, description: file, action: { label: m.lv_saved_reveal(), onClick: () => void revealItem(path) } });
+	}
+
 	handle(ev: EngineEvent) {
 		for (const listener of this.listeners) listener(ev);
 		if (ev.type === 'started') {
-			if (!SERVICE_PROFILES.has(ev.profile)) this.progress = { profile: ev.profile, startedAt: Date.now(), tool: null, pass: 0 };
+			if (this.exportingProfile) {
+				if (this.progress) this.progress = { ...this.progress, tool: null, pass: 0 };
+			} else if (!SERVICE_PROFILES.has(ev.profile)) this.progress = { profile: ev.profile, startedAt: Date.now(), tool: null, pass: 0 };
 		} else if (ev.type === 'pass') {
 			if (this.progress) this.progress = { ...this.progress, tool: ev.tool, pass: ev.n };
-		}
-		else if (ev.type === 'error') this.onError?.(ev.message);
+		} else if (ev.type === 'export-started') {
+			const profile = this.view?.state.activeProfile ?? 'export';
+			this.exportingProfile = profile;
+			this.progress = { profile, startedAt: Date.now(), tool: null, pass: 0, parts: { done: 0, total: ev.total } };
+		} else if (ev.type === 'export-progress') {
+			if (this.progress) this.progress = { ...this.progress, parts: { done: ev.done, total: ev.total } };
+		} else if (ev.type === 'export-finished') {
+			const profile = this.exportingProfile ?? 'export';
+			this.exportingProfile = null;
+			this.progress = null;
+			this.revision++;
+			if (ev.error) this.onError?.(ev.error);
+			else if (ev.exported > 0) this.announceSaved(m.lv_saved_parts({ count: ev.exported, failed: ev.failed }), ev.dir);
+			this.onFinished?.({ type: 'finished', profile, ok: ev.ok, cancelled: ev.cancelled, pdf: null, updated: false });
+		} else if (ev.type === 'bake-finished') {
+			this.figureRevision++;
+		} else if (ev.type === 'saved') {
+			this.announceSaved(m.lv_saved_one(), ev.file);
+		} else if (ev.type === 'error') this.onError?.(ev.message);
 		else if (ev.type === 'finished' && !SERVICE_PROFILES.has(ev.profile)) {
 			this.progress = null;
 			void this.loadTypical().catch(() => {});

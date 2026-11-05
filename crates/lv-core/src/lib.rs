@@ -12,6 +12,7 @@ pub mod config;
 pub mod detectar;
 pub mod error;
 pub mod figcache;
+pub mod figimages;
 pub mod figures;
 pub mod formato;
 pub mod fsio;

@@ -4,6 +4,7 @@
 	import MenuBarTrigger from './MenuBarTrigger.svelte';
 	import { menuContentClass, menuBarItemClass, separatorClass } from '$lib/menus/menuStyles';
 	import { m } from '$lib/paraglide/messages';
+	import { lvProject } from '$lib/lv/lvEngine.svelte';
 
 	let { index, select, terminalVisible }: { index: number; select: (value: string) => void; terminalVisible: boolean } = $props();
 </script>
@@ -14,9 +15,12 @@
 		<Menu.Positioner>
 			<Menu.Content class={menuContentClass}>
 				<Menu.Item value="compile" class={menuBarItemClass}><Menu.ItemText>{m.menubar_terminal_compile()}</Menu.ItemText></Menu.Item>
-				<Menu.Item value="configure" class={menuBarItemClass}
-					><Menu.ItemText>{m.menubar_configure_compile_command()}</Menu.ItemText></Menu.Item
-				>
+				<!-- LatexFrog: an engine project compiles by its profiles, not by a shell command -->
+				{#if !lvProject.active}
+					<Menu.Item value="configure" class={menuBarItemClass}
+						><Menu.ItemText>{m.menubar_configure_compile_command()}</Menu.ItemText></Menu.Item
+					>
+				{/if}
 				<Menu.Separator class={separatorClass} />
 				<Menu.Item value="new" class={menuBarItemClass}><Menu.ItemText>{m.menubar_new_terminal()}</Menu.ItemText></Menu.Item>
 				<Menu.Item value="toggle" class={menuBarItemClass}>

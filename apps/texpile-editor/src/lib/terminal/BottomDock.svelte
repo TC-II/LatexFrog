@@ -13,7 +13,6 @@
 	import DockTabCount from './DockTabCount.svelte';
 	import { lvProject } from '$lib/lv/lvEngine.svelte';
 	import LvDoctorPanel from '$lib/lv/LvDoctorPanel.svelte';
-	import LvFiguresPanel from '$lib/lv/LvFiguresPanel.svelte';
 	import LvFrog from '$lib/lv/LvFrog.svelte';
 	import LvHistoryPanel from '$lib/lv/LvHistoryPanel.svelte';
 	import LvLeftoverPanel from '$lib/lv/LvLeftoverPanel.svelte';
@@ -87,7 +86,7 @@
 	const shells = new TerminalShells(() => onClose());
 	// a project with no engine has none of the engine's tabs
 	$effect(() => {
-		if (!lvProject.active && (view === 'history' || view === 'doctor' || view === 'leftover' || view === 'figures')) view = 'problems';
+		if (!lvProject.active && (view === 'history' || view === 'doctor' || view === 'leftover')) view = 'problems';
 	});
 	let menuOpen = $state(false);
 
@@ -193,7 +192,7 @@
 			{/if}
 		</button>
 		{#if lvProject.active}
-			{#each [['figures', m.lv_figures_tab()], ['history', m.lv_diag_history()], ['doctor', m.lv_diag_doctor()], ['leftover', m.lv_diag_orphans()]] as [id, label] (id)}
+			{#each [['history', m.lv_diag_history()], ['doctor', m.lv_diag_doctor()], ['leftover', m.lv_diag_orphans()]] as [id, label] (id)}
 				<button
 					class="rounded-base flex shrink-0 items-center gap-1 px-2 py-1 whitespace-nowrap {view === id ? 'preset-tonal' : 'hover:preset-tonal'}"
 					data-testid="lv-dock-{id}"
@@ -321,9 +320,9 @@
 		<div class="bg-surface-50-950 absolute inset-0 z-10 overflow-hidden">
 			<ProblemsPanel root={cwd} onJump={onProblemJump} />
 		</div>
-	{:else if view === 'history' || view === 'doctor' || view === 'leftover' || view === 'figures'}
+	{:else if view === 'history' || view === 'doctor' || view === 'leftover'}
 		<div class="bg-surface-50-950 absolute inset-0 z-10 overflow-hidden">
-			{#if view === 'history'}<LvHistoryPanel />{:else if view === 'doctor'}<LvDoctorPanel />{:else if view === 'figures'}<LvFiguresPanel />{:else}<LvLeftoverPanel />{/if}
+			{#if view === 'history'}<LvHistoryPanel />{:else if view === 'doctor'}<LvDoctorPanel />{:else}<LvLeftoverPanel />{/if}
 		</div>
 	{:else if view === 'agent'}
 		<div class="bg-surface-50-950 absolute inset-0 z-10 overflow-hidden">

@@ -11,7 +11,9 @@
 		if (!progress) return '';
 		const id = progress.profile;
 		const name = lvProject.view?.config?.profiles.find((p) => p.id === id)?.label ?? id;
-		const step = progress.tool ? m.lv_progress_pass({ tool: progress.tool, pass: progress.pass }) : m.lv_progress_compiling({ profile: name });
+		const pass = progress.tool ? m.lv_progress_pass({ tool: progress.tool, pass: progress.pass }) : m.lv_progress_compiling({ profile: name });
+		// a profile saving one PDF per part: which part it is on
+		const step = progress.parts ? `${m.lv_progress_parts({ done: Math.min(progress.parts.done + 1, progress.parts.total), total: progress.parts.total })} · ${pass}` : pass;
 		const elapsed = formatSeconds(Math.max(0, now - progress.startedAt));
 		const typical = lvProject.typical[progress.profile];
 		return `${step} · ${typical ? m.lv_progress_typical({ elapsed, typical: formatSeconds(typical.ms) }) : elapsed}`;

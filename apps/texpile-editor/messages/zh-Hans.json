@@ -3090,11 +3090,8 @@
 	"figure_snap_intersection": "交点",
 	"figure_snap_perpendicular": "垂足",
 	"image_save_failed": "无法保存图片：{reason}",
-	"lv_delivery_menu": "Figures and delivery…",
-	"lv_delivery_title": "Figures and delivery",
 	"lv_close": "Close",
 	"lv_cancel": "Cancel",
-	"lv_figures_title": "Figure cache",
 	"lv_figures_status": "{current} current, {old} old, {mb} MB.",
 	"lv_figures_pending": " {count} to bake.",
 	"lv_figures_failed": " {count} failed.",
@@ -3106,13 +3103,5 @@
 	"lv_figures_clean_nothing": "Nothing to clean.",
 	"lv_figures_clean_preview": "Will delete {count} figures: {files} files, {mb} MB.",
 	"lv_figures_clean_confirm": "Delete these files",
-	"lv_figures_cleaned": "Deleted {count} figures, {mb} MB.",
-	"lv_export_title": "Export parts",
-	"lv_export_run": "Export",
-	"lv_export_running": "Exporting…",
-	"lv_export_done": "Exported {exported}, failed {failed}.",
-	"lv_publish_title": "Delivery",
-	"lv_publish_run": "Publish {profile}",
-	"lv_published": "Published {file}",
-	"lv_open_folder": "Open folder"
+	"lv_figures_cleaned": "Deleted {count} figures, {mb} MB."
 }

@@ -1,4 +1,7 @@
 // plugin stack and node-view wiring for the LaTeX visual editor; LatexEditorView.svelte mounts it
+import { LvBakedFigureView, leaveFiguresToBaked } from '$lib/lv/LvBakedFigureView';
+import { mayHoldBakedFigure } from '$lib/lv/lvFigureImages';
+import { activeFilePath } from '$lib/workspace/workspaceStore';
 import { FigureCardView, isFigureBlock } from '$lib/draw/host/card/FigureCardView.svelte';
 import { tikzLanguage } from '$lib/draw/tikz/tikzLanguage';
 import type { Plugin } from 'prosemirror-state';
@@ -266,6 +269,7 @@ export function latexNodeViews(
 	return {
 		code_block: (node, view, getPos) => new CodeBlockView(node, view, getPos as () => number),
 		raw_latex: (node, view, getPos, decorations) =>
+			leaveFiguresToBaked(
 			simpleFrontmatter(node.textContent)
 				? new FrontmatterRawView(node, view, getPos as () => number)
 				: placeholderCommand(node.textContent)?.command === 'printbibliography'
@@ -278,13 +282,17 @@ export function latexNodeViews(
 								? new FigureCardView(node, view, getPos as () => number, tikzLanguage, m.figure_card_tikz())
 								: isRawFigure(node.textContent)
 									? new RawFigureView(node, view, getPos as () => number, imageDir)
-									: drawnOrSource(
+									: mayHoldBakedFigure(node.textContent)
+										? new LvBakedFigureView(node, view, getPos as () => number, () => activeFilePath.current ?? null)
+										: drawnOrSource(
 											node,
 											view,
 											getPos as () => number,
 											decorations,
 											latexChipKind(view, true, onJumpToLabel, onJumpToDefinition)
 										),
+				node
+			),
 		inline_latex: (node, view, getPos, decorations) =>
 			inlinePlaceholder(node.textContent)
 				? new InlinePlaceholderView(node, view, getPos as () => number)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compileTarget, compileWhen, compileWhenChange, emptyProfile, profileId, relativeFolder, removeProfile, rows, selectionOf, setProfile, toParts, type ConfigJson } from '$lib/lv/lvProfiles';
+import { choiceLabel, compileTarget, defaultProfiles, emptyProfile, inEnglish, outputName, profileId, relativeFolder, removeProfile, rows, selectionOf, setProfile, toParts, variableLabel, type ConfigJson } from '$lib/lv/lvProfiles';
 
 describe('profile config', () => {
 	it('keeps what it does not know and does not write defaults', () => {
@@ -42,12 +42,28 @@ describe('chapters of a profile', () => {
 });
 
 describe('when and where', () => {
-	it('reads and writes when it compiles', () => {
-		expect(compileWhen({})).toBe('save');
-		expect(compileWhen({ compileOn: 'idle' })).toBe('idle');
-		expect(compileWhen({ autoCompile: false })).toBe('manual');
-		expect(compileWhen(setProfile({}, 'a', compileWhenChange('manual')).profiles?.a ?? {})).toBe('manual');
-		expect(compileWhen(setProfile({}, 'a', compileWhenChange('idle')).profiles?.a ?? {})).toBe('idle');
+	it('names saved files from the pattern', () => {
+		const f = { n: '3', num: '7', name: 'Filters: Butterworth', profile: 'Current' };
+		expect(outputName('{profile}.pdf', f)).toBe('Current.pdf');
+		expect(outputName('Cap {num:02} {name}', f)).toBe('Cap 07 Filters- Butterworth.pdf');
+		expect(outputName('{n}-{unknown}', f)).toBe('3-{unknown}.pdf');
+	});
+
+	it('shows variables and their values in English unless named', () => {
+		const v = { label: 'Pie de libro', choices: ['completo', 'autor', 'raro'], choiceLabels: { autor: 'Only author' } };
+		expect(inEnglish('Ninguno')).toBe('None');
+		expect(choiceLabel(v, 'completo')).toBe('Full');
+		expect(choiceLabel(v, 'autor')).toBe('Only author');
+		expect(choiceLabel(v, 'raro')).toBe('raro');
+		expect(variableLabel('OpcionPie', { label: 'pie' })).toBe('Footer');
+	});
+
+	it('gives a new project Default, and Current when it has parts', () => {
+		const labels = { full: 'Default', current: 'Current' };
+		expect(Object.keys(defaultProfiles({}, [], false, labels).profiles ?? {})).toEqual(['default']);
+		const both = defaultProfiles({}, [{ clave: 'front' } as never], true, labels).profiles ?? {};
+		expect(Object.keys(both)).toEqual(['default', 'current']);
+		expect(both.current).toMatchObject({ label: 'Current', parts: 'current', omit: ['front'] });
 	});
 
 	it('makes folders relative to the project', () => {

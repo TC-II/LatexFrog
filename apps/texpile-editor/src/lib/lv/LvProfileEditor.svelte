@@ -6,10 +6,11 @@
 	import { m } from '$lib/paraglide/messages';
 	import LvFrog from './LvFrog.svelte';
 	import {
-		compileWhen,
-		compileWhenChange,
 		DEFAULT_OUTPUT,
+		choiceLabel,
 		emptyProfile,
+		outputName,
+		PER_PART_PATTERN,
 		PROFILE_COLORS,
 		profileId,
 		relativeFolder,
@@ -19,14 +20,21 @@
 		setProfile,
 		shortName,
 		toParts,
-		type CompileWhen,
+		variableLabel,
 		type ConfigJson,
 		type Piece,
 		type ProfileJson,
 		type ProfileOutput
 	} from './lvProfiles';
 
-	let { config, pieces, parts, root, onChange }: { config: ConfigJson; pieces: Piece[]; parts: string[]; root: string; onChange: (next: ConfigJson) => void } = $props();
+	let {
+		config,
+		pieces,
+		parts,
+		root,
+		onChange,
+		selected = $bindable('')
+	}: { config: ConfigJson; pieces: Piece[]; parts: string[]; root: string; onChange: (next: ConfigJson) => void; selected?: string } = $props();
 
 	const ids = $derived(Object.keys(config.profiles ?? {}));
 	let chosen = $state('');
@@ -35,6 +43,9 @@
 	const outputs: Record<string, ProfileOutput> = {};
 
 	const id = $derived(ids.includes(chosen) ? chosen : (ids[0] ?? ''));
+	$effect(() => {
+		selected = id;
+	});
 	const profile = $derived<ProfileJson>(config.profiles?.[id] ?? {});
 	const selection = $derived(selectionOf(profile));
 	const omit = $derived(profile.omit ?? []);
@@ -58,15 +69,25 @@
 		change({ output: next });
 	}
 
+	// a part's number or name means nothing for one file, and the profile's name alone would give every part the same file
+	const PART_FIELD = /\{(n|num|cap|name|nombre)(:0\d+)?\}/;
 	function perPart(on: boolean) {
-		const pattern = on && !/\{(n|cap|nombre)/.test(output.pattern) ? '{cap:02} - {nombre}.pdf' : output.pattern;
+		let pattern = output.pattern;
+		if (on && !PART_FIELD.test(pattern)) pattern = PER_PART_PATTERN;
+		if (!on && PART_FIELD.test(pattern)) pattern = DEFAULT_OUTPUT.pattern;
 		const next: ProfileOutput = { ...output, pattern };
 		if (on) next.perPart = true;
 		else delete next.perPart;
 		outputs[id] = next;
-		// one PDF per chapter compiles every chapter: too much to run on its own
-		change({ output: next, ...(on ? { autoCompile: false } : {}) });
+		change({ output: next });
 	}
+
+	const firstPart = $derived(shortName(parts.find((p) => selection.all || selection.list.includes(p)) ?? parts[0] ?? 'Chapter'));
+	const example = $derived(
+		output.perPart
+			? outputName(output.pattern, { n: '1', num: '1', name: firstPart, profile: profile.label ?? id })
+			: outputName(output.pattern, { n: '1', num: '', name: profile.label ?? id, profile: profile.label ?? id })
+	);
 
 	function setCopy(on: boolean) {
 		if (!on && profile.output) outputs[id] = profile.output;
@@ -156,11 +177,11 @@
 					</label>
 					{#each variables as [name, v] (name)}
 						<label class="flex items-center justify-between gap-2">
-							{v.label ?? name}
+							<span title={m.lv_profiles_var_title()}>{variableLabel(name, v)}</span>
 							<select class={INPUT} value={profile.vars?.[name] ?? ''} data-testid="lv-profile-var" onchange={(e) => change({ vars: { ...(profile.vars ?? {}), [name]: e.currentTarget.value } })}>
-								<option value="">{v.default ? m.lv_profiles_default_value({ value: v.default }) : m.lv_profiles_default()}</option>
+								<option value="">{v.default ? m.lv_profiles_default_value({ value: choiceLabel(v, v.default) }) : m.lv_profiles_default()}</option>
 								{#each v.choices ?? [] as choice (choice)}
-									<option value={choice}>{choice}</option>
+									<option value={choice}>{choiceLabel(v, choice)}</option>
 								{/each}
 							</select>
 						</label>
@@ -168,14 +189,6 @@
 					<label class="flex items-center gap-2">
 						<input type="checkbox" checked={profile.draftImages === true} onchange={(e) => change({ draftImages: e.currentTarget.checked })} />
 						{m.lv_draft_images()}
-					</label>
-					<label class="flex items-center justify-between gap-2">
-						{m.lv_profiles_when()}
-						<select class={INPUT} value={compileWhen(profile)} data-testid="lv-profile-when" onchange={(e) => change(compileWhenChange(e.currentTarget.value as CompileWhen))}>
-							<option value="save">{m.lv_profiles_when_save()}</option>
-							<option value="idle">{m.lv_profiles_when_idle()}</option>
-							<option value="manual">{m.lv_profiles_when_manual()}</option>
-						</select>
 					</label>
 				</div>
 
@@ -205,7 +218,8 @@
 							{m.lv_profiles_name_pattern()}
 							<input class="{INPUT} min-w-0 flex-1" value={output.pattern} oninput={(e) => setOutput({ ...output, pattern: e.currentTarget.value })} />
 						</label>
-						<p class="text-xs opacity-60">{'{n}'} {m.lv_profiles_help_n()}, {'{cap}'} {m.lv_profiles_help_cap()}, {'{nombre}'} {m.lv_profiles_help_name()}, {'{perfil}'} {m.lv_profiles_help_profile()}</p>
+						<p class="text-xs opacity-60">{'{profile}'} {m.lv_profiles_help_profile()}, {'{n}'} {m.lv_profiles_help_n()}, {'{num}'} {m.lv_profiles_help_cap()}, {'{name}'} {m.lv_profiles_help_name()}. {m.lv_profiles_help_zeros()}</p>
+						<p class="text-xs opacity-80" data-testid="lv-profile-example">{m.lv_profiles_example({ name: example })}</p>
 					</div>
 				</div>
 			</div>
