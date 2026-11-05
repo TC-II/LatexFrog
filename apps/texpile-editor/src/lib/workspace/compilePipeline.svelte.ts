@@ -89,7 +89,8 @@ export class CompilePipeline {
 			compileLog.current = toLogState(await lvProject.problems(ev.profile), ev.profile);
 			this.deps.shareCompileState();
 			const root = workspaceRoot.current;
-			if (root && ev.pdf && ev.updated) this.showCompiledPdf(joinPath(root, ev.pdf), Date.now());
+			// up to date is still a result: with nothing on show, the existing PDF is what the user asked to see
+			if (root && ev.pdf && (ev.updated || !pdfStore.current)) this.showCompiledPdf(joinPath(root, ev.pdf), Date.now());
 		} finally {
 			this.endRun();
 			this.deps.refreshTree();

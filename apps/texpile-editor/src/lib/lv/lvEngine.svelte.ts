@@ -4,7 +4,7 @@ import type { LogEntry } from '$lib/compileLog/compileLog';
 import type { CompileLogState } from '$lib/stores/compileLogStore';
 import { pdfStore } from '$lib/stores/pdfStore';
 import { fileUrl, joinPath, relativeTo } from '$lib/workspace/fileSystem';
-import { activeFilePath } from '$lib/workspace/workspaceStore';
+import { activeFilePath, mainFile, setMainFile } from '$lib/workspace/workspaceStore';
 
 export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean };
 export type Variable = { name: string; label: string; choices: string[]; default: string | null };
@@ -123,6 +123,11 @@ class LvProject {
 		const known = (await exists(joinPath(root, 'latexfrog.json'))) || (await exists(joinPath(root, 'latexviewer.json')));
 		if (!known) return;
 		this.view = (await this.request<{ project: ProjectView }>('open', { root })).project;
+		// The engine's root is the project's main file: without this the preview stays on "No main file" after a good build.
+		if (this.view.rootFile && !mainFile.current?.endsWith(this.view.rootFile)) setMainFile(root, joinPath(root, this.view.rootFile));
+		const profile = this.view.state.activeProfile;
+		const lastPdf = profile && joinPath(root, `.latexfrog/build/${profile}/lv-${profile}.pdf`);
+		if (lastPdf && !pdfStore.current && (await exists(lastPdf))) pdfStore.current = fileUrl(lastPdf) + '&t=' + Date.now();
 		await this.loadTypical();
 		this.sessionOpen = true;
 		void import('./lvPanels').then((p) => p.offerOrphans());
