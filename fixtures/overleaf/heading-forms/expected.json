@@ -1,0 +1,12 @@
+{
+  "main": "main.tex",
+  "parts": 0,
+  "headings": [
+    "A Long Title",
+    "Unnumbered",
+    "Transfer Function H(s)",
+    "Functions on",
+    "A Title Broken Across Lines",
+    "With Emphasis"
+  ]
+}

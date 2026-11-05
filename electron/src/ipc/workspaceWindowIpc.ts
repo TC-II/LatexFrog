@@ -1,6 +1,6 @@
 // the multi-window surface: folder claims, held closes, new windows, zoom, and the
 // once-per-session startup claim
-import { BrowserWindow, dialog, ipcMain } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
 import { startWorkspaceWatch, stopWorkspaceWatch } from '../fs/workspaceWatch';
 import { createWindow, startUrl } from '../windows/createWindow';
 import {
@@ -14,17 +14,14 @@ import {
 	persistOpenFolders
 } from '../windows/windowRegistry';
 
+import { pickFolder } from '../lv/folderPicker';
 // first renderer to ask runs the once-per-session startup work (update check, What's New)
 let startupTasksClaimed = false;
 
 /** the folder picker, then a window for the folder (or the one that already has it); null when cancelled */
 export async function openFolderInNewWindow(from: BrowserWindow | undefined): Promise<string | null> {
-	const res = await dialog.showOpenDialog(from!, {
-		title: 'Open Folder',
-		properties: ['openDirectory', 'createDirectory']
-	});
-	if (res.canceled || res.filePaths.length === 0) return null;
-	const root = res.filePaths[0]!;
+	const root = await pickFolder(from);
+	if (!root) return null;
 	const existing = windowWithRoot(root);
 	if (existing) focusWindow(existing);
 	else focusWindow(createWindow(startUrl(), { kind: 'folder', path: root }));

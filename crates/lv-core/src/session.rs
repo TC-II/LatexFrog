@@ -1151,6 +1151,22 @@ impl Session {
 
     /// Del cursor al PDF. `Ok(None)` si el archivo no figura en el SyncTeX del PDF elegido (todavía no se compiló con él).
     pub fn synctex_forward(&self, rel: &str, line: u32) -> Result<Option<SyncForward>> {
+        self.synctex_forward_in(rel, line, None)
+    }
+
+    /// Forward search that prefers `shown`, the profile whose PDF is on screen, when its SyncTeX holds the file: Follow must
+    /// move the PDF the user is looking at, not a newer one of another profile.
+    pub fn synctex_forward_in(&self, rel: &str, line: u32, shown: Option<&str>) -> Result<Option<SyncForward>> {
+        if let Some(perfil) = shown {
+            let known = self.lock()?.config.as_ref().is_some_and(|c| c.profiles.contains_key(perfil));
+            if let Some(sx) = known.then(|| self.cargar_synctex(perfil).ok()).flatten() {
+                if let Some(tag) = sx.tag_of(&self.root, rel) {
+                    if let Some(f) = sx.forward(tag, line) {
+                        return Ok(Some(SyncForward { pdf: crate::build::pdf_rel(perfil), page: f.rects[0].page, rects: f.rects, line_used: f.line_used, perfil: perfil.to_string() }));
+                    }
+                }
+            }
+        }
         let Some(perfil) = self.elegir_pdf(rel)? else {
             return Err(otro("No PDF with SyncTeX for this file: compile first."));
         };

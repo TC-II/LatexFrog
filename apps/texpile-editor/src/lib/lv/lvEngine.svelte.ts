@@ -8,11 +8,14 @@ import { fileUrl, joinPath, relativeTo, revealItem } from '$lib/workspace/fileSy
 import { activeFilePath, mainFile, setMainFile } from '$lib/workspace/workspaceStore';
 import { clearFollowMark } from './lvSync';
 import { toaster } from '$lib/modals/toaster-svelte';
+import { fileService } from '$lib/files/service/fileService';
+import { fileMode } from '$lib/workspace/fileMode.svelte';
+import { collabGuest } from '$lib/collab/guestStore.svelte';
 
 export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; compileOn: string | null; output?: { dir: string; pattern: string; perPart?: boolean } | null };
 export type Variable = { name: string; label: string; choices: string[]; default: string | null };
 export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean };
-export type OutlineTab = 'contents' | 'parts' | 'figures';
+export type OutlineTab = 'contents' | 'figures';
 export type Typical = { ms: number; pasadas: number; n: number };
 export type Progress = { profile: string; startedAt: number; tool: string | null; pass: number; parts?: { done: number; total: number } };
 export type ProjectView = {
@@ -112,7 +115,6 @@ class LvProject {
 	figureRevision = $state(0);
 	onFollow: (() => void) | null = null;
 	isBusy: () => boolean = () => false;
-	private pinnedPart = false;
 	/** the profile saving one PDF per part, while it runs: its parts' builds report as one run */
 	private exportingProfile: string | null = null;
 	private idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -166,7 +168,10 @@ class LvProject {
 		if (wasOpen) await this.request('close');
 		if (!root) return;
 		const known = (await exists(joinPath(root, 'latexfrog.json'))) || (await exists(joinPath(root, 'latexviewer.json')));
-		if (!known) return;
+		if (!known) {
+			void this.offerSetup(root);
+			return;
+		}
 		this.view = (await this.request<{ project: ProjectView }>('open', { root })).project;
 		// The engine's root is the project's main file: without this the preview stays on "No main file" after a good build.
 		if (this.view.rootFile && !mainFile.current?.endsWith(this.view.rootFile)) setMainFile(root, joinPath(root, this.view.rootFile));
@@ -177,6 +182,19 @@ class LvProject {
 		this.sessionOpen = true;
 		void import('./lvPanels').then((p) => p.offerOrphans());
 		void this.runDoctor().catch(() => {});
+	}
+
+	/** folders already offered setup in this window: closing the dialog reopens the folder, which must not offer it again */
+	private setupOffered = new Set<string>();
+
+	/** every LaTeX folder is meant to be a LatexFrog project: one that is not yet opens on Project Configuration */
+	private async offerSetup(root: string) {
+		if (this.setupOffered.has(root) || fileMode.current || collabGuest.joined) return;
+		this.setupOffered.add(root);
+		const files = await fileService.scanTexFiles(root).catch(() => []);
+		if (this.folder.root !== root || !files.some((f) => /\.tex$/i.test(f.path))) return;
+		const { openConfigPanel } = await import('./lvPanels');
+		if (this.folder.root === root && !this.view) openConfigPanel();
 	}
 
 	async runDoctor() {
@@ -226,45 +244,12 @@ class LvProject {
 	}
 
 	async compile() {
-		// a part compiled by name stays that part; otherwise the open file says which one
-		if (this.pinnedPart) this.pinnedPart = false;
-		else await this.noteActiveFile();
+		await this.noteActiveFile();
 		return this.request('compile');
 	}
 
 	private get activeProfile() {
 		return this.view?.config?.profiles.find((p) => p.id === this.view?.state.activeProfile) ?? null;
-	}
-
-	/**
-	 * One part, now: an accepted exception to compiling only through a profile. A profile of the current part builds it directly;
-	 * otherwise it takes a profile of chosen parts, as in the Tauri app.
-	 */
-	async compilePart(name: string | null) {
-		if (!name) return;
-		const active = this.activeProfile;
-		if (active?.parts === 'current') {
-			await this.setState({ currentPart: name });
-		} else {
-			const chosen = active?.parts === 'selection' ? active : this.view?.config?.profiles.find((p) => p.parts === 'selection' && !p.hidden);
-			if (!chosen) {
-				this.onError?.('No profile compiles chosen parts: add one in Project Configuration');
-				return;
-			}
-			await this.setState({ selection: [name], profile: chosen.id });
-		}
-		this.pinnedPart = true;
-		this.onCompile?.();
-	}
-
-	/** Ctrl+Alt+C */
-	async compileActivePart() {
-		await this.noteActiveFile();
-		if (!this.fileInfo?.part) {
-			this.onError?.(m.lv_part_none());
-			return;
-		}
-		await this.compilePart(this.fileInfo.part);
 	}
 
 	/** how this project compiles by itself, chosen beside Compile: on saving, once typing stops, or only by hand */
@@ -346,7 +331,8 @@ class LvProject {
 		const v = this.view;
 		if (!v) return null;
 		const file = relativeTo(v.root, path).replace(/\\/g, '/');
-		const res = await this.request<SyncForward | null>('synctex-forward', { file, line });
+		// the PDF on screen first: Follow must move it, not a newer PDF of another profile
+		const res = await this.request<SyncForward | null>('synctex-forward', { file, line, profile: this.shownProfile() });
 		const box = res?.rects[0];
 		if (!res || !box) return null;
 		// the newest PDF holding this file may not be the one on screen

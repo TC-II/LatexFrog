@@ -1,6 +1,6 @@
 // The composition root: pins the app identity, registers every IPC surface, and owns the
 // launch/open/quit lifecycle. Each domain lives in its own module (ipc/, windows/, fs/, ...).
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { applyAppIdentity, portable } from './appIdentity';
@@ -26,6 +26,7 @@ import { registerNativeAppearanceIpc } from './nativeAppearance';
 import { registerSurfacesIpc } from './ipc/surfacesIpc';
 import { registerDeferredIpc, shutdownDeferred } from './ipc/deferredIpc';
 import { registerLvSidecarIpc } from './lv/lvSidecar';
+import { pickFolder } from './lv/folderPicker';
 import { registerWindowChrome } from './windowChrome';
 
 applyAppIdentity();
@@ -224,8 +225,8 @@ app.whenReady().then(() => {
 		// the start screen's File menu; the renderer's own open-folder push handles the result
 		{
 			openFolder: async (win) => {
-				const res = await dialog.showOpenDialog(win, { title: 'Open Folder', properties: ['openDirectory', 'createDirectory'] });
-				if (!res.canceled && res.filePaths[0]) win.webContents.send('main:open-folder', res.filePaths[0]);
+				const picked = await pickFolder(win);
+				if (picked) win.webContents.send('main:open-folder', picked);
 			},
 			newWindow: () => focusWindow(createWindow(startUrl())),
 			openFolderNewWindow: async (win) => void (await openFolderInNewWindow(win))

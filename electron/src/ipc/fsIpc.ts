@@ -13,6 +13,7 @@ import { resolveRealRelative } from '../fs/resolveRealRelative';
 import { noteOwnFileOp, noteOwnWrite } from '../ai/acp/ownWrites';
 import { followImageMove } from '../images/imageIpc';
 import { handleFs } from './ipcResult';
+import { pickFolder } from '../lv/folderPicker';
 
 /**
  * Where a workspace's undo backups live: under the app's OWN data directory, never inside the
@@ -30,14 +31,8 @@ const UNDO_MAX_BYTES = 64 * 1024 * 1024;
 
 export function registerFsIpc(): void {
 	ipcMain.handle('dialog:openFolder', async (e) => {
-		const res = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender) ?? undefined!, {
-			title: 'Open Folder',
-			// createDirectory is macOS-only and off by default: without it NSOpenPanel has no New Folder
-			// button, so "create new project" (which wants an EMPTY folder) was impossible without going
-			// to Finder first. Ignored on Windows/Linux, which already allow it.
-			properties: ['openDirectory', 'createDirectory']
-		});
-		return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0];
+		// LatexFrog: starts in the last folder picked
+		return pickFolder(BrowserWindow.fromWebContents(e.sender) ?? undefined);
 	});
 	for (const [channel, properties] of [
 		['dialog:pickFolder', ['openDirectory']],

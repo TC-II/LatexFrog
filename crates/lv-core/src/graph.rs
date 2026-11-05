@@ -311,7 +311,7 @@ impl ProjectIndex {
         interesantes.extend(commands.iter().map(String::as_str));
         let cmds: HashSet<&str> = commands.iter().map(String::as_str).collect();
         let mut visitados = HashSet::new();
-        ix.visitar(root, root_file, false, None, &interesantes, &cmds, &mut visitados);
+        ix.visitar(root, root_file, false, None, "", &interesantes, &cmds, &mut visitados);
         ix.datos_de_tikz.sort();
         ix.datos_de_tikz.dedup();
         ix.scan_ms = t0.elapsed().as_millis() as u64;
@@ -321,7 +321,10 @@ impl ProjectIndex {
     /// `dentro`: el archivo con el `tikzpicture` desde el que se llegó a éste, y si ese dibujo está en un `figure` (todo lo que éste
     /// incluya es un dato de ese dibujo).
     #[allow(clippy::too_many_arguments)]
-    fn visitar(&mut self, root: &Path, rel: &str, en_parte: bool, dentro: Option<(&str, bool)>, interesantes: &HashSet<&str>, cmds: &HashSet<&str>, vistos: &mut HashSet<String>) {
+    /// `base`: the folder an `\import` set for this file (empty for none): with the `import` package, an `\input` inside an imported
+    /// file is read from the imported folder first.
+    #[allow(clippy::too_many_arguments)]
+    fn visitar(&mut self, root: &Path, rel: &str, en_parte: bool, dentro: Option<(&str, bool)>, base: &str, interesantes: &HashSet<&str>, cmds: &HashSet<&str>, vistos: &mut HashSet<String>) {
         if !vistos.insert(rel.to_string()) {
             return;
         }
@@ -348,7 +351,14 @@ impl ProjectIndex {
                 "includegraphics" => (EdgeKind::Graphics, c.args),
                 "bibliography" => (EdgeKind::Bib, c.args[0].split(',').map(|s| s.trim().to_string()).collect()),
                 "addbibresource" => (EdgeKind::Bib, c.args),
-                "import" | "subimport" => (EdgeKind::Import, vec![format!("{}/{}", c.args[0].trim().trim_end_matches('/'), c.args[1].trim())]),
+                "import" => (EdgeKind::Import, vec![format!("{}/{}", c.args[0].trim().trim_end_matches('/'), c.args[1].trim())]),
+                // `\subimport` is relative to the file it is written in
+                "subimport" => {
+                    let aqui = rel.rsplit_once('/').map_or("", |(d, _)| d);
+                    let dir = c.args[0].trim().trim_end_matches('/');
+                    let dir = if aqui.is_empty() { dir.to_string() } else if dir.is_empty() { aqui.to_string() } else { format!("{aqui}/{dir}") };
+                    (EdgeKind::Import, vec![if dir.is_empty() { c.args[1].trim().to_string() } else { format!("{dir}/{}", c.args[1].trim()) }])
+                }
                 "input" => (EdgeKind::Input, c.args),
                 "include" => (EdgeKind::Include, c.args),
                 "subfile" => (EdgeKind::Subfile, c.args),
@@ -363,6 +373,8 @@ impl ProjectIndex {
                 let target = match kind {
                     EdgeKind::Graphics => resolver_imagen(root, &raw),
                     EdgeKind::Bib => resolver_bib(root, &raw),
+                    // inside an imported file, its folder first and then the project's top
+                    _ if !base.is_empty() && !matches!(kind, EdgeKind::Import) => resolver_tex(root, &format!("{base}/{raw}")).or_else(|| resolver_tex(root, &raw)),
                     _ => resolver_tex(root, &raw),
                 };
                 aristas.push(Edge { kind, command: c.comando.clone(), raw, target, line: c.linea, en_tikz, en_figure });
@@ -401,7 +413,9 @@ impl ProjectIndex {
             if let (true, Some(t)) = (e.kind.estructural(), &e.target) {
                 if t.to_lowercase().ends_with(".tex") {
                     let desde = if e.en_tikz { Some((dentro.map_or(rel, |d| d.0), e.en_figure)) } else { None };
-                    self.visitar(root, t, en_parte || es_parte, desde, interesantes, cmds, vistos);
+                    // an imported file sets its folder for what it inputs; anything else passes the current one on
+                    let carpeta = if e.kind == EdgeKind::Import { t.rsplit_once('/').map_or("", |(d, _)| d).to_string() } else { base.to_string() };
+                    self.visitar(root, t, en_parte || es_parte, desde, &carpeta, interesantes, cmds, vistos);
                 }
             }
         }

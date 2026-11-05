@@ -35,9 +35,38 @@ async function engineRoot(root: string): Promise<string | null> {
  */
 async function projectFolder(root: string): Promise<string> {
 	const main = await engineRoot(root);
-	if (!main || !/[\\/]/.test(main)) return root;
-	const folder = joinPath(root, dirname(main));
-	return (await fileService.exists(joinPath(folder, 'latexfrog.json'))) ? folder : root;
+	if (main) {
+		if (!/[\\/]/.test(main)) return root;
+		// a configuration saved beside a subfolder's main file (as setup once did) still means the subfolder
+		return (await fileService.exists(joinPath(root, main))) ? joinPath(root, dirname(main)) : root;
+	}
+	if (await fileService.exists(joinPath(root, 'latexviewer.json'))) return root;
+	return (await documentFolder(root)) ?? root;
+}
+
+/** a line that starts a document, outside a comment */
+const DOCUMENTCLASS = /^[^%\n]*\\documentclass\b/m;
+/** how deep below the opened folder a main file is looked for, and how many files are read at most */
+const DOCUMENT_DEPTH = 3;
+const DOCUMENT_READS = 300;
+
+/**
+ * LatexFrog: the folder of a repository whose LaTeX lives in a subfolder (`repo/Proyecto/book.tex`). Null when a document starts at
+ * the top or the documents sit in more than one folder: the opened folder stays.
+ */
+async function documentFolder(root: string): Promise<string | null> {
+	const files = (await fileService.scanTexFiles(root).catch(() => [])).filter((f) => /\.tex$/i.test(f.path));
+	const depth = (f: { relPath: string }) => f.relPath.split(/[\\/]/).length;
+	const near = files.filter((f) => depth(f) <= DOCUMENT_DEPTH).sort((a, b) => depth(a) - depth(b)).slice(0, DOCUMENT_READS);
+	const roots = (
+		await Promise.all(near.map(async (f) => ((await readTextFile(f.path).catch(() => '')).match(DOCUMENTCLASS) ? f : null)))
+	).filter((f) => f !== null);
+	if (roots.length === 0 || roots.some((f) => depth(f) === 1)) return null;
+	const shallowest = depth(roots[0]);
+	const folders = new Set(roots.filter((f) => depth(f) === shallowest).map((f) => dirname(f.path)));
+	// the opened folder's separators: paths are matched as strings (the PDF on screen, the tree)
+	const sep = root.includes('\\') ? '\\' : '/';
+	return folders.size === 1 ? [...folders][0].replace(/[\\/]/g, sep) : null;
 }
 
 function show(root: string): void {
@@ -121,7 +150,8 @@ async function open(
  *  the file to land on; omit it for whichever tab was focused there last. */
 export async function openFolderInWindow(root: string, want?: string | null): Promise<OpenOutcome> {
 	if (switchFolder) {
-		await switchFolder(root, want ?? undefined);
+		// a folder switched to from an open workspace lands on its project folder too, as a first open does
+		await switchFolder(await projectFolder(root), want ?? undefined);
 		return 'opened';
 	}
 	fileMode.current = false;

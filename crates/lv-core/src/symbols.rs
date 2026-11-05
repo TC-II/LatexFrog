@@ -271,7 +271,53 @@ fn escanear(texto: &str) -> Vec<Cmd> {
     out
 }
 
-fn titulo_legible(t: &str) -> String {
+/// The balanced `{...}` group that starts at byte `i` (after spaces): its contents and the byte after it.
+pub(crate) fn grupo(t: &str, i: usize) -> Option<(&str, usize)> {
+    let start = i + t[i..].len() - t[i..].trim_start().len();
+    if !t[start..].starts_with('{') {
+        return None;
+    }
+    let mut depth = 0;
+    for (k, c) in t[start..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((&t[start + 1..start + k], start + k + 1));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// `\texorpdfstring{TeX}{text}` reads as its text: keeping both showed "$H(s)$H(s)".
+fn sin_texorpdfstring(t: &str) -> String {
+    const CMD: &str = "\\texorpdfstring";
+    let mut out = String::new();
+    let mut rest = t;
+    while let Some(at) = rest.find(CMD) {
+        out.push_str(&rest[..at]);
+        let after = at + CMD.len();
+        match grupo(rest, after).and_then(|(_, j)| grupo(rest, j)) {
+            Some((text, end)) => {
+                out.push_str(text);
+                rest = &rest[end..];
+            }
+            None => {
+                out.push_str(CMD);
+                rest = &rest[after..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+pub(crate) fn titulo_legible(t: &str) -> String {
+    let t = sin_texorpdfstring(t);
     let mut out = String::new();
     let mut chars = t.chars().peekable();
     while let Some(c) = chars.next() {
@@ -295,7 +341,8 @@ fn titulo_legible(t: &str) -> String {
                     out.push(' ');
                 }
             }
-            '{' | '}' => {}
+            // math shifts go (`$H(s)$` reads `H(s)`); an escaped `\$` stays, above
+            '{' | '}' | '$' => {}
             '~' => out.push(' '),
             c => out.push(c),
         }
@@ -696,6 +743,18 @@ impl Symbols {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_title_with_texorpdfstring_reads_as_its_text() {
+        assert_eq!(titulo_legible(r"Propiedades de \texorpdfstring{$H(s)$}{H(s)}"), "Propiedades de H(s)");
+        assert_eq!(titulo_legible(r"A \texorpdfstring {$\alpha$} {alfa} y B"), "A alfa y B");
+    }
+
+    #[test]
+    fn math_shifts_leave_the_title_and_an_escaped_dollar_stays() {
+        assert_eq!(titulo_legible(r"Respuesta de $H(s)$"), "Respuesta de H(s)");
+        assert_eq!(titulo_legible(r"Costo en \$ por unidad"), "Costo en $ por unidad");
+    }
 
     fn proyecto(archivos: &[(&str, &str)]) -> tempfile::TempDir {
         let d = tempfile::tempdir().unwrap();

@@ -265,11 +265,13 @@ fn candidatas(root: &Path, archivos: &[Archivo], condiciones: &BTreeSet<String>,
     // La recomendada es, de las independientes (nadie las incluye, sin `\includeonly` ni flags), la que alcanza más archivos: el documento
     // del libro alcanza el preámbulo, el cuerpo y todos los capítulos; un documento de prueba suelto, casi nada. A igual alcance, la
     // más cerca de la raíz del proyecto.
+    // A document at the top of the project wins over one in a subfolder, whatever each reaches: as on Overleaf, the main file sits at
+    // the top and a subfolder's document is a preview or a test (a style lab that inputs its data files reached more and won).
     let mejor = |roles: &[RolDeRaiz]| {
         v.iter()
             .enumerate()
             .filter(|(_, c)| roles.contains(&c.rol))
-            .max_by_key(|(_, c)| (c.alcanza, std::cmp::Reverse(c.archivo.matches('/').count())))
+            .max_by_key(|(_, c)| (std::cmp::Reverse(c.archivo.matches('/').count()), c.alcanza))
             .map(|(i, _)| i)
     };
     let recomendada = mejor(&[RolDeRaiz::Principal]).or_else(|| mejor(&[RolDeRaiz::Otra])).or(if v.is_empty() { None } else { Some(0) });

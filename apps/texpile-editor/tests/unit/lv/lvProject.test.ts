@@ -4,16 +4,42 @@ import { resolveGotoTarget } from '$lib/editor/source/sourceGotoTarget';
 import { refineClick } from '$lib/lv/lvSync';
 import { fileTier, fuzzyScore } from '$lib/palette/paletteFilter';
 import { jobReason } from '$lib/lv/lvFormat';
-import { cleanBlock, groupFigures, type Figure } from '$lib/lv/lvFigures';
+import { cleanBlock, figureTree, type Figure, type Heading } from '$lib/lv/lvFigures';
 import { exportName, figuresOf, flagUse, outputsOf, partCommands, removeVariable, setFigures, setFlag, setOutputs, setPartCommands, setVariable, useDetected, type ConfigJson } from '$lib/lv/lvProfiles';
 
-const figure = (nombre: string, archivo: string | null, estado: Figure['estado']): Figure => ({ nombre, slug: null, archivo, estado, bytes: 1 });
+const figure = (nombre: string, estado: Figure['estado'], at?: { codigo: string; linea: number; archivo?: string; dondeLinea?: number }): Figure => ({
+	nombre,
+	slug: null,
+	archivo: at?.archivo ?? at?.codigo ?? null,
+	estado,
+	bytes: 1,
+	codigo: at?.codigo ?? null,
+	linea: at?.linea ?? null,
+	dondeLinea: at?.dondeLinea ?? at?.linea ?? null
+});
 
 describe('figures', () => {
-	it('groups by file, alphabetically, with the ones without a file last', () => {
-		const groups = groupFigures([figure('a', 'z.tex', 'aldia'), figure('b', null, 'fallo'), figure('c', 'a.tex', 'falta'), figure('d', 'a.tex', 'fallo')]);
-		expect(groups.map((g) => g.file)).toEqual(['a.tex', 'z.tex', null]);
-		expect(groups[0]).toMatchObject({ done: 0, pending: 1, failed: 1 });
+	const headings: Heading[] = [
+		{ level: 1, title: 'Circuits', file: 'ch1.tex', line: 1 },
+		{ level: 2, title: 'Resistors', file: 'ch1.tex', line: 2 },
+		{ level: 2, title: 'Empty', file: 'ch1.tex', line: 9 },
+		{ level: 1, title: 'Filters', file: 'ch2.tex', line: 1 }
+	];
+
+	it('places each figure under the heading above its code, and leaves out headings without figures', () => {
+		const tree = figureTree(headings, [
+			figure('wire', 'aldia', { codigo: 'ch1.tex', linea: 5 }),
+			figure('cover', 'aldia', { codigo: 'main.tex', linea: 3 }),
+			figure('cap', 'pendiente', { codigo: 'figs/cap.tex', linea: 2, archivo: 'ch2.tex', dondeLinea: 7 }),
+			figure('gone', 'aldia')
+		]);
+		expect(tree.nodes.map((n) => n.heading.title)).toEqual(['Circuits', 'Filters']);
+		expect(tree.nodes[0].children.map((n) => [n.heading.title, n.figures.map((f) => f.nombre)])).toEqual([['Resistors', ['wire']]]);
+		// a figure file with no heading of its own goes where the chapter inputs it
+		expect(tree.nodes[1]).toMatchObject({ total: 1, changed: 1, failed: 0 });
+		expect(tree.nodes[1].figures.map((f) => f.nombre)).toEqual(['cap']);
+		expect(tree.beforeHeadings.map((f) => f.nombre)).toEqual(['cover']);
+		expect(tree.notInCode.map((f) => f.nombre)).toEqual(['gone']);
 	});
 
 	it('only a complete list of today and of this root allows cleaning', () => {

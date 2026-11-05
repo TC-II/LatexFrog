@@ -35,7 +35,7 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 - [x] History, doctor, orphans, project lock.
 - [x] Config editor with Detect, validation and diff; project migration.
 - [x] Visual profile editor, active profile beside Compile, automatic compile from the profile.
-- [x] Parts panel and Ctrl+Alt+C; SyncTeX to the exact word; Follow.
+- [x] SyncTeX to the exact word; Follow. The Parts panel and Ctrl+Alt+C were removed: a profile's parts do that job.
 - [x] Project screen: detection reasons per section and the variables form.
 - [x] Figures panel per figure, as a tab of the bottom dock.
 - [x] Inverse SyncTeX with the neighbour search; a selection of lines refines each line.
@@ -46,6 +46,9 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 - [x] Profile variables override the document: the engine compiles copies without the unguarded definitions. A profile that leaves parts out defines the partial flags.
 - [x] Figures and Parts are tabs of the sidebar's Project outline. Baked figures show as their picture in the visual editor, with a button to their code.
 - [x] The PDF keeps fitting its pane's width; Follow shows its state and starts on; inverse SyncTeX centres the line and finds the word in the visual editor too.
+- [x] Figures tab as a tree of the document's headings. Check figures compares the code with the cache without compiling; Compile changed compiles only what changed. Colors show only after a check of the current code.
+- [x] Any LaTeX folder opens as a LatexFrog project: the configuration screen comes first, and a repository with the document in a subfolder opens that subfolder.
+- [x] `fixtures/overleaf`: ten projects laid out as Overleaf lays them out, checked by `tests/overleaf.rs`. Audited against the 61 projects of `01-Overleaf`: every main file and heading found; the five that fail to compile fail the same way with plain latexmk (or have no document).
 
 ### M4. Release
 - [ ] Installer that bundles the sidecar (`extraResources`).

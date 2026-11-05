@@ -1,0 +1,15 @@
+{
+  "main": "main.tex",
+  "parts": 1,
+  "headings": [
+    "Circuits",
+    "Resistors",
+    "Capacitors"
+  ],
+  "figures": "app",
+  "figureCaptions": [
+    "Cover drawing",
+    "A wire",
+    "A capacitor drawn in its own file"
+  ]
+}

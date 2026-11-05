@@ -341,6 +341,9 @@ pub fn render_latexmkrc() -> String {
         "$emulate_aux = 0;",
         "$ENV{TEXINPUTS} = \".latexfrog/drivers$sep\" . ($ENV{TEXINPUTS} // '');",
         "$ENV{INDEXSTYLE} = getcwd() . ($ENV{INDEXSTYLE} ? $sep . $ENV{INDEXSTYLE} : '');",
+        // bibtex runs inside the build folder: `\bibliography{refs}` and a project `.bst` are found from the project's top
+        "$ENV{BIBINPUTS} = getcwd() . $sep . ($ENV{BIBINPUTS} // '');",
+        "$ENV{BSTINPUTS} = getcwd() . $sep . ($ENV{BSTINPUTS} // '');",
         "",
     ]
     .join("\n")
@@ -862,6 +865,7 @@ mod tests {
         assert!(rc.contains("TEXINPUTS"));
         // latexmk corre makeindex desde el directorio de salida: el estilo del proyecto se busca en la raíz.
         assert!(rc.contains("$ENV{INDEXSTYLE} = getcwd()"));
+        assert!(rc.contains("$ENV{BIBINPUTS} = getcwd()"));
         assert!(rc.ends_with('\n') && !rc.contains('\r'));
     }
 

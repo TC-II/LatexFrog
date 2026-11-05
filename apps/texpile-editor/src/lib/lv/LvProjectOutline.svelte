@@ -1,19 +1,17 @@
 <script lang="ts">
 	// The sidebar's Project outline: everything about the whole project rather than the open file, in one place. Contents lists the
-	// chapters and sections, Parts what a profile compiles, Figures the figure cache. One sidebar entry for all three keeps
+	// chapters and sections, Figures the figure cache. One sidebar entry for both keeps
 	// Texpile's sidebar change down to a single view.
 	import { m } from '$lib/paraglide/messages';
 	import { lvProject, type OutlineTab } from './lvEngine.svelte';
 	import LvFiguresPanel from './LvFiguresPanel.svelte';
 	import LvFrog from './LvFrog.svelte';
 	import LvOutline from './LvOutline.svelte';
-	import LvPartsPanel from './LvPartsPanel.svelte';
 
 	let { onOpenFileAt }: { onOpenFileAt: (file: string, line: number) => void } = $props();
 
 	const TABS: [OutlineTab, () => string][] = [
 		['contents', () => m.lv_outline_contents()],
-		['parts', () => m.lv_parts_title()],
 		['figures', () => m.lv_figures_tab()]
 	];
 </script>
@@ -32,9 +30,7 @@
 			>
 		{/each}
 	</div>
-	{#if lvProject.outlineTab === 'parts'}
-		<LvPartsPanel onOpenFile={onOpenFileAt} />
-	{:else if lvProject.outlineTab === 'figures'}
+	{#if lvProject.outlineTab === 'figures'}
 		<div class="min-h-0 flex-1"><LvFiguresPanel /></div>
 	{:else}
 		<LvOutline {onOpenFileAt} />

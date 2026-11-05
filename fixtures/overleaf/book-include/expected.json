@@ -1,0 +1,16 @@
+{
+  "main": "main.tex",
+  "parts": 4,
+  "headings": [
+    "Preface",
+    "Foundations",
+    "Sets",
+    "Definitions",
+    "Operations",
+    "Functions",
+    "Maps",
+    "Applications",
+    "Filters",
+    "Low-pass filters and their design"
+  ]
+}

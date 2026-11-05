@@ -1,0 +1,12 @@
+{
+  "main": "main.tex",
+  "parts": 0,
+  "headings": [
+    "Introduction",
+    "Method",
+    "Setup",
+    "Measurements",
+    "Results",
+    "Acknowledgements"
+  ]
+}

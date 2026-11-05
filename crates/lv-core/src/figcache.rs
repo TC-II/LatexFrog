@@ -245,6 +245,10 @@ pub struct Figlist {
     /// misma que la de ahora, no cambió nada que pueda cambiar una figura y el listado previo a un build se saltea.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub huella: Option<String>,
+    /// `huella_de_figuras` when this list was made, baked or not. The same footprint today means the list still says which figures
+    /// changed; another means something was edited since and the states are not known until the next check.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub huella_listado: Option<String>,
     /// La raíz con que se armó la lista. Con otra raíz (que puede tener su propio `\includeonly`, como `cap_actual.tex` del libro) lo
     /// que lista no es lo mismo: una figlist sin raíz (de antes de F8b) **no vale**.
     #[serde(default, skip_serializing_if = "Option::is_none")]

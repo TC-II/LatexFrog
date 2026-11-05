@@ -47,14 +47,18 @@
 		<p class="p-2 opacity-60">{m.lv_outline_empty()}</p>
 	{:else}
 		{#each symbols.sections as s, i (`${s.file}:${s.line}:${i}`)}
+			{@const parent = (symbols.sections[i + 1]?.level ?? -1) > s.level}
 			<button
 				type="button"
-				class="hover:preset-tonal block w-full truncate rounded py-0.5 pr-1 text-left {s.level <= 1 ? 'font-semibold' : ''} {isActive(s.file) ? 'text-primary-ink' : ''}"
+				class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left {s.level <= 1 ? 'font-semibold' : ''} {parent ? 'text-[0.95rem]' : ''} {isActive(s.file) ? 'text-primary-ink' : ''}"
 				style="padding-left: {4 + Math.max(0, s.level - 1) * 14}px"
 				title="{s.file}:{s.line}"
+				data-parent={parent || undefined}
 				onclick={() => onOpenFileAt(joinPath(root, s.file), s.line)}
 			>
-				{s.title || m.lv_outline_untitled()}
+				<!-- a heading with headings under it: a dot, so the tree reads at a glance -->
+				<span class="size-1.5 shrink-0 rounded-full {parent ? 'bg-current' : 'bg-transparent'}" aria-hidden="true"></span>
+				<span class="truncate">{s.title || m.lv_outline_untitled()}</span>
 			</button>
 		{/each}
 	{/if}

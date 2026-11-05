@@ -5,6 +5,8 @@
 	import { X } from '@lucide/svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { lvProject } from './lvEngine.svelte';
+	import { joinPath } from '$lib/workspace/fileSystem';
+	import { openFolderInWindow } from '$lib/workspace/openWorkspace';
 	import { compactDiff, lineDiff } from './lineDiff';
 	import LvFrog from './LvFrog.svelte';
 	import LvProfileEditor from './LvProfileEditor.svelte';
@@ -170,6 +172,16 @@
 			}
 			onClose();
 		});
+
+	/** the main file's folder when it is not the open one: that folder is the project */
+	const subfolder = $derived(typeof config?.root === 'string' && /[\\/]/.test(config.root) ? config.root.replace(/[\\/][^\\/]*$/, '') : null);
+
+	async function openSubfolder() {
+		const root = lvProject.folderRoot;
+		if (!root || !subfolder) return;
+		await close();
+		await openFolderInWindow(joinPath(root, subfolder));
+	}
 
 	async function close() {
 		// a plain folder held open only for this dialog goes back to the terminal path
@@ -337,10 +349,17 @@
 		{#if error}
 			<p class="text-error-500" data-testid="lv-config-failure">{error}</p>
 		{/if}
+		{#if subfolder}
+			<!-- the engine compiles from the project's folder: a main file below it would fail on its first input -->
+			<p class="text-warning-500 flex items-center gap-2" data-testid="lv-config-subfolder">
+				{m.lv_config_subfolder({ folder: subfolder })}
+				<button class="rounded border border-surface-300-700 px-2 py-0.5" onclick={openSubfolder}>{m.lv_config_subfolder_open({ folder: subfolder })}</button>
+			</p>
+		{/if}
 		<div class="flex justify-end gap-2">
 			<button class="rounded px-2 py-1 hover:bg-surface-200-800" onclick={close}>{m.lv_close()}</button>
-			<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-save" disabled={busy || !validation?.ok} onclick={() => save()}>{m.lv_config_save()}</button>
-			<button class="rounded bg-primary-500 px-3 py-1 text-white" data-testid="lv-config-run" title={m.lv_config_run_title()} disabled={busy || !validation?.ok || !editing} onclick={() => save(true)}>{m.lv_config_run()}</button>
+			<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-save" disabled={busy || !validation?.ok || !!subfolder} onclick={() => save()}>{m.lv_config_save()}</button>
+			<button class="rounded bg-primary-500 px-3 py-1 text-white" data-testid="lv-config-run" title={m.lv_config_run_title()} disabled={busy || !validation?.ok || !editing || !!subfolder} onclick={() => save(true)}>{m.lv_config_run()}</button>
 		</div>
 	</div>
 </div>

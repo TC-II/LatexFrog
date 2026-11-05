@@ -1,0 +1,9 @@
+{
+  "folder": "paper",
+  "main": "main.tex",
+  "parts": 0,
+  "headings": [
+    "Only Section",
+    "Body"
+  ]
+}

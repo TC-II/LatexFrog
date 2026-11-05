@@ -40,6 +40,8 @@ pub(super) struct BakeJob {
     pub luego_build: Option<String>,
     /// Qué la pidió, para el historial: `manual`, `antes del build de <perfil>` o `el resto`.
     pub motivo: String,
+    /// Only list and compare (the Figures panel's Check): which figures changed is written to the list and nothing is baked.
+    pub solo_listar: bool,
 }
 
 /// Lo que hace falta para cancelar la cocción en curso.
@@ -101,9 +103,15 @@ pub struct FiguraView {
     pub slug: Option<String>,
     /// El archivo que declara el slug (`\FigurasDe{slug}`), si se encontró.
     pub archivo: Option<String>,
-    /// `aldia`, `pendiente`, `fallo` o `falta`.
+    /// `aldia`, `pendiente`, `fallo`, `falta` or `sinrevisar` (in the code, not in the last check).
     pub estado: String,
     pub bytes: u64,
+    /// Where its code is: the file and the line of its `tikzpicture`. None for a figure of the list that is no longer in the code.
+    pub codigo: Option<String>,
+    pub linea: Option<u32>,
+    /// The line of `archivo` that brings it (the `tikzpicture` or its `\input`): the tree places it under the section above it.
+    pub donde_linea: Option<u32>,
+    pub caption: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -146,6 +154,9 @@ pub struct FiguresStatus {
     pub necesita_cocer: bool,
     pub cocinando: Option<Cocinando>,
     pub errores: Vec<ErrorFigura>,
+    /// The last check still holds: nothing that can change a figure was edited since. False means the states may be stale.
+    pub revisado: bool,
+    pub sin_revisar: usize,
 }
 
 fn ahora_ms() -> u64 {
@@ -433,7 +444,18 @@ impl Session {
     pub fn request_bake(self: &Arc<Self>) -> Result<BuildAck> {
         self.guardia()?;
         self.plan_bake(&FaseBake::Todo)?; // un error de configuración se dice acá, no en un hilo
-        match self.cola.pedir(Job::Bake(BakeJob { fase: FaseBake::Todo, luego_build: None, motivo: "manual".into() })) {
+        self.pedir_bake(BakeJob { fase: FaseBake::Todo, luego_build: None, motivo: "manual".into(), solo_listar: false })
+    }
+
+    /// The Figures panel's Check: lists the whole document and compares each figure with the cache, without baking anything.
+    pub fn request_check(self: &Arc<Self>) -> Result<BuildAck> {
+        self.guardia()?;
+        self.plan_bake(&FaseBake::Todo)?;
+        self.pedir_bake(BakeJob { fase: FaseBake::Todo, luego_build: None, motivo: "check".into(), solo_listar: true })
+    }
+
+    fn pedir_bake(self: &Arc<Self>, job: BakeJob) -> Result<BuildAck> {
+        match self.cola.pedir(Job::Bake(job)) {
             Pedido::Correr(t) => match self.ejecutar(&t, false) {
                 Ok(id) => Ok(BuildAck::Started { id }),
                 Err(e) => {
@@ -476,7 +498,7 @@ impl Session {
             if let (Some(r), Ok(mut l)) = (&razon, self.listado_decidido.lock()) {
                 *l = Some(historial::Listado { salteado: false, motivo: r.clone() });
             }
-            match self.cola.pedir(Job::Bake(BakeJob { fase, luego_build: Some(perfil.clone()), motivo: format!("antes del build de {perfil}") })) {
+            match self.cola.pedir(Job::Bake(BakeJob { fase, luego_build: Some(perfil.clone()), motivo: format!("antes del build de {perfil}"), solo_listar: false })) {
                 Pedido::Correr(t) => match self.ejecutar(&t, false) {
                     Ok(id) => return Ok(BuildAck::Started { id }),
                     Err(_) => {
@@ -580,7 +602,7 @@ impl Session {
             if let Some(p) = &b.luego_build {
                 let _ = self.cola.pedir(Job::Build { perfil: p.clone() });
             }
-            let _ = self.cola.pedir(Job::Bake(BakeJob { fase: FaseBake::Todo, luego_build: None, motivo: "el resto".into() }));
+            let _ = self.cola.pedir(Job::Bake(BakeJob { fase: FaseBake::Todo, luego_build: None, motivo: "el resto".into(), solo_listar: false }));
         } else if let Some(p) = &b.luego_build {
             // La cocción falló antes de empezar (no hay motor, no compila hasta el listado): el build igual se intenta, que es
             // lo que el usuario pidió, y dirá su propio error.
@@ -630,7 +652,12 @@ impl Session {
             d.a_cocinar = pend.len() as u32;
         }
         let completa = plan.completa;
-        self.guardar_lista(plan, &nombres, &pend, &[], stamp.as_deref(), None);
+        // a check that finds nothing to bake leaves the cache as good as a full bake: the next build may skip its listing
+        let al_dia = b.solo_listar && completa && pend.is_empty() && self.bake.rotas.lock().map(|r| r.is_empty()).unwrap_or(false);
+        self.guardar_lista(plan, &nombres, &pend, &[], stamp.as_deref(), if al_dia { plan.huella.clone() } else { None });
+        if b.solo_listar {
+            return Ok(ResultadoCoccion { restantes: pend, ..Default::default() });
+        }
         let total = pend.len() as u32;
         if let Ok(mut g) = self.bake.cocinando.lock() {
             if let Some(c) = g.as_mut() {
@@ -695,6 +722,7 @@ impl Session {
                 pendientes: pendientes.to_vec(),
                 fallidas: fallidas.to_vec(),
                 huella,
+                huella_listado: plan.huella.clone(),
                 raiz: Some(plan.root_rel.clone()),
                 partes: Some(plan.partes.clone()),
             },
@@ -732,14 +760,29 @@ impl Session {
         } else {
             figcache::slugs_por_archivo(&self.root, &ix.reachable).into_iter().map(|(slug, archivo)| (archivo, slug)).collect()
         };
-        // Un archivo sin slug propio usa el de su parte (las figuras de un `\input` dentro de un capítulo llevan el del capítulo).
-        let slug = por_archivo.get(&rel).cloned().or_else(|| {
-            let parte = ix.part_of(&rel)?;
-            ix.parts[parte].file.as_ref().and_then(|f| por_archivo.get(f)).cloned()
-        });
-        let Some(slug) = slug else { return Ok(vec![]) };
-        let texto = std::fs::read_to_string(self.root.join(&rel)).map_err(|e| Error::Io(format!("{rel}: {e}")))?;
-        Ok(crate::figimages::figuras_del_archivo(&self.root, &rel, &texto, &fcfg.dir, &sello, &slug, fcfg.only_in_figure_env))
+        // A file without a slug of its own is counted inside its part's file (the figures of an `\input` in a chapter carry the
+        // chapter's name and follow the chapter's count): the part's file is scanned and only this file's figures kept.
+        let duenio = if por_archivo.contains_key(&rel) {
+            Some(rel.clone())
+        } else {
+            ix.part_of(&rel).and_then(|p| ix.parts[p].file.clone()).filter(|f| por_archivo.contains_key(f))
+        };
+        let Some(duenio) = duenio else { return Ok(vec![]) };
+        let slug = por_archivo[&duenio].clone();
+        let texto = std::fs::read_to_string(self.root.join(&duenio)).map_err(|e| Error::Io(format!("{duenio}: {e}")))?;
+        let todas = crate::figimages::figuras_del_archivo(&self.root, &duenio, &texto, &fcfg.dir, &sello, &slug, fcfg.only_in_figure_env, &por_archivo);
+        if duenio == rel {
+            return Ok(todas);
+        }
+        Ok(todas
+            .into_iter()
+            .filter(|f| f.archivo == rel)
+            .map(|mut f| {
+                f.snippet = f.propio.clone();
+                f.donde_linea = f.linea;
+                f
+            })
+            .collect())
     }
 
     pub fn figures_status(&self) -> Result<FiguresStatus> {
@@ -753,10 +796,12 @@ impl Session {
         let estado = figcache::estado_del_cache(&figs, hoy.as_deref());
         let lista = figcache::leer_figlist(&self.root);
         let mut vale = false;
+        let mut revisado = false;
         let slugs = match &rf {
             Some(rf) => {
                 let ix = ProjectIndex::build(&self.root, rf, &cfg.parts.commands);
                 vale = lista.as_ref().zip(hoy.as_deref()).is_some_and(|(l, h)| l.completa && l.vale_para(h, rf, &self.partes_con_figuras(&fcfg, &ix)));
+                revisado = vale && lista.as_ref().and_then(|l| l.huella_listado.as_ref()).is_some_and(|h| Some(h) == self.huella_actual(&ix, &fcfg).as_ref());
                 if fcfg.modo == Modo::App {
                     // Los slugs los puso la app (a partir del nombre de cada archivo): se invierte esa tabla.
                     figcache::slugs_app(&ix.reachable).into_iter().map(|(archivo, slug)| (slug, archivo)).collect()
@@ -768,9 +813,54 @@ impl Session {
         };
         let por_base: std::collections::HashMap<&str, &figcache::FiguraEnCache> = figs.iter().map(|f| (f.nombre.as_str(), f)).collect();
         let mut vistas = Vec::new();
+        let corto_de = |n: &String| crate::figures::nombre_corto(n).to_string();
+        let listadas: std::collections::HashSet<String> = lista.iter().flat_map(|l| l.nombres.iter().map(corto_de)).collect();
+        let pendientes_l: std::collections::HashSet<String> = lista.iter().flat_map(|l| l.pendientes.iter().map(corto_de)).collect();
+        let fallidas_l: std::collections::HashSet<String> = lista.iter().flat_map(|l| l.fallidas.iter().map(corto_de)).collect();
+        // Every figure the code has today, with where it is: the list only knows the figures of the last check.
+        let mut en_codigo: std::collections::HashSet<String> = std::collections::HashSet::new();
+        if let Some(sello) = hoy.as_deref().filter(|_| fcfg.modo != Modo::Off) {
+            let propios: BTreeMap<String, String> = slugs.iter().map(|(slug, archivo)| (archivo.clone(), slug.clone())).collect();
+            for (slug, archivo) in &slugs {
+                let Ok(texto) = std::fs::read_to_string(self.root.join(archivo)) else { continue };
+                for f in crate::figimages::figuras_del_archivo(&self.root, archivo, &texto, &fcfg.dir, sello, slug, fcfg.only_in_figure_env, &propios) {
+                    if !en_codigo.insert(f.nombre.clone()) {
+                        continue;
+                    }
+                    let en_cache = por_base.get(f.nombre.as_str()).copied();
+                    // Not in the last check: a figure added since, or one this build does not draw (a chapter only a reduced
+                    // profile inputs). Compiling would not make it, so it is not counted as missing.
+                    let estado = if fallidas_l.contains(&f.nombre) || en_cache.is_some_and(|c| c.log && !c.pdf) {
+                        "fallo"
+                    } else if !listadas.contains(&f.nombre) {
+                        "sinrevisar"
+                    } else if !en_cache.is_some_and(|c| c.pdf) {
+                        "falta"
+                    } else if pendientes_l.contains(&f.nombre) {
+                        "pendiente"
+                    } else {
+                        "aldia"
+                    };
+                    vistas.push(FiguraView {
+                        nombre: format!("{}/{}", fcfg.dir.trim_end_matches('/'), f.nombre),
+                        slug: Some(slug.clone()),
+                        archivo: Some(archivo.clone()),
+                        estado: estado.into(),
+                        bytes: en_cache.map_or(0, |c| c.bytes),
+                        codigo: Some(f.archivo),
+                        linea: Some(f.linea),
+                        donde_linea: Some(f.donde_linea),
+                        caption: f.caption,
+                    });
+                }
+            }
+        }
         if let Some(l) = &lista {
             for n in &l.nombres {
                 let corto = crate::figures::nombre_corto(n);
+                if en_codigo.contains(corto) {
+                    continue;
+                }
                 let en_cache = por_base.get(corto).copied();
                 let slug = figcache::partir_nombre(corto).map(|(_, s, _)| s);
                 let archivo = slug.as_ref().and_then(|s| slugs.get(s)).cloned();
@@ -787,7 +877,7 @@ impl Session {
                 } else {
                     "aldia"
                 };
-                vistas.push(FiguraView { nombre: n.clone(), slug, archivo, estado: estado.into(), bytes: en_cache.map_or(0, |f| f.bytes) });
+                vistas.push(FiguraView { nombre: n.clone(), slug, archivo, estado: estado.into(), bytes: en_cache.map_or(0, |f| f.bytes), codigo: None, linea: None, donde_linea: None, caption: None });
             }
         }
         let errores = self
@@ -822,9 +912,11 @@ impl Session {
             pendientes: vistas.iter().filter(|v| v.estado == "pendiente" || v.estado == "falta").count(),
             fallidas: vistas.iter().filter(|v| v.estado == "fallo").count(),
             figlist: lista.as_ref().map(|l| FiglistView { fecha_ms: l.fecha_ms, total: l.nombres.len(), completa: l.completa, del_sello_de_hoy: Some(l.sello.as_str()) == hoy.as_deref(), vale }),
+            sin_revisar: vistas.iter().filter(|v| v.estado == "sinrevisar").count(),
             figuras: vistas,
             cocinando: self.bake.cocinando.lock().ok().and_then(|g| g.clone()),
             errores,
+            revisado,
         })
     }
 

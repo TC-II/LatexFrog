@@ -41,10 +41,11 @@ Every command except `open` needs an open project.
 | `status` | | `{building: bool, lockedBy: number or null}` |
 | `problems` | `profile` | `Problem[]` |
 | `symbols` *async* | | `Symbols`; `sections` is the project-wide outline |
-| `synctex-forward` | `file`, `line` | `SyncForward` or `null` |
+| `synctex-forward` | `file`, `line`, optional `profile` | `SyncForward` or `null`; `profile`, the PDF on screen, is used first when it holds the file |
 | `synctex-inverse` | `profile`, `page`, `x`, `y` | `SyncInverse` or `null` |
 | `pdf-for` | `file` | PDF path or `null`, the newest PDF that contains the file |
-| `figures-status` *async* | | `FiguresStatus` |
+| `figures-status` *async* | | `FiguresStatus`: every figure in the code with where it is (`codigo`, `linea`, `dondeLinea`, `caption`) and its `estado`; `revisado` says the last check is of the code as it is now |
+| `figures-check` | | `BuildAck`; lists the figures without baking any. `bake-finished.remaining` is how many changed or were never compiled |
 | `figures-bake` | | `BuildAck` |
 | `figures-clean-preview` *async* | | `Cleanup`; deletes nothing |
 | `figures-clean` *async* | | `Cleanup` |
