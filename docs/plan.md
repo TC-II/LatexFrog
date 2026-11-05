@@ -47,7 +47,7 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 
 ## Measured
 
-Book copy through `lv-sidecar`, part selection, 2026-11-04: first build 9.1 s, one-pass rebuild 2.0 s after a chapter edit, outline 50 ms for 199 sections. Compiling right after a build waits about 4 s more: the background figure listing runs first and only cedes when it ends. To fix.
+Book copy through `lv-sidecar`, part selection, 2026-11-04: first build 9.1 s, one-pass rebuild 2.0 s after a chapter edit, outline 50 ms for 199 sections. Compiling during the background figure listing waited about 4 s more; the listing now stops within 10 ms and runs again after the build: 2.1 to 2.6 s for three such rebuilds.
 
 ## Known issue accepted
 

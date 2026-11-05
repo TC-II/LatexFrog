@@ -612,7 +612,11 @@ impl Session {
         }
 
         let t_listado = std::time::Instant::now();
-        let nombres = self.cocinero.listar(&plan.opciones, job, cancelado)?;
+        // Sólo cede el listado del resto, igual que su cocción (abajo): el de un perfil es el que su build está esperando.
+        let cede = || matches!(b.fase, FaseBake::Todo) && self.cola.build_pendiente();
+        let Some(nombres) = self.cocinero.listar_cediendo(&plan.opciones, job, cancelado, &cede)? else {
+            return Ok(ResultadoCoccion { cedio: true, ..Default::default() });
+        };
         let listing_ms = t_listado.elapsed().as_millis() as u64;
         let (stamp, usa_sello) = {
             let d = self.lock()?;
@@ -649,7 +653,6 @@ impl Session {
         };
         // La cocción de las figuras del perfil no cede el paso: el build que la espera es justo el que la pidió. La del resto
         // sí: un pedido de build interrumpe, y se retoma cuando termine.
-        let cede = || matches!(b.fase, FaseBake::Todo) && self.cola.build_pendiente();
         let res = self.cocinero.cocer(&plan.opciones, &pend, job, cancelado, &cede, &avance)?;
         figures::quitar_residuos_de_subcompilacion(root, cocinero::JOB_COCINA);
         let sin_cocer: Vec<String> = res.restantes.iter().cloned().chain(res.rotas.iter().map(|f| f.nombre.clone())).collect();

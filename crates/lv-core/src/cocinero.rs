@@ -132,6 +132,12 @@ impl Cocinero {
     /// la figlist. Los `.md5` que pgf escribe quedan en `.latexfrog/build/cocina/<cache>/`: `figcache::pendientes` los compara con los del
     /// cache compartido y recién una figura verificada los instala.
     pub fn listar(&self, o: &Opciones, job: &Arc<Job>, cancelado: &AtomicBool) -> Result<Vec<String>> {
+        Ok(self.listar_cediendo(o, job, cancelado, &|| false)?.unwrap_or_default())
+    }
+
+    /// El listado, cortándolo si `cede()` se vuelve verdadero (devuelve `None`). Se probó esperarlo y un Compile justo después de
+    /// otro demoraba unos 4 s en el libro: el listado del resto no tiene nada que entregar y se repite después del build.
+    pub fn listar_cediendo(&self, o: &Opciones, job: &Arc<Job>, cancelado: &AtomicBool, cede: &dyn Fn() -> bool) -> Result<Option<Vec<String>>> {
         let salida = build_dir(&o.root, PERFIL_COCINA);
         // Lo que dejó un listado anterior no puede colarse en éste (un `.md5` viejo haría ver una figura como al día).
         let _ = fs::remove_file(salida.join(format!("{JOB_COCINA}.figlist")));
@@ -156,6 +162,13 @@ impl Cocinero {
                 let _ = hijo.wait();
                 return Err(Error::Other("cancelado".into()));
             }
+            if cede() {
+                // Queda sospechoso: el `.aux` de un listado cortado puede estar truncado.
+                job.terminate();
+                let _ = hijo.kill();
+                let _ = hijo.wait();
+                return Ok(None);
+            }
             match hijo.try_wait() {
                 Ok(Some(st)) => break st,
                 Ok(None) => std::thread::sleep(Duration::from_millis(20)),
@@ -172,7 +185,7 @@ impl Cocinero {
         if estado.success() {
             clear_suspect(&o.root, PERFIL_COCINA);
         }
-        Ok(crate::figcache::parsear_figlist(&texto))
+        Ok(Some(crate::figcache::parsear_figlist(&texto)))
     }
 
     fn lanzar_figura(&self, o: &Opciones, nombre: &str, job: &Job) -> Result<Child> {
@@ -364,6 +377,17 @@ Set-Content "$job.log" 'This is pdfTeX'
         assert!(cocina.join("figuras-cache/S-a-0.md5").is_file());
         assert!(!cocina.join("figuras-cache/viejo.md5").exists());
         assert!(!d.path().join("figuras-cache/S-a-0.md5").exists(), "el listado no toca el cache compartido: eso es lo que daría la figura por buena");
+    }
+
+    #[test]
+    fn un_listado_que_cede_se_corta_enseguida_y_queda_sospechoso() {
+        let (d, o, _) = proyecto();
+        let c = Cocinero::con_programa("powershell", ["-NoProfile", "-Command", "Start-Sleep -Seconds 20"].iter().map(OsString::from).collect());
+        let inicio = Instant::now();
+        let r = c.listar_cediendo(&o, &job(), &sin_cancelar(), &|| inicio.elapsed() > Duration::from_millis(300)).unwrap();
+        assert_eq!(r, None);
+        assert!(inicio.elapsed() < Duration::from_secs(5), "no espera al listado: {:?}", inicio.elapsed());
+        assert!(build_dir(d.path(), PERFIL_COCINA).join(".sospechoso").is_file());
     }
 
     #[test]
