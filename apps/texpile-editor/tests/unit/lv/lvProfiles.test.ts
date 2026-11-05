@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { choiceLabel, compileTarget, defaultProfiles, emptyProfile, inEnglish, outputName, profileId, relativeFolder, removeProfile, rows, selectionOf, setProfile, toParts, variableLabel, type ConfigJson } from '$lib/lv/lvProfiles';
+import { compileTarget, defaultProfiles, emptyProfile, outputName, parseConfig, profileId, relativeFolder, removeProfile, rows, selectionOf, setProfile, toParts, watermarkDefaults, watermarkPreviewText, type ConfigJson } from '$lib/lv/lvProfiles';
 
 describe('profile config', () => {
 	it('keeps what it does not know and does not write defaults', () => {
@@ -19,9 +19,14 @@ describe('profile config', () => {
 		expect(profileId('A', ['a'])).toBe('a-2');
 	});
 
-	it('starts a new profile empty, without footer where the project can say so', () => {
-		const p = emptyProfile({ variables: { Pie: { choices: ['completo', 'ninguno'] } } }, [{ clave: 'toc', nombre: 'Contents' }], 1, 'One');
-		expect(p).toMatchObject({ parts: 'list', partList: [], omit: ['toc'], externalize: true, vars: { Pie: 'ninguno' } });
+	it('starts a new profile empty', () => {
+		const p = emptyProfile([{ clave: 'toc', nombre: 'Contents' }], 1, 'One');
+		expect(p).toEqual({ label: 'One', color: '#378ADD', parts: 'list', partList: [], omit: ['toc'], externalize: true });
+	});
+
+	it('drops the old project variables on reading, so the next save leaves them out', () => {
+		const c = parseConfig('{ "root": "a.tex", "variables": { "OpcionPie": {} }, "profiles": { "p": { "vars": { "OpcionPie": "autor" }, "label": "P" } } }');
+		expect(c).toEqual({ root: 'a.tex', profiles: { p: { label: 'P' } } });
 	});
 });
 
@@ -49,13 +54,16 @@ describe('when and where', () => {
 		expect(outputName('{n}-{unknown}', f)).toBe('3-{unknown}.pdf');
 	});
 
-	it('shows variables and their values in English unless named', () => {
-		const v = { label: 'Pie de libro', choices: ['completo', 'autor', 'raro'], choiceLabels: { autor: 'Only author' } };
-		expect(inEnglish('Ninguno')).toBe('None');
-		expect(choiceLabel(v, 'completo')).toBe('Full');
-		expect(choiceLabel(v, 'autor')).toBe('Only author');
-		expect(choiceLabel(v, 'raro')).toBe('raro');
-		expect(variableLabel('OpcionPie', { label: 'pie' })).toBe('Footer');
+	it('shows a watermark with the engine defaults and its fields filled', () => {
+		expect(watermarkDefaults({ text: 'x' })).toEqual({ on: true, text: 'x', position: 'center', color: '#808080', opacity: 30, size: 60, angle: 45, bold: false });
+		expect(watermarkDefaults({ text: 'x', position: 'bottom-right', on: false })).toMatchObject({ on: false, size: 9, angle: 0 });
+		expect(watermarkPreviewText('{profile} - {date} - p. {page} {x}', 'Draft', '5 Nov')).toBe('Draft - 5 Nov - p. 1 {x}');
+	});
+
+	it('keeps a watermark in the profile and drops an empty one', () => {
+		const withMark = setProfile({ profiles: { a: {} } }, 'a', { watermark: { text: 'DRAFT', on: false } });
+		expect(withMark.profiles?.a).toEqual({ watermark: { text: 'DRAFT', on: false } });
+		expect(setProfile(withMark, 'a', { watermark: undefined }).profiles?.a).toEqual({});
 	});
 
 	it('gives a new project Default, and Current when it has parts', () => {

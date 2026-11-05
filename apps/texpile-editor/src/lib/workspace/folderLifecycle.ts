@@ -24,6 +24,7 @@ import {
 import { detectMainFile, gatherProjectMacros } from '$lib/workspace/project';
 import { claimWorkspace, releaseWorkspace, pickFolder, samePath, type TexFile } from '$lib/workspace/fileSystem';
 import { warnMissingFolder } from '$lib/workspace/missingFolder';
+import { projectFolder } from '$lib/workspace/openWorkspace';
 
 export type FolderLifecycleDeps = {
 	scanTexFiles(root: string): Promise<{ files: TexFile[] }>;
@@ -52,11 +53,13 @@ export class FolderLifecycle {
 	/** `want`: the file to land on, as Open in Workspace from a lone file asks */
 	async open(path?: string, want?: string): Promise<void> {
 		const d = this.deps;
-		const root = path ?? (await pickFolder());
-		if (!root) return;
+		const picked = path ?? (await pickFolder());
+		if (!picked) return;
 		// a recents entry for a folder that is gone stops before anything else: the claim would make
 		// the dead path this window's folder, and the swap would leave an empty workspace behind
-		if (!(await fileService.exists(root))) return warnMissingFolder(root);
+		if (!(await fileService.exists(picked))) return warnMissingFolder(picked);
+		// LatexFrog: a repository whose document lives in a subfolder opens that subfolder, as the start screen does
+		const root = await projectFolder(picked);
 		// picking a folder is asking for a workspace, whatever this window was showing before
 		const lone = fileMode.current ? activeFilePath.current : null;
 		fileMode.current = false;

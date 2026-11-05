@@ -1,4 +1,4 @@
-//! Exportar partes, vista previa de un fragmento y variables, con TeX de verdad (F7): `cargo test -p lv-core --features tex`, sobre
+//! Exportar partes, vista previa de un fragmento y marca de agua, con TeX de verdad (F7): `cargo test -p lv-core --features tex`, sobre
 //! `fixtures/exportar` (un libro de tres partes que arranca en el capítulo 5, una con un error a propósito).
 #![cfg(feature = "tex")]
 
@@ -232,21 +232,24 @@ fn la_vista_previa_de_un_fragmento_resuelve_referencias_y_comparte_el_cache_sin_
     assert_eq!(c.r.log().matches("-jobname \"figuras-cache/").count(), antes, "figura del fragmento al día");
 }
 
+/// A profile's watermark, stamped from the driver: its text with its fields reaches every page, and the document's own footer is
+/// still the document's.
 #[test]
-fn la_variable_del_menu_llega_al_documento_porque_la_guardia_deja_ganar_al_driver() {
+fn the_profiles_watermark_reaches_the_pdf_and_the_documents_footer_stays() {
     let c = caso();
     c.seleccion(&["Cap/uno"]);
-    let pie = |valor: &str| {
-        let mut v = BTreeMap::new();
-        v.insert("OpcionPie".to_string(), valor.to_string());
-        c.s.set_state(StatePatch { variables: Some(v), ..Default::default() }).unwrap();
-        c.compilar("parcial");
-        c.texto_de(".latexfrog/build/parcial/lv-parcial.pdf")
-    };
-    assert!(pie("ninguno").contains("Pie:ninguno"));
-    assert!(pie("autor").contains("Pie:autor"), "el cambio de variable recompila (cambia el driver)");
-    // Una opción que el proyecto no declara se rechaza.
-    let mut malo = BTreeMap::new();
-    malo.insert("OpcionPie".to_string(), "inventada".to_string());
-    assert!(c.s.set_state(StatePatch { variables: Some(malo), ..Default::default() }).is_err());
+    let cfg = fs::read_to_string(c.p.join("latexfrog.json")).or_else(|_| fs::read_to_string(c.p.join(".latexfrog/latexfrog.json"))).unwrap();
+    let cfg = cfg.replace(
+        r#""label": "Partes elegidas" }"#,
+        r##""label": "Partes elegidas", "watermark": { "text": "MARCA {profile} 50% & co", "position": "bottom-right", "color": "#cc0000" } }"##,
+    );
+    c.s.write_config(&cfg).unwrap();
+    c.compilar("parcial");
+    let texto = c.texto_de(".latexfrog/build/parcial/lv-parcial.pdf");
+    assert!(texto.contains("MARCA Partes elegidas 50% & co"), "{texto}");
+    assert!(texto.contains("Pie:completo"), "the document's footer is the document's: {texto}");
+    // Off: the settings stay and nothing is stamped.
+    c.s.write_config(&cfg.replace(r#""text": "MARCA"#, r#""on": false, "text": "MARCA"#)).unwrap();
+    c.compilar("parcial");
+    assert!(!c.texto_de(".latexfrog/build/parcial/lv-parcial.pdf").contains("MARCA"));
 }

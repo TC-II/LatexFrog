@@ -10,9 +10,10 @@
 //! argumentos que son parámetros de macro (`\input{#1}` dentro de la definición de `\Capitulo`). Alcanza para decidir
 //! qué archivos pertenecen a qué parte; lo que se le escape es un archivo que no aparece, no un build roto.
 
+use crate::macros::{LoadKind, Macros, PathTemplate};
 use regex::Regex;
 use serde::Serialize;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -167,7 +168,20 @@ fn saltar_blancos(b: &[u8], mut i: usize) -> usize {
     i
 }
 
+#[cfg(test)]
 fn escanear(texto: &str, interesantes: &HashSet<&str>) -> Vec<Crudo> {
+    escanear_con(texto, &|n| interesantes.contains(n).then(|| cantidad_de_argumentos(n)))
+}
+
+/// A command found by `escanear_con`: its name, its brace arguments and its line.
+pub(crate) type Llamada = (String, Vec<String>, u32);
+
+/// Calls to the commands `aridad` knows (it gives how many brace arguments each takes), without comments.
+pub(crate) fn llamadas(texto: &str, aridad: &dyn Fn(&str) -> Option<usize>) -> Vec<Llamada> {
+    escanear_con(texto, aridad).into_iter().map(|c| (c.comando, c.args, c.linea)).collect()
+}
+
+fn escanear_con(texto: &str, aridad: &dyn Fn(&str) -> Option<usize>) -> Vec<Crudo> {
     let limpio: String = texto.lines().map(sin_comentario).collect::<Vec<_>>().join("\n");
     let b = limpio.as_bytes();
     let mut out = Vec::new();
@@ -190,9 +204,7 @@ fn escanear(texto: &str, interesantes: &HashSet<&str>) -> Vec<Crudo> {
                 }
                 let nombre = &limpio[ini..j];
                 i = j;
-                if !interesantes.contains(nombre) {
-                    continue;
-                }
+                let Some(n_args) = aridad(nombre) else { continue };
                 let mut k = saltar_blancos(b, j);
                 if b.get(k) == Some(&b'*') {
                     k += 1;
@@ -209,7 +221,7 @@ fn escanear(texto: &str, interesantes: &HashSet<&str>) -> Vec<Crudo> {
                     }
                 }
                 let mut args = Vec::new();
-                for _ in 0..cantidad_de_argumentos(nombre) {
+                for _ in 0..n_args {
                     k = saltar_blancos(b, k);
                     match argumento(b, &limpio, k) {
                         Some((a, sig)) => {
@@ -219,7 +231,7 @@ fn escanear(texto: &str, interesantes: &HashSet<&str>) -> Vec<Crudo> {
                         None => break,
                     }
                 }
-                if args.len() == cantidad_de_argumentos(nombre) {
+                if args.len() == n_args {
                     out.push(Crudo { comando: nombre.to_string(), args, linea });
                 }
             }
@@ -299,22 +311,67 @@ fn leer_texto(path: &Path) -> Option<String> {
 
 // --- el índice ---------------------------------------------------------------------------------------------------------
 
+/// Loader macros by name (see `macros`).
+type Loaders = BTreeMap<String, Vec<PathTemplate>>;
+
+/// What every file of one walk is read with.
+struct Contexto<'a> {
+    /// The commands read, with how many brace arguments each takes.
+    interesantes: HashMap<&'a str, usize>,
+    /// `parts.commands`.
+    cmds: HashSet<&'a str>,
+    loaders: &'a Loaders,
+}
+
 impl ProjectIndex {
     /// Recorre el proyecto desde `root_file`. Un archivo que no se puede leer se salta: el índice es una ayuda, no
     /// puede impedir abrir ni compilar.
     pub fn build(root: &Path, root_file: &str, commands: &[String]) -> ProjectIndex {
         let t0 = Instant::now();
+        // User macros that load files (`\Ejercicio{slug}` → `\input{ejercicios/slug}`) are only known after reading their
+        // definitions, which are in files the graph reaches: walk, read the definitions, and walk again while that finds more.
+        let mut loaders = Loaders::new();
+        let mut ix = Self::walk(root, root_file, commands, &loaders);
+        for _ in 0..3 {
+            let mut m = Macros::default();
+            for rel in ix.files.keys() {
+                if let Some(t) = leer_texto(&root.join(rel)) {
+                    m.read(&t);
+                }
+            }
+            let found: Loaders = m
+                .loaders()
+                .into_iter()
+                // a call in a document is a name of letters; a part command that includes its argument as is (`\Capitulo`) already works
+                .filter(|(n, ts)| n.bytes().all(|c| c.is_ascii_alphabetic()) && !(commands.contains(n) && ts.iter().all(|t| t.path == "{}")))
+                .collect();
+            if found == loaders {
+                break;
+            }
+            loaders = found;
+            ix = Self::walk(root, root_file, commands, &loaders);
+        }
+        ix.scan_ms = t0.elapsed().as_millis() as u64;
+        ix
+    }
+
+    fn walk(root: &Path, root_file: &str, commands: &[String], loaders: &Loaders) -> ProjectIndex {
         let mut ix = ProjectIndex { root_file: root_file.to_string(), ..Default::default() };
         // `begin` y `end` sólo se miran para llevar la cuenta de los `tikzpicture` abiertos.
-        let mut interesantes: HashSet<&str> =
-            ["input", "include", "subfile", "import", "subimport", "includegraphics", "bibliography", "addbibresource", "begin", "end"].into_iter().collect();
-        interesantes.extend(commands.iter().map(String::as_str));
+        let mut interesantes: HashMap<&str, usize> =
+            ["input", "include", "subfile", "import", "subimport", "includegraphics", "bibliography", "addbibresource", "begin", "end"].into_iter().map(|c| (c, cantidad_de_argumentos(c))).collect();
+        interesantes.extend(commands.iter().map(|c| (c.as_str(), 1)));
+        for (name, ts) in loaders {
+            let n = ts.iter().map(|t| t.arg + 1).max().unwrap_or(1);
+            let e = interesantes.entry(name.as_str()).or_insert(n);
+            *e = (*e).max(n);
+        }
         let cmds: HashSet<&str> = commands.iter().map(String::as_str).collect();
+        let ctx = Contexto { interesantes, cmds, loaders };
         let mut visitados = HashSet::new();
-        ix.visitar(root, root_file, false, None, "", &interesantes, &cmds, &mut visitados);
+        ix.visitar(root, root_file, false, false, None, "", &ctx, &mut visitados);
         ix.datos_de_tikz.sort();
         ix.datos_de_tikz.dedup();
-        ix.scan_ms = t0.elapsed().as_millis() as u64;
         ix
     }
 
@@ -323,30 +380,62 @@ impl ProjectIndex {
     #[allow(clippy::too_many_arguments)]
     /// `base`: the folder an `\import` set for this file (empty for none): with the `import` package, an `\input` inside an imported
     /// file is read from the imported folder first.
+    /// `cuerpo`: this file is read after `\begin{document}`.
     #[allow(clippy::too_many_arguments)]
-    fn visitar(&mut self, root: &Path, rel: &str, en_parte: bool, dentro: Option<(&str, bool)>, base: &str, interesantes: &HashSet<&str>, cmds: &HashSet<&str>, vistos: &mut HashSet<String>) {
+    fn visitar(&mut self, root: &Path, rel: &str, en_parte: bool, cuerpo: bool, dentro: Option<(&str, bool)>, base: &str, ctx: &Contexto, vistos: &mut HashSet<String>) {
         if !vistos.insert(rel.to_string()) {
             return;
         }
         self.reachable.insert(rel.to_string());
         let Some(texto) = leer_texto(&root.join(rel)) else { return };
         let mut aristas = Vec::new();
+        // whether each edge is in the document body, for what its file reads
+        let mut en_cuerpo: Vec<bool> = Vec::new();
+        let mut cuerpo_aqui = cuerpo;
+        let aridad = |n: &str| ctx.interesantes.get(n).copied();
         // Cuántos `\begin{tikzpicture}` hay abiertos en este punto del archivo (sin contar los comentarios: `escanear` los saca).
         let mut tikz_abiertos: u32 = 0;
         let mut figure_abiertos: u32 = 0;
-        for c in escanear(&texto, interesantes) {
+        for c in escanear_con(&texto, &aridad) {
             if matches!(c.comando.as_str(), "begin" | "end") {
                 let abre = c.comando == "begin";
                 let cuenta = |n: u32| if abre { n + 1 } else { n.saturating_sub(1) };
                 match c.args[0].trim() {
                     "tikzpicture" => tikz_abiertos = cuenta(tikz_abiertos),
                     "figure" | "figure*" => figure_abiertos = cuenta(figure_abiertos),
+                    "document" if abre => cuerpo_aqui = true,
                     _ => {}
                 }
                 continue;
             }
             let en_tikz = tikz_abiertos > 0 || dentro.is_some();
             let en_figure = en_tikz && (figure_abiertos > 0 || dentro.is_some_and(|d| d.1));
+            if let Some(ts) = ctx.loaders.get(c.comando.as_str()) {
+                // A loader macro: one edge per path it builds. In the body it is like a part command (its files are not
+                // the preamble, which `formato` fingerprints); before `\begin{document}` it is an `\input`.
+                for (n, t) in ts.iter().enumerate() {
+                    let Some(arg) = c.args.get(t.arg) else { continue };
+                    let raw = t.path.replace("{}", arg.trim().trim_matches('"').trim());
+                    if arg.trim().is_empty() || raw.contains('#') || raw.contains('\\') {
+                        continue;
+                    }
+                    let kind = match t.kind {
+                        _ if ctx.cmds.contains(c.comando.as_str()) => EdgeKind::Part,
+                        LoadKind::Include => EdgeKind::Include,
+                        LoadKind::Subfile => EdgeKind::Subfile,
+                        LoadKind::Input if cuerpo_aqui => EdgeKind::Part,
+                        LoadKind::Input => EdgeKind::Input,
+                    };
+                    let target = if !base.is_empty() { resolver_tex(root, &format!("{base}/{raw}")).or_else(|| resolver_tex(root, &raw)) } else { resolver_tex(root, &raw) };
+                    // a later path that names no file (`sol/x` when there is no solution) adds nothing
+                    if target.is_none() && n > 0 {
+                        continue;
+                    }
+                    aristas.push(Edge { kind, command: c.comando.clone(), raw, target, line: c.linea, en_tikz, en_figure });
+                    en_cuerpo.push(cuerpo_aqui);
+                }
+                continue;
+            }
             let (kind, args): (EdgeKind, Vec<String>) = match c.comando.as_str() {
                 "includegraphics" => (EdgeKind::Graphics, c.args),
                 "bibliography" => (EdgeKind::Bib, c.args[0].split(',').map(|s| s.trim().to_string()).collect()),
@@ -378,6 +467,7 @@ impl ProjectIndex {
                     _ => resolver_tex(root, &raw),
                 };
                 aristas.push(Edge { kind, command: c.comando.clone(), raw, target, line: c.linea, en_tikz, en_figure });
+                en_cuerpo.push(cuerpo_aqui);
             }
         }
         // `plot file {x}` y `table {x}` no son comandos con el archivo entre llaves: se buscan dentro de cada `tikzpicture`.
@@ -391,7 +481,7 @@ impl ProjectIndex {
             }
         }
         self.files.insert(rel.to_string(), aristas.clone());
-        for e in aristas {
+        for (e, cuerpo_e) in aristas.into_iter().zip(en_cuerpo) {
             if let Some(t) = &e.target {
                 self.reachable.insert(t.clone());
                 if e.kind.estructural() {
@@ -401,7 +491,7 @@ impl ProjectIndex {
                     self.datos_de_tikz.push(DatoDeTikz { incluye: dentro.map_or(rel, |d| d.0).to_string(), dato: t.clone(), line: e.line, en_figure: e.en_figure });
                 }
             }
-            let es_parte = cmds.contains(e.command.as_str()) && !en_parte;
+            let es_parte = ctx.cmds.contains(e.command.as_str()) && !en_parte;
             if es_parte {
                 if let Some(name) = nombre_de_parte(&e.raw) {
                     // La misma parte dos veces (por ejemplo en un `\if`) cuenta una.
@@ -415,7 +505,7 @@ impl ProjectIndex {
                     let desde = if e.en_tikz { Some((dentro.map_or(rel, |d| d.0), e.en_figure)) } else { None };
                     // an imported file sets its folder for what it inputs; anything else passes the current one on
                     let carpeta = if e.kind == EdgeKind::Import { t.rsplit_once('/').map_or("", |(d, _)| d).to_string() } else { base.to_string() };
-                    self.visitar(root, t, en_parte || es_parte, desde, &carpeta, interesantes, cmds, vistos);
+                    self.visitar(root, t, en_parte || es_parte, cuerpo_e, desde, &carpeta, ctx, vistos);
                 }
             }
         }
@@ -498,6 +588,35 @@ impl ProjectIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_loader_macro_brings_its_files_into_the_body_not_the_preamble() {
+        let d = tempfile::tempdir().unwrap();
+        let w = |rel: &str, t: &str| {
+            let p = d.path().join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, t).unwrap();
+        };
+        w("main.tex", "\\input{defs}\n\\Load{early}\n\\begin{document}\n\\Ex{a}\n\\Ex{missing}\n\\end{document}\n");
+        w("defs.tex", "\\makeatletter\n\\newcommand{\\Ex}[1]{\\ex@go{1}{#1}}\n\\def\\ex@go#1#2{\\input{ex/#2}\\IfFileExists{sol/#2.tex}{\\input{sol/#2}}{}}\n\\newcommand{\\Load}[1]{\\input{sty/#1}}\n\\makeatother\n");
+        w("ex/a.tex", "\\includegraphics{ex/a-fig}\n");
+        w("ex/a-fig.pdf", "%PDF");
+        w("sol/a.tex", "Solution.\n");
+        w("sty/early.tex", "\\relax\n");
+        let ix = ProjectIndex::build(d.path(), "main.tex", &cmds(&["include"]));
+        for f in ["ex/a.tex", "ex/a-fig.pdf", "sol/a.tex", "sty/early.tex"] {
+            assert!(ix.reachable.contains(f), "{f} not reached");
+        }
+        let main = &ix.files["main.tex"];
+        let kinds: Vec<_> = main.iter().filter(|e| e.command != "input").map(|e| (e.command.as_str(), e.kind, e.raw.as_str(), e.target.is_some())).collect();
+        assert_eq!(
+            kinds,
+            [("Load", EdgeKind::Input, "sty/early", true), ("Ex", EdgeKind::Part, "ex/a", true), ("Ex", EdgeKind::Part, "sol/a", true), ("Ex", EdgeKind::Part, "ex/missing", false)]
+        );
+        assert!(ix.parts.is_empty(), "a loader is not a part command");
+        let pre = crate::formato::archivos_del_preambulo(&ix);
+        assert!(pre.contains("sty/early.tex") && !pre.contains("ex/a.tex"));
+    }
 
     fn cmds(c: &[&str]) -> Vec<String> {
         c.iter().map(|s| s.to_string()).collect()

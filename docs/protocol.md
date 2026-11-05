@@ -34,7 +34,7 @@ Every command except `open` needs an open project.
 | `view` | | `ProjectView` |
 | `refresh` | | `ProjectView`, re-indexed from disk |
 | `set-root` | `file` | `ProjectView`; session only, persist through `config-write` |
-| `set-state` | any of `profile`, `selection` (part names), `variables` (name to value), `autoCompile`, `idleMs`, `outsideSave`, `draftImages` | `State` |
+| `set-state` | any of `profile`, `selection` (part names), `autoCompile`, `idleMs`, `outsideSave`, `draftImages` | `State` |
 | `file-info` | `file` | `FileInfo`; which part a file belongs to and if it affects the active profile |
 | `compile` | optional `profile`, `root`, `parts` | `BuildAck`; `root` and `parts` are applied as `set-root` and `selection` first |
 | `cancel` | | `{cancelled: bool}` |
@@ -44,7 +44,7 @@ Every command except `open` needs an open project.
 | `synctex-forward` | `file`, `line`, optional `profile` | `SyncForward` or `null`; `profile`, the PDF on screen, is used first when it holds the file |
 | `synctex-inverse` | `profile`, `page`, `x`, `y` | `SyncInverse` or `null` |
 | `pdf-for` | `file` | PDF path or `null`, the newest PDF that contains the file |
-| `figures-status` *async* | | `FiguresStatus`: every figure in the code with where it is (`codigo`, `linea`, `dondeLinea`, `caption`) and its `estado`; `revisado` says the last check is of the code as it is now |
+| `figures-status` *async* | | `FiguresStatus`: every figure in the code with where it is (`codigo`, `linea`, `dondeLinea`, `caption`) and its `estado`; `revisado` says the last check is of the code as it is now; `imagenes` lists the `\includegraphics` outside TikZ (`imagen`, `codigo`, `linea`, `archivo`, `dondeLinea`, `caption`) |
 | `figures-check` | | `BuildAck`; lists the figures without baking any. `bake-finished.remaining` is how many changed or were never compiled |
 | `figures-bake` | | `BuildAck` |
 | `figures-clean-preview` *async* | | `Cleanup`; deletes nothing |
@@ -59,7 +59,7 @@ Every command except `open` needs an open project.
 | `orphans` *async* | | `TexProcess[]` |
 | `kill-orphans` *async* | `pids` | killed PIDs |
 | `detect` *async* | optional `root` | `Proposal`; writes nothing |
-| `config-read` | | text of `latexfrog.json` or `null` |
+| `config-read` | | text of `.latexfrog/latexfrog.json` or `null` |
 | `config-validate` | `text` | `Validation` |
 | `config-write` | `text` | `ProjectView` |
 | `config-probe` *async* | `text`, optional `part` | `Probe`; tries a configuration without saving it |
@@ -103,4 +103,4 @@ The Rust structs in `crates/lv-core/src` are the reference; fields are camelCase
 
 ## Project files
 
-`latexfrog.json` is the configuration; `.latexfrog/` holds state, builds, drivers, history and the lock. `open` migrates `latexviewer.json` and `.lv/` once. If the new one already exists, it wins, the old one stays untouched and is named in `migration.conflicts`. No migration happens while another instance holds the lock.
+`.latexfrog/latexfrog.json` is the configuration; the rest of `.latexfrog/` holds state, builds, drivers, history and the lock, and its `.gitignore` keeps only the configuration. `open` migrates `.lv/`, then a top-level `latexfrog.json` or `latexviewer.json`, once. If the new one already exists, it wins, the old one stays untouched and is named in `migration.conflicts`. No migration happens while another instance holds the lock.

@@ -26,6 +26,8 @@
 		return t.kind === 'none' ? m.lv_target_none() : m.lv_target_all();
 	});
 	const why = $derived(active?.parts === 'current' ? m.lv_target_current_title() : '');
+	/** a long chapter name would push the bar around: 8 characters and an ellipsis, the whole name on hover */
+	const short = $derived(target.length > 9 ? `${target.slice(0, 8).trimEnd()}…` : target);
 </script>
 
 {#if view && active}
@@ -42,6 +44,6 @@
 				<option value={p.id}>{p.label}</option>
 			{/each}
 		</select>
-		<span class="max-w-48 truncate opacity-70 @max-[38rem]:hidden" title={why} data-testid="lv-target-parts">{target}</span>
+		<span class="inline-block w-[9ch] shrink-0 truncate opacity-70 @max-[38rem]:hidden" title={why ? `${target} · ${why}` : target} data-testid="lv-target-parts">{short}</span>
 	</div>
 {/if}

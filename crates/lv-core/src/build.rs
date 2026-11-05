@@ -139,8 +139,8 @@ pub struct DriverSpec {
     pub partial: bool,
     /// Macros que se definen vacías antes de cargar la raíz (`\def\CompilacionReducida{}`).
     pub flags: Vec<String>,
-    /// Variables del proyecto: `\def\Nombre{valor}`.
-    pub vars: Vec<(String, String)>,
+    /// The profile's watermark and the profile's visible name (its `{profile}` field).
+    pub marca: Option<(crate::config::WatermarkCfg, String)>,
     /// Partes que entran, por `\includeonly`. `None` = no se toca.
     pub includeonly: Option<Vec<String>>,
     pub draft_images: bool,
@@ -228,6 +228,83 @@ fn render_figuras(f: &FigureInject) -> Result<Vec<String>> {
     Ok(l)
 }
 
+/// Plain text as LaTeX: the characters TeX reads as commands are written as themselves.
+fn texto_latex(t: &str) -> String {
+    let mut o = String::new();
+    for c in t.chars() {
+        match c {
+            '\\' => o.push_str("\\textbackslash{}"),
+            '{' | '}' | '%' | '#' | '$' | '&' | '_' => {
+                o.push('\\');
+                o.push(c);
+            }
+            '~' => o.push_str("\\textasciitilde{}"),
+            '^' => o.push_str("\\textasciicircum{}"),
+            _ => o.push(c),
+        }
+    }
+    o
+}
+
+/// The watermark's text: plain text with its fields, `{date}` (the compile's date), `{page}` and `{profile}`.
+fn texto_de_marca(t: &str, perfil: &str) -> String {
+    let mut o = String::new();
+    let mut resto = t;
+    while let Some(i) = resto.find('{') {
+        o.push_str(&texto_latex(&resto[..i]));
+        let r = &resto[i..];
+        let campo = [("{date}", "\\today".to_string()), ("{page}", "\\thepage".to_string()), ("{profile}", texto_latex(perfil))].into_iter().find(|(k, _)| r.starts_with(k));
+        match campo {
+            Some((k, v)) => {
+                o.push_str(&v);
+                resto = &r[k.len()..];
+            }
+            None => {
+                o.push_str("\\{");
+                resto = &r[1..];
+            }
+        }
+    }
+    o.push_str(&texto_latex(resto));
+    o
+}
+
+/// A profile's watermark: drawn under every page's content by the kernel's `shipout/background` hook (a picture with its origin at
+/// the page's top left corner), so the document is not touched. xcolor and graphicx are asked for at `\\begin{document}`: a document
+/// that loads them already keeps its own options, one that does not gets them without a clash.
+fn render_marca(w: &crate::config::WatermarkCfg, perfil: &str) -> Result<Vec<String>> {
+    use crate::config::WatermarkPos as P;
+    w.validate().map_err(|e| Error::Other(format!("the watermark: {e}")))?;
+    let centro = w.position == P::Center;
+    let tam = w.size.unwrap_or(if centro { 60.0 } else { 9.0 });
+    let angulo = w.angle.unwrap_or(if centro { 45.0 } else { 0.0 });
+    // where the text is anchored: x and y as fractions of the paper plus a margin, and the side of the text that sits there
+    let (x, y, ancla) = match w.position {
+        P::Center => ("0.5\\paperwidth", "-0.5\\paperheight", ""),
+        P::Top => ("0.5\\paperwidth", "-1cm", "[t]"),
+        P::Bottom => ("0.5\\paperwidth", "-\\paperheight+1cm", "[b]"),
+        P::TopLeft => ("1.5cm", "-1cm", "[tl]"),
+        P::TopRight => ("\\paperwidth-1.5cm", "-1cm", "[tr]"),
+        P::BottomLeft => ("1.5cm", "-\\paperheight+1cm", "[bl]"),
+        P::BottomRight => ("\\paperwidth-1.5cm", "-\\paperheight+1cm", "[br]"),
+    };
+    // drawn at 10pt and scaled: a font without every size (Computer Modern) would put a large one back at 24.88pt
+    let serie = if w.bold { "\\bfseries" } else { "" };
+    Ok(vec![
+        "% --- watermark ---".into(),
+        format!("\\AddToHook{{begindocument/before}}{{\\RequirePackage{{xcolor}}\\RequirePackage{{graphicx}}\\definecolor{{lvMarca}}{{HTML}}{{{}}}}}", w.color[1..].to_ascii_uppercase()),
+        "\\makeatletter".into(),
+        "\\newdimen\\lv@mx \\newdimen\\lv@my".into(),
+        format!("\\def\\lv@marca{{{}}}", texto_de_marca(&w.text, perfil)),
+        format!(
+            "\\AddToHook{{shipout/background}}{{\\setlength\\unitlength{{1pt}}\\lv@mx=\\dimexpr {x}\\relax \\lv@my=\\dimexpr {y}\\relax \\put(\\strip@pt\\lv@mx,\\strip@pt\\lv@my){{\\makebox(0,0){ancla}{{\\rotatebox{{{angulo}}}{{\\scalebox{{{}}}{{\\normalfont\\fontsize{{10}}{{12}}\\selectfont{serie}\\color{{lvMarca!{}!white}}\\lv@marca}}}}}}}}}}",
+            tam / 10.0,
+            w.opacity
+        ),
+        "\\makeatother".into(),
+    ])
+}
+
 /// Lo que va dentro de `{...}` en una macro que genera la app. En lugar de intentar escapar, se rechaza: un valor con
 /// llaves, barras o `%` rompería el driver de una forma difícil de ver.
 fn texto_seguro(t: &str, que: &str) -> Result<()> {
@@ -264,12 +341,8 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
         }
         l.push(format!("\\def\\{f}{{}}"));
     }
-    for (k, v) in &s.vars {
-        if !crate::config::macro_valida(k) {
-            return Err(Error::Other(format!("{k:?} cannot be a variable name")));
-        }
-        texto_seguro(v, &format!("the value of {k}"))?;
-        l.push(format!("\\def\\{k}{{{v}}}"));
+    if let Some((w, visible)) = &s.marca {
+        l.extend(render_marca(w, visible)?);
     }
     if let Some(f) = &s.figuras {
         l.extend(render_figuras(f)?);
@@ -937,13 +1010,13 @@ mod tests {
     }
 
     #[test]
-    fn el_driver_con_flags_variables_y_partes_sigue_el_orden_medido_en_s4() {
+    fn el_driver_con_flags_y_partes_sigue_el_orden_medido_en_s4() {
         let d = render_driver_spec(&DriverSpec {
             perfil: "parcial".into(),
             root_rel: "Funciones de Aproximación.tex".into(),
             partial: true,
             flags: vec!["CompilacionReducida".into(), "TikzExternalizar".into()],
-            vars: vec![("OpcionPie".into(), "autor".into())],
+            marca: None,
             includeonly: Some(vec!["Secciones/Desnormalización".into(), "Secciones/Uno".into()]),
             draft_images: true,
             figuras: None,
@@ -955,8 +1028,24 @@ mod tests {
         .unwrap();
         assert_eq!(
             d,
-            "% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\PassOptionsToPackage{draft}{graphicx}\n\\PassOptionsToPackage{draft}{graphics}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\def\\OpcionPie{autor}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Desnormalización,Secciones/Uno}}\n\\input{\"Funciones de Aproximación\"}\n"
+            "% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\PassOptionsToPackage{draft}{graphicx}\n\\PassOptionsToPackage{draft}{graphics}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Desnormalización,Secciones/Uno}}\n\\input{\"Funciones de Aproximación\"}\n"
         );
+    }
+
+    /// The watermark is drawn by the kernel's shipout hook, its text as plain text with its fields, and nothing of the document changes.
+    #[test]
+    fn the_watermark_is_plain_text_with_fields_drawn_under_every_page() {
+        let w: crate::config::WatermarkCfg =
+            serde_json::from_str(r##"{ "text": "50% {profile} - {date} - p. {page} {x} #1", "position": "bottom-right", "color": "#cc0000", "opacity": 40, "bold": true }"##).unwrap();
+        let d = render_driver_spec(&DriverSpec { perfil: "p".into(), root_rel: "main.tex".into(), marca: Some((w, "Draft & co".into())), ..Default::default() }).unwrap();
+        assert!(d.contains("\\def\\lv@marca{50\\% Draft \\& co - \\today - p. \\thepage \\{x\\} \\#1}"), "{d}");
+        assert!(d.contains("\\definecolor{lvMarca}{HTML}{CC0000}"), "{d}");
+        assert!(d.contains("\\AddToHook{shipout/background}"), "{d}");
+        assert!(d.contains("\\makebox(0,0)[br]{\\rotatebox{0}{\\scalebox{0.9}{\\normalfont\\fontsize{10}{12}\\selectfont\\bfseries\\color{lvMarca!40!white}\\lv@marca}}}"), "{d}");
+        assert!(d.find("watermark").unwrap() < d.find("\\input{").unwrap(), "before the document: {d}");
+        // off: nothing
+        let off: crate::config::WatermarkCfg = serde_json::from_str(r#"{ "text": "x", "on": false }"#).unwrap();
+        assert!(!off.on);
     }
 
     #[test]
@@ -973,11 +1062,18 @@ mod tests {
     #[test]
     fn el_driver_rechaza_lo_que_romperia_tex() {
         let base = || DriverSpec { perfil: "p".into(), root_rel: "main.tex".into(), ..Default::default() };
-        for valor in ["", "a}b", "a\\b", "50%", "a#b"] {
+        let marca = |f: &dyn Fn(&mut crate::config::WatermarkCfg)| {
+            let mut w: crate::config::WatermarkCfg = serde_json::from_str(r#"{ "text": "Draft" }"#).unwrap();
+            f(&mut w);
             let mut s = base();
-            s.vars = vec![("X".into(), valor.into())];
-            assert!(render_driver_spec(&s).is_err(), "valor {valor:?}");
-        }
+            s.marca = Some((w, "P".into()));
+            render_driver_spec(&s)
+        };
+        assert!(marca(&|_| {}).is_ok());
+        assert!(marca(&|w| w.text = " ".into()).is_err(), "no text");
+        assert!(marca(&|w| w.text = "a\nb".into()).is_err(), "two lines");
+        assert!(marca(&|w| w.color = "red".into()).is_err());
+        assert!(marca(&|w| w.opacity = 0).is_err());
         for parte in ["a,b", "a}", "%x", ""] {
             let mut s = base();
             s.includeonly = Some(vec![parte.into()]);

@@ -70,18 +70,9 @@ pub struct ProfileView {
     pub part_list: Vec<String>,
     pub omit: Vec<String>,
     pub color: Option<String>,
-    pub vars: indexmap::IndexMap<String, String>,
+    pub watermark: Option<config::WatermarkCfg>,
     pub output: Option<config::OutputCfg>,
     pub compile_on: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VariableView {
-    pub name: String,
-    pub label: String,
-    pub choices: Vec<String>,
-    pub default: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -89,7 +80,6 @@ pub struct VariableView {
 pub struct ConfigView {
     pub engine: String,
     pub profiles: Vec<ProfileView>,
-    pub variables: Vec<VariableView>,
     /// Dónde se publica, si el proyecto lo dice.
     pub publish_dir: Option<String>,
     /// Dónde van los PDF de las partes exportadas (`export.dir`, `export/` por defecto).
@@ -402,19 +392,9 @@ impl Session {
                     part_list: p.part_list.clone(),
                     omit: p.omit.clone(),
                     color: p.color.clone(),
-                    vars: p.vars.clone(),
+                    watermark: p.watermark.clone(),
                     output: p.output.clone(),
                     compile_on: p.compile_on.clone(),
-                })
-                .collect(),
-            variables: c
-                .variables
-                .iter()
-                .map(|(n, v)| VariableView {
-                    name: n.clone(),
-                    label: v.label.clone().unwrap_or_else(|| n.clone()),
-                    choices: v.choices.clone(),
-                    default: v.default.clone(),
                 })
                 .collect(),
             publish_dir: c.publish.as_ref().map(|p| p.dir.clone()),
@@ -495,14 +475,6 @@ impl Session {
                 return Err(otro(format!("{mala:?} is not a part of the project")));
             }
         }
-        if let Some(vars) = &patch.variables {
-            for (k, v) in vars {
-                let Some(def) = cfg.variables.get(k) else { return Err(otro(format!("no variable {k:?}"))) };
-                if !def.choices.is_empty() && !def.choices.contains(v) {
-                    return Err(otro(format!("{v:?} is not a choice of {k}")));
-                }
-            }
-        }
         let s = &mut d.state;
         if let Some(p) = patch.active_profile {
             s.active_profile = Some(p);
@@ -512,9 +484,6 @@ impl Session {
         }
         if let Some(part) = patch.current_part {
             s.current_part = Some(part);
-        }
-        if let Some(v) = patch.variables {
-            s.variables.extend(v);
         }
         if let Some(a) = patch.auto_compile {
             s.auto_compile = a;
@@ -621,11 +590,6 @@ impl Session {
         if pc.externalize {
             flags.extend(cfg.flags.externalize.iter().cloned());
         }
-        let vars: Vec<(String, String)> = cfg
-            .variables
-            .iter()
-            .filter_map(|(n, v)| pc.vars.get(n).or(d.state.variables.get(n)).or(v.default.as_ref()).map(|x| (n.clone(), x.clone())))
-            .collect();
         let seed = includeonly.as_ref().map(|sel| {
             (
                 nombres.iter().filter(|n| !sel.contains(n)).cloned().collect::<Vec<_>>(),
@@ -647,30 +611,6 @@ impl Session {
             let piezas = crate::piezas::detectar(&self.root, &ix);
             copias.extend(crate::piezas::copias(&self.root, &piezas, &pc.omit));
         }
-        // Las variables que el perfil (o esta máquina) fija pisan al proyecto: sin las definiciones sin guardia que las volverían a pisar.
-        let fijadas: Vec<String> = cfg.variables.keys().filter(|n| pc.vars.get(*n).or(d.state.variables.get(*n)).is_some_and(|v| !v.is_empty())).cloned().collect();
-        if !fijadas.is_empty() {
-            let mut archivos: Vec<String> = ix.reachable.iter().filter(|r| r.to_ascii_lowercase().ends_with(".tex") || r.to_ascii_lowercase().ends_with(".sty")).cloned().collect();
-            for rel in archivos.clone() {
-                if let Ok(t) = std::fs::read_to_string(self.root.join(&rel)) {
-                    archivos.extend(crate::piezas::opcionales(&self.root, &t).into_iter().filter(|o| !ix.reachable.contains(o)));
-                }
-            }
-            archivos.sort();
-            archivos.dedup();
-            for rel in archivos {
-                let texto = match copias.get(&rel) {
-                    Some(t) => t.clone(),
-                    None => match std::fs::read_to_string(self.root.join(&rel)) {
-                        Ok(t) => t,
-                        Err(_) => continue,
-                    },
-                };
-                if let Some(nuevo) = crate::piezas::sin_definiciones(&texto, &fijadas) {
-                    copias.insert(rel, nuevo);
-                }
-            }
-        }
         let mut sustituciones = Vec::new();
         for (rel, contenido) in copias {
             let copia = format!(".latexfrog/piezas/{perfil}/{rel}");
@@ -682,7 +622,7 @@ impl Session {
             root_rel: rf.clone(),
             partial: parcial,
             flags,
-            vars,
+            marca: pc.watermark.clone().filter(|w| w.on).map(|w| (w, pc.label.clone().unwrap_or_else(|| perfil.to_string()))),
             includeonly,
             // (la exportación nunca va en borrador, ni aunque su perfil lo diga: es lo que se entrega)
             draft_images: perfil != config::PERFIL_EXPORT && (pc.draft_images || Self::borrador_para(&d.state, &cfg, perfil)),

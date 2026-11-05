@@ -15,7 +15,10 @@ export type Figure = {
 	/** the line of `archivo` that brings it: the `tikzpicture` itself or the `\input` of the file that has it */
 	dondeLinea?: number | null;
 	caption?: string | null;
+	/** set for an image the code inserts (`\includegraphics`), not a TikZ figure: the image file */
+	imagen?: string | null;
 };
+export type ImageRef = { imagen: string; codigo: string; linea: number; archivo: string; dondeLinea: number; caption: string | null };
 export type FigureError = { nombre: string; mensaje: string; file: string | null; line: number | null; log: string };
 export type FigureList = { fechaMs: number; total: number; completa: boolean; delSelloDeHoy: boolean; vale: boolean };
 export type FiguresStatus = {
@@ -35,7 +38,12 @@ export type FiguresStatus = {
 	/** the last check is of the code as it is now: only then do the states say whether each PDF is the code's */
 	revisado?: boolean;
 	sinRevisar?: number;
+	imagenes?: ImageRef[];
 };
+
+/** the images as rows of the tree, beside the TikZ figures */
+export const imageRows = (images: ImageRef[]): Figure[] =>
+	images.map((i) => ({ nombre: `${i.imagen}@${i.codigo}:${i.linea}`, slug: null, archivo: i.archivo, estado: 'aldia', bytes: 0, codigo: i.codigo, linea: i.linea, dondeLinea: i.dondeLinea, caption: i.caption, imagen: i.imagen }));
 
 export type Heading = { level: number; title: string; file: string; line: number };
 
@@ -74,6 +82,12 @@ export function figureTree(headings: Heading[], figures: Figure[]): FigureTree {
 		if (at < 0) at = headingAbove(headings, f.archivo, f.dondeLinea);
 		if (at < 0) beforeHeadings.push(f);
 		else under.set(at, [...(under.get(at) ?? []), f]);
+	}
+	// in document order inside a heading: by line in the heading's file, or by the line that brings in the file that has them
+	for (const [i, list] of under) {
+		const file = headings[i].file;
+		const at = (f: Figure) => (f.codigo === file ? (f.linea ?? 0) : (f.dondeLinea ?? 0));
+		list.sort((a, b) => at(a) - at(b));
 	}
 	const root: FigureNode[] = [];
 	const stack: FigureNode[] = [];

@@ -5,7 +5,8 @@
 //! descarta lo que es un parámetro de macro (`\label{#1}`). Las definiciones (`\newcommand`, `\newenvironment`...) se saltan
 //! enteras, cuerpo incluido: adentro hay `\begin` sin `\end` y `\ref{#1}` que no son del documento.
 
-use crate::graph::{sin_comentario, EdgeKind, ProjectIndex};
+use crate::graph::{llamadas, sin_comentario, EdgeKind, ProjectIndex};
+use crate::macros::Macros;
 use crate::logparse::{Problem, Severity};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -468,7 +469,9 @@ fn ordenar_secciones(ix: &ProjectIndex, todas: Vec<Section>) -> Vec<Section> {
         if !vistos.insert(rel.to_string()) {
             return;
         }
-        let propias = por_archivo.remove(rel).unwrap_or_default();
+        let mut propias = por_archivo.remove(rel).unwrap_or_default();
+        // sectioning commands and heading macros are collected apart
+        propias.sort_by_key(|s| s.line);
         let hijos: Vec<(u32, String)> = ix
             .files
             .get(rel)
@@ -565,6 +568,16 @@ impl Symbols {
             }
         }
         visitar(ix, &ix.root_file, &mut orden, &mut vistos);
+
+        // Macros that typeset a heading by hand (`\metaEjercicio{Title}{...}`) or wrap a sectioning command: their calls go
+        // to the outline too, so a document without `\section` still has one.
+        let mut macros = Macros::default();
+        for rel in &orden {
+            if let Some(t) = leer(root, rel) {
+                macros.read(&t);
+            }
+        }
+        let headings = macros.headings();
 
         let mut bibitems: HashSet<String> = HashSet::new();
         let mut contexto_previo: Vec<String> = Vec::new();
@@ -672,6 +685,15 @@ impl Symbols {
                         s.defs.push(Def { name: arg, kind: kind.into(), file: rel.clone(), line: c.linea, args });
                     }
                     _ => {}
+                }
+            }
+            if !headings.is_empty() {
+                for (name, args, line) in llamadas(&texto, &|n| headings.get(n).map(|h| h.arg + 1)) {
+                    let h = headings[&name];
+                    let title = recortar(&titulo_legible(&args[h.arg]), 120);
+                    if !title.is_empty() && !args[h.arg].contains('#') {
+                        s.sections.push(Section { level: h.level, title, file: rel.clone(), line, label: None });
+                    }
                 }
             }
             for (env, l) in pila.into_iter().filter(|(e, _)| e != "document") {

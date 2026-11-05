@@ -1,4 +1,5 @@
-//! Moves a project from the old names (`latexviewer.json`, `.lv/`) to the new ones (`latexfrog.json`, `.latexfrog/`) when it opens.
+//! Moves a project from the old names (`latexviewer.json`, `.lv/`) to the new ones when it opens, and the configuration from the top
+//! of the project into `.latexfrog/latexfrog.json`, where it lives now: LatexFrog keeps one entry in a project.
 //!
 //! Each step is one rename, so a failure leaves the old name intact and the next open tries again. An existing new name always wins:
 //! the old one stays where it is and is reported. Nothing is merged, because a merge could lose either side.
@@ -10,7 +11,9 @@ use std::fs;
 use std::path::Path;
 
 const OLD_CONFIG: &str = concat!("latex", "viewer.json");
-const NEW_CONFIG: &str = "latexfrog.json";
+/// The configuration at the top of the project, where it lived before it moved into `.latexfrog/`.
+const TOP_CONFIG: &str = "latexfrog.json";
+const NEW_CONFIG: &str = crate::config::CONFIG_REL;
 const OLD_DIR: &str = concat!(".", "lv");
 const NEW_DIR: &str = ".latexfrog";
 /// The Tauri app that wrote the old lock.
@@ -19,7 +22,7 @@ const OLD_APP: &str = "lv-app.exe";
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Migration {
-    /// The old config file was renamed.
+    /// A configuration file was moved into `.latexfrog/`.
     pub config: bool,
     /// The old folder was renamed.
     pub folder: bool,
@@ -45,15 +48,7 @@ pub fn migrate_with(root: &Path, image_of: &dyn Fn(u32) -> Option<String>) -> Re
     }
     let renamed = |old: &Path, new: &Path| fs::rename(old, new).map_err(|e| Error::Other(format!("could not rename {}: {e}", old.display())));
 
-    let (old_cfg, new_cfg) = (root.join(OLD_CONFIG), root.join(NEW_CONFIG));
-    if old_cfg.is_file() {
-        if new_cfg.exists() {
-            m.conflicts.push(OLD_CONFIG.to_string());
-        } else {
-            renamed(&old_cfg, &new_cfg)?;
-            m.config = true;
-        }
-    }
+    // The folder first: the configuration moves into it.
     let new_dir = root.join(NEW_DIR);
     if old_dir.is_dir() {
         if new_dir.exists() {
@@ -61,8 +56,27 @@ pub fn migrate_with(root: &Path, image_of: &dyn Fn(u32) -> Option<String>) -> Re
         } else {
             renamed(&old_dir, &new_dir)?;
             m.folder = true;
-            crate::config::ensure_gitignore(root)?;
         }
+    }
+    // Another LatexFrog with the project open reads the configuration where it is: it stays until that one closes.
+    let otro_abierto = fs::read(new_dir.join("lock"))
+        .is_ok_and(|lock| matches!(candado::evaluar(&lock, std::process::id(), &candado::nombre_de_la_app(), image_of), Veredicto::Ocupado(_)));
+    let new_cfg = root.join(NEW_CONFIG);
+    for old in [TOP_CONFIG, OLD_CONFIG] {
+        let old_cfg = root.join(old);
+        if !old_cfg.is_file() || otro_abierto {
+            continue;
+        }
+        if new_cfg.exists() {
+            m.conflicts.push(old.to_string());
+        } else {
+            fs::create_dir_all(&new_dir).map_err(|e| Error::Other(format!("could not create {}: {e}", new_dir.display())))?;
+            renamed(&old_cfg, &new_cfg)?;
+            m.config = true;
+        }
+    }
+    if m.folder || m.config {
+        crate::config::ensure_gitignore(root)?;
     }
     Ok(m)
 }
@@ -88,7 +102,7 @@ mod tests {
         fs::write(old(r, "build/fast/a.aux"), "x").unwrap();
         let m = migrate_with(r, &nobody).unwrap();
         assert!(m.config && m.folder && m.conflicts.is_empty());
-        assert_eq!(fs::read(r.join(NEW_CONFIG)).unwrap(), b"\xEF\xBB\xBF{}\r\n");
+        assert_eq!(fs::read(r.join(".latexfrog/latexfrog.json")).unwrap(), b"\xEF\xBB\xBF{}\r\n");
         assert_eq!(fs::read_to_string(r.join(".latexfrog/build/fast/a.aux")).unwrap(), "x");
         assert!(!r.join(OLD_CONFIG).exists() && !r.join(OLD_DIR).exists());
         assert_eq!(migrate_with(r, &nobody).unwrap(), Migration::default());
@@ -99,13 +113,13 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let r = d.path();
         fs::write(r.join(OLD_CONFIG), "old").unwrap();
+        fs::create_dir_all(r.join(".latexfrog")).unwrap();
         fs::write(r.join(NEW_CONFIG), "new").unwrap();
         fs::create_dir_all(r.join(OLD_DIR)).unwrap();
         fs::write(old(r, "state.json"), "old").unwrap();
-        fs::create_dir_all(r.join(".latexfrog")).unwrap();
         let m = migrate_with(r, &nobody).unwrap();
         assert!(!m.config && !m.folder);
-        assert_eq!(m.conflicts, vec![OLD_CONFIG.to_string(), format!("{OLD_DIR}/")]);
+        assert_eq!(m.conflicts, vec![format!("{OLD_DIR}/"), OLD_CONFIG.to_string()]);
         assert_eq!(fs::read_to_string(r.join(NEW_CONFIG)).unwrap(), "new");
         assert_eq!(fs::read_to_string(old(r, "state.json")).unwrap(), "old");
     }
@@ -122,5 +136,20 @@ mod tests {
         assert!(r.join(OLD_CONFIG).exists() && old(r, "lock").exists());
         // A PID reused by another program does not stop it.
         assert!(migrate_with(r, &|_| Some("notepad.exe".to_string())).unwrap().config);
+    }
+
+    #[test]
+    fn the_configuration_at_the_top_moves_into_latexfrogs_folder_byte_for_byte() {
+        let d = tempfile::tempdir().unwrap();
+        let r = d.path();
+        fs::write(r.join(TOP_CONFIG), b"\xEF\xBB\xBF{ \"root\": \"main.tex\" }\r\n").unwrap();
+        fs::write(r.join(".gitignore"), b"*.aux\n").unwrap();
+        let m = migrate_with(r, &nobody).unwrap();
+        assert!(m.config && !m.folder && m.conflicts.is_empty());
+        assert!(!r.join(TOP_CONFIG).exists());
+        assert_eq!(fs::read(r.join(NEW_CONFIG)).unwrap(), b"\xEF\xBB\xBF{ \"root\": \"main.tex\" }\r\n");
+        assert!(r.join(".latexfrog/.gitignore").is_file());
+        assert_eq!(fs::read(r.join(".gitignore")).unwrap(), b"*.aux\n", "the project's own .gitignore is not touched");
+        assert_eq!(migrate_with(r, &nobody).unwrap(), Migration::default());
     }
 }

@@ -113,7 +113,7 @@ fn sin_latexfrog_json_se_detecta_todo_y_el_texto_propuesto_se_valida_y_se_escrib
     assert_eq!(v.ejemplo_nombre.as_deref(), Some("export/01 - Uno.pdf"));
     // Escribir: queda en el disco con el mismo texto, la sesión lo toma y la configuración pasa a estar guardada.
     let vista = s.write_config(&p.texto).unwrap();
-    assert_eq!(fs::read_to_string(d.path().join("latexfrog.json")).unwrap(), p.texto);
+    assert_eq!(fs::read_to_string(d.path().join(".latexfrog/latexfrog.json")).unwrap(), p.texto);
     assert_eq!(s.config_on_disk().unwrap().as_deref(), Some(p.texto.as_str()));
     assert!(vista.config_saved && vista.config_error.is_none());
     assert_eq!(vista.root_file.as_deref(), Some("main.tex"));
@@ -135,7 +135,7 @@ fn una_configuracion_con_errores_no_se_escribe_y_dice_cual_es_el_problema() {
     assert!(!v.ok && v.errores.iter().any(|e| e.contains("does not exist")), "{:?}", v.errores);
     assert!(matches!(s.write_config(r#"{ "root": "no-existe.tex", "profiles": { "completo": {} } }"#), Err(Error::NotFound(_))));
     assert!(matches!(s.write_config("{ esto no es json"), Err(_)));
-    assert!(!d.path().join("latexfrog.json").exists(), "nada se escribió");
+    assert!(!d.path().join(".latexfrog/latexfrog.json").exists(), "nada se escribió");
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn cambiar_la_raiz_en_la_configuracion_cambia_la_de_la_sesion_y_no_toca_state_js
     let con_otra = con_perfiles(&p.texto).replace("\"root\": \"main.tex\"", "\"root\": \"otro.tex\"");
     let vista = s.write_config(&con_otra).unwrap();
     assert_eq!(vista.root_file.as_deref(), Some("otro.tex"));
-    assert!(fs::read_to_string(d.path().join("latexfrog.json")).unwrap().contains("\"root\": \"otro.tex\""));
+    assert!(fs::read_to_string(d.path().join(".latexfrog/latexfrog.json")).unwrap().contains("\"root\": \"otro.tex\""));
     let estado = fs::read_to_string(d.path().join(".latexfrog/state.json")).unwrap_or_default();
     assert!(!estado.contains("otro.tex"), "la raíz ya no se guarda en state.json: {estado}");
     // Con la sesión nueva (otra instancia, otro día) la raíz es la del proyecto.
@@ -168,7 +168,7 @@ fn probar_lista_las_figuras_de_la_parte_con_la_configuracion_propuesta_sin_guard
     // Sin parte pedida, la primera; con una que no existe, un error; y no se guardó nada.
     assert_eq!(s.probe_config_con(&p.texto, None, &sonda_muda).unwrap().listado.parte.as_deref(), Some("Secciones/Uno"));
     assert!(s.probe_config_con(&p.texto, Some("Secciones/Tres"), &sonda_muda).is_err());
-    assert!(!d.path().join("latexfrog.json").exists());
+    assert!(!d.path().join(".latexfrog/latexfrog.json").exists());
     // Una configuración sin cache de figuras no tiene nada que listar y lo dice.
     let sin_cache = r#"{ "root": "main.tex", "profiles": { "completo": {} } }"#;
     let r = s.probe_config_con(sin_cache, None, &sonda_muda).unwrap();

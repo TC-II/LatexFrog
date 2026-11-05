@@ -36,6 +36,9 @@ pub struct FiguraEnArchivo {
 
 /// The readable `\caption{...}` of a `figure` environment's text, skipping an optional `[short]` argument.
 fn caption_de(figura: &str) -> Option<String> {
+    // a commented `% \caption{...}` is not the caption: TeX never reads it
+    let limpio: String = figura.lines().map(sin_comentario).collect::<Vec<_>>().join("\n");
+    let figura = limpio.as_str();
     let at = figura.find("\\caption")? + "\\caption".len();
     let rest = figura[at..].trim_start();
     let mut i = at + (figura[at..].len() - rest.len());
@@ -187,6 +190,78 @@ pub fn figuras_del_archivo(
     c.out
 }
 
+/// An image the document inserts with `\includegraphics` outside any `tikzpicture` (a photo, a plot, a PDF), for the Figures tree.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImagenEnCodigo {
+    /// The image file, relative to the root, or the argument as written when it does not resolve.
+    pub imagen: String,
+    /// Where the `\includegraphics` is.
+    pub codigo: String,
+    pub linea: u32,
+    /// The file and line that bring `codigo` in (its `\input`), for a file without headings of its own; `codigo` itself otherwise.
+    pub archivo: String,
+    pub donde_linea: u32,
+    pub caption: Option<String>,
+}
+
+/// The `figure` environments of a text: first and last line (from 1) and caption.
+fn figuras_con_caption(texto: &str) -> Vec<(u32, u32, Option<String>)> {
+    let mut v = Vec::new();
+    let mut abierta: Option<(usize, u32)> = None;
+    let mut prof = 0u32;
+    let mut base = 0;
+    for (n, l) in texto.split_inclusive('\n').enumerate() {
+        for c in re_figura().captures_iter(sin_comentario(l)) {
+            let Some(env) = c.get(2).map(|e| e.as_str()) else { continue };
+            if env == "tikzpicture" {
+                continue;
+            }
+            let m = c.get(0).expect("coincidencia");
+            if &c[1] == "begin" {
+                if prof == 0 {
+                    abierta = Some((base + m.start(), n as u32 + 1));
+                }
+                prof += 1;
+            } else if prof > 0 {
+                prof -= 1;
+                if prof == 0 {
+                    if let Some((ini, desde)) = abierta.take() {
+                        v.push((desde, n as u32 + 1, caption_de(&texto[ini..base + m.end()])));
+                    }
+                }
+            }
+        }
+        base += l.len();
+    }
+    v
+}
+
+/// Every image the project's code inserts outside a `tikzpicture`, file by file, with the caption of the `figure` it is in.
+pub fn imagenes_del_proyecto(root: &Path, ix: &crate::graph::ProjectIndex) -> Vec<ImagenEnCodigo> {
+    use crate::graph::EdgeKind;
+    let mut out = Vec::new();
+    for (rel, edges) in &ix.files {
+        let graficos: Vec<_> = edges.iter().filter(|e| e.kind == EdgeKind::Graphics && !e.en_tikz).collect();
+        if graficos.is_empty() {
+            continue;
+        }
+        let figuras = std::fs::read_to_string(root.join(rel)).map(|t| figuras_con_caption(&t)).unwrap_or_default();
+        // the first structural edge that brings this file in
+        let traido = ix.files.iter().find_map(|(padre, es)| {
+            es.iter()
+                .find(|e| matches!(e.kind, EdgeKind::Input | EdgeKind::Include | EdgeKind::Subfile | EdgeKind::Import | EdgeKind::Part) && e.target.as_deref() == Some(rel.as_str()))
+                .map(|e| (padre.clone(), e.line))
+        });
+        for e in graficos {
+            let caption = figuras.iter().find(|(a, b, _)| *a <= e.line && e.line <= *b).and_then(|(_, _, c)| c.clone());
+            let (archivo, donde_linea) = traido.clone().unwrap_or_else(|| (rel.clone(), e.line));
+            out.push(ImagenEnCodigo { imagen: e.target.clone().unwrap_or_else(|| e.raw.clone()), codigo: rel.clone(), linea: e.line, archivo, donde_linea, caption });
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,6 +286,28 @@ mod tests {
         let v = figuras_del_archivo(d.path(), "cap.tex", texto, "cache", "ABC123", "cap", false, &BTreeMap::new());
         assert_eq!(v[0].linea, 2);
         assert_eq!(v.len(), 3);
+    }
+
+    #[test]
+    fn images_outside_tikz_come_with_their_caption_and_the_line_that_brings_their_file() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("img")).unwrap();
+        std::fs::write(d.path().join("img/photo.png"), b"x").unwrap();
+        std::fs::write(d.path().join("main.tex"), "\\documentclass{article}\n\\begin{document}\n\\section{A}\n\\input{fig}\n\\end{document}\n").unwrap();
+        std::fs::write(d.path().join("fig.tex"), "\\begin{figure}\n\\includegraphics[width=3cm]{img/photo}\n\\caption{A photo}\n\\end{figure}\n\\begin{tikzpicture}\\node{\\includegraphics{img/photo}};\\end{tikzpicture}\n").unwrap();
+        let ix = crate::graph::ProjectIndex::build(d.path(), "main.tex", &[]);
+        let v = imagenes_del_proyecto(d.path(), &ix);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert_eq!((v[0].imagen.as_str(), v[0].codigo.as_str(), v[0].linea, v[0].archivo.as_str(), v[0].donde_linea), ("img/photo.png", "fig.tex", 2, "main.tex", 4));
+        assert_eq!(v[0].caption.as_deref(), Some("A photo"));
+    }
+
+    /// Overleaf's figure template leaves `% \caption{Caption}`: commented, it is no caption, and the image keeps its file name.
+    #[test]
+    fn a_commented_caption_is_not_the_caption() {
+        assert_eq!(caption_de("\\begin{figure}\n\\includegraphics{a.pdf}\n% \\caption{Caption}\n\\end{figure}"), None);
+        assert_eq!(caption_de("\\begin{figure}\n% \\caption{Old}\n\\caption{New} % \\caption{x}\n\\end{figure}").as_deref(), Some("New"));
+        assert_eq!(caption_de("\\begin{figure}\n\\caption{100\\% done}\n\\end{figure}").as_deref(), Some("100% done"));
     }
 
     /// The book's way: `\input{fig_x}` outside any `figure`, and the `figure` inside fig_x. pgf's count goes on through it, so the

@@ -206,69 +206,6 @@ pub fn detectar(root: &Path, ix: &ProjectIndex) -> Vec<PiezaInfo> {
     out
 }
 
-/// Las variables que el perfil fija le ganan al proyecto: el driver las define antes de cargar la raíz, y un `\def` sin guardia del
-/// proyecto (`\def\OpcionPie{completo}` en el preámbulo, otra vez en `opciones.tex`) las volvería a pisar. Devuelve `texto` sin esas
-/// definiciones, o `None` si no tiene ninguna. Sólo se saca la definición misma, `\def\X{...}` con sus llaves balanceadas: lo demás
-/// de la línea queda. Una definición con guardia (`\ifdefined\X\else\def\X{...}\fi`) respeta el valor del driver y no se toca.
-pub fn sin_definiciones(texto: &str, nombres: &[String]) -> Option<String> {
-    let eol = if texto.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut lineas: Vec<String> = texto.split(eol).map(str::to_string).collect();
-    let mut cambio = false;
-    for nombre in nombres {
-        let def = regex::Regex::new(&format!(r"\\[gex]?def\s*\\{}\b\s*", regex::escape(nombre))).expect("patrón válido");
-        for n in crate::doctor::defs_sin_guardia(texto, nombre) {
-            let Some(l) = lineas.get_mut(n as usize - 1) else { continue };
-            let codigo = sin_comentario(l).len();
-            let Some(m) = def.find(&l[..codigo]) else { continue };
-            // El cuerpo: el primer `{...}` balanceado después del nombre.
-            let resto = &l[m.end()..];
-            if !resto.starts_with('{') {
-                continue;
-            }
-            let (mut prof, mut fin, mut barra) = (0i32, None, false);
-            for (i, c) in resto.char_indices() {
-                if barra {
-                    barra = false;
-                    continue;
-                }
-                match c {
-                    '\\' => barra = true,
-                    '{' => prof += 1,
-                    '}' => {
-                        prof -= 1;
-                        if prof == 0 {
-                            fin = Some(m.end() + i + 1);
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            let Some(fin) = fin else { continue };
-            l.replace_range(m.start()..fin, "");
-            cambio = true;
-        }
-    }
-    cambio.then(|| lineas.join(eol))
-}
-
-/// Los archivos que carga `\InputIfFileExists{x}` en `texto` y existen: el índice del proyecto no los sigue (pueden faltar), pero un
-/// `opciones.tex` local es justo donde un proyecto redefine sus variables.
-pub fn opcionales(root: &Path, texto: &str) -> Vec<String> {
-    let re = regex::Regex::new(r"\\InputIfFileExists\s*\{([^{}\\%]+)\}").expect("patrón válido");
-    let mut v = Vec::new();
-    for l in texto.lines() {
-        for c in re.captures_iter(sin_comentario(l)) {
-            let nombre = c[1].trim().replace('\\', "/");
-            let rel = if nombre.contains('.') { nombre } else { format!("{nombre}.tex") };
-            if !rel.starts_with("..") && root.join(&rel).is_file() && !v.contains(&rel) {
-                v.push(rel);
-            }
-        }
-    }
-    v
-}
-
 /// Las líneas del driver que sacan esas piezas. Van en `begindocument/before`: ahí los paquetes ya definieron sus comandos y el
 /// cuerpo todavía no los usó. `\RenewDocumentCommand` (del núcleo de LaTeX desde 2020) acepta los argumentos opcionales de cada uno.
 pub fn lineas_del_driver(omitir: &[Pieza]) -> Vec<String> {
@@ -302,25 +239,6 @@ pub fn lineas_del_driver(omitir: &[Pieza]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn saca_las_definiciones_sin_guardia_de_una_variable_y_deja_lo_demas() {
-        let t = "% el pie\r\n\\def\\OpcionPie{completo}\r\n\\InputIfFileExists{opciones}{}{}\r\n\\def\\PieOpcionAutor{autor}\r\n";
-        let n = vec!["OpcionPie".to_string()];
-        assert_eq!(sin_definiciones(t, &n).unwrap(), "% el pie\r\n\r\n\\InputIfFileExists{opciones}{}{}\r\n\\def\\PieOpcionAutor{autor}\r\n");
-        assert_eq!(sin_definiciones("\\def\\OpcionPie{completo} % completo | autor\n", &n).unwrap(), " % completo | autor\n");
-        assert_eq!(sin_definiciones("x\\def\\OpcionPie{a{b}c}y\n", &n).unwrap(), "xy\n", "llaves anidadas");
-        assert!(sin_definiciones("\\ifdefined\\OpcionPie\\else\\def\\OpcionPie{completo}\\fi\n", &n).is_none(), "con guardia no se toca");
-        assert!(sin_definiciones("% \\def\\OpcionPie{x}\n\\def\\OpcionPieLarga{y}\n", &n).is_none());
-    }
-
-    #[test]
-    fn encuentra_los_archivos_opcionales_que_existen() {
-        let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("opciones.tex"), "x").unwrap();
-        let t = "\\InputIfFileExists{opciones}{}{}\n\\InputIfFileExists{falta}{}{}\n% \\InputIfFileExists{otro}{}{}\n";
-        assert_eq!(opcionales(d.path(), t), ["opciones.tex"]);
-    }
 
     #[test]
     fn las_claves_van_y_vuelven() {

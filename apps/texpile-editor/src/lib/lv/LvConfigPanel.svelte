@@ -2,29 +2,23 @@
 	// Edits a copy of latexfrog.json: everything comes from the engine (detect, validate, probe) and only Save writes.
 	// In a plain folder this is how it becomes an engine project; giving up leaves it a terminal project.
 	import { onMount, type Snippet } from 'svelte';
-	import { X } from '@lucide/svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { lvProject } from './lvEngine.svelte';
-	import { joinPath } from '$lib/workspace/fileSystem';
+	import { joinPath, pickFolder } from '$lib/workspace/fileSystem';
 	import { openFolderInWindow } from '$lib/workspace/openWorkspace';
 	import { compactDiff, lineDiff } from './lineDiff';
 	import LvFrog from './LvFrog.svelte';
 	import LvProfileEditor from './LvProfileEditor.svelte';
 	import {
-		choiceLabel,
 		configText,
 		defaultProfiles,
-		inEnglish,
 		figuresOf,
 		flagUse,
-		MACRO_NAME,
 		parseConfig,
 		partCommands,
-		removeVariable,
 		setFigures,
 		setFlag,
 		setPartCommands,
-		setVariable,
 		shortName,
 		useDetected,
 		type ConfigJson,
@@ -35,7 +29,6 @@
 
 	type Candidate = { archivo: string; rol: 'principal' | 'auxiliar' | 'otra'; recomendada: boolean; motivo: string };
 	type DetectedFlag = { nombre: string; uso: FlagUse; frase: string };
-	type DetectedVariable = { nombre: string; label: string; choices: string[]; default: string; defSinGuardia: unknown[]; frase: string };
 	type Proposal = {
 		raiz: string;
 		candidatas: Candidate[];
@@ -47,11 +40,11 @@
 		flags: DetectedFlag[];
 		figuras: { motivo: string; avisos: string[] };
 		salidas: { ejemploNombre: string | null };
-		variables: DetectedVariable[];
 	};
 	type Validation = { ok: boolean; errores: string[]; normalizado: string | null; ejemploNombre: string | null };
 
-	let { onClose }: { onClose: () => void } = $props();
+	// `required`: the folder is not a LatexFrog project yet. There is no Close: the dialog ends by saving or by opening another folder.
+	let { onClose, required = false }: { onClose: () => void; required?: boolean } = $props();
 
 	let proposal = $state<Proposal | null>(null);
 	let onDisk = $state<string | null>(null);
@@ -91,7 +84,6 @@
 	]);
 	const ROLES = $derived<Record<Candidate['rol'], string>>({ principal: m.lv_config_role_main(), auxiliar: m.lv_config_role_aux(), otra: m.lv_config_role_included() });
 	let otherFlagsOpen = $state(false);
-	let newVariable = $state('');
 
 	const INPUT = 'min-w-0 flex-1 rounded border border-surface-300-700 bg-transparent px-1 py-0.5';
 	const LABEL = 'w-40 shrink-0 opacity-70';
@@ -110,18 +102,6 @@
 			if (onDisk === null) edit(withDefaultProfile(proposal.texto));
 			else update((c) => ({ ...c, root }));
 		});
-
-	/** the names shown for each value, in the values' order; a name left as the value itself is not stored */
-	function shownLabels(choices: string[], shown: string[]): Record<string, string> | undefined {
-		const out = Object.fromEntries(choices.map((c, i) => [c, shown[i] ?? '']).filter(([c, l]) => l && l !== c));
-		return Object.keys(out).length ? out : undefined;
-	}
-
-	function addVariable() {
-		const name = newVariable;
-		update((c) => setVariable(c, name, { label: name, choices: [] }));
-		newVariable = '';
-	}
 
 	const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -176,11 +156,19 @@
 	/** the main file's folder when it is not the open one: that folder is the project */
 	const subfolder = $derived(typeof config?.root === 'string' && /[\\/]/.test(config.root) ? config.root.replace(/[\\/][^\\/]*$/, '') : null);
 
+	// the folder switch reopens the engine on the new folder: putting this one back first would offer its setup again
 	async function openSubfolder() {
 		const root = lvProject.folderRoot;
 		if (!root || !subfolder) return;
-		await close();
+		onClose();
 		await openFolderInWindow(joinPath(root, subfolder));
+	}
+
+	async function openAnother() {
+		const picked = await pickFolder();
+		if (!picked) return;
+		onClose();
+		await openFolderInWindow(picked);
 	}
 
 	async function close() {
@@ -219,7 +207,7 @@
 			</section>
 		{/snippet}
 		{#if proposal}
-			<details open={onDisk === null} data-testid="lv-config-technical">
+			<details data-testid="lv-config-technical">
 				<summary class="cursor-pointer opacity-70">{m.lv_config_technical()}</summary>
 				<div class="mt-2 flex flex-col gap-2">
 					<div class="flex justify-end"><button class="hover:preset-tonal rounded px-2 py-1" title={m.lv_config_detect_hint()} disabled={busy} onclick={() => detect()}>{m.lv_config_detect()}</button></div>
@@ -292,35 +280,6 @@
 						{/snippet}
 						{@render section(m.lv_config_figures_title(), proposal.figuras.motivo, 'figures', figuresBody)}
 
-						{#snippet variablesBody()}
-							{#each Object.entries(config?.variables ?? {}) as [name, v] (name)}
-								<div class="flex items-center gap-1" data-testid="lv-config-variable">
-									<code class="w-28 shrink-0 truncate">\{name}</code>
-									<input class={INPUT} value={v.label ?? ''} placeholder={m.lv_config_variable_label()} aria-label={m.lv_config_variable_label()} onchange={(e) => update((c) => setVariable(c, name, { ...v, label: e.currentTarget.value }))} />
-									<input class={INPUT} value={(v.choices ?? []).join(', ')} placeholder={m.lv_config_variable_choices()} aria-label={m.lv_config_variable_choices()} data-testid="lv-config-variable-choices" onchange={(e) => update((c) => setVariable(c, name, { ...v, choices: list(e.currentTarget.value) }))} />
-									<input class={INPUT} value={(v.choices ?? []).map((ch) => choiceLabel(v, ch)).join(', ')} placeholder={m.lv_config_variable_shown()} aria-label={m.lv_config_variable_shown()} title={m.lv_config_variable_shown_hint()} data-testid="lv-config-variable-shown" onchange={(e) => update((c) => setVariable(c, name, { ...v, choiceLabels: shownLabels(v.choices ?? [], list(e.currentTarget.value)) }))} />
-									<select class="rounded border border-surface-300-700 bg-transparent px-1 py-0.5" value={v.default ?? ''} aria-label={m.lv_config_variable_default()} onchange={(e) => update((c) => setVariable(c, name, { ...v, default: e.currentTarget.value || undefined }))}>
-										<option value="">{m.lv_config_variable_no_value()}</option>
-										{#each v.choices ?? [] as choice (choice)}<option value={choice}>{choice}</option>{/each}
-									</select>
-									<button class="hover:preset-tonal rounded p-0.5" title={m.lv_config_variable_remove()} aria-label={m.lv_config_variable_remove()} onclick={() => update((c) => removeVariable(c, name))}><X class="size-3.5" /></button>
-								</div>
-							{/each}
-							{#each (proposal?.variables ?? []).filter((v) => !(v.nombre in (config?.variables ?? {}))) as v (v.nombre)}
-								<div class="flex items-center gap-2">
-									<p class="min-w-0 flex-1 text-xs opacity-70">{v.frase}</p>
-									<button class="hover:preset-tonal shrink-0 rounded px-1.5 py-0.5 text-xs" onclick={() => update((c) => setVariable(c, v.nombre, { label: inEnglish(v.label) ?? v.label, choices: v.choices, default: v.default }))}>{m.lv_config_variable_add_detected({ name: v.nombre })}</button>
-								</div>
-							{/each}
-							{#each (proposal?.variables ?? []).filter((v) => v.nombre in (config?.variables ?? {}) && v.defSinGuardia.length > 0) as v (v.nombre)}
-								<p class="text-xs opacity-70" data-testid="lv-config-variable-warning">{v.frase}</p>
-							{/each}
-							<div class="flex items-center gap-2">
-								<input class={INPUT} bind:value={newVariable} placeholder={m.lv_config_variable_new()} aria-label={m.lv_config_variable_new()} data-testid="lv-config-variable-new" />
-								<button class="hover:preset-tonal shrink-0 rounded px-1.5 py-0.5 text-xs" data-testid="lv-config-variable-add" disabled={!MACRO_NAME.test(newVariable) || newVariable in (config?.variables ?? {})} onclick={addVariable}>{m.lv_config_variable_add()}</button>
-							</div>
-						{/snippet}
-						{@render section(m.lv_config_variables_title(), m.lv_config_variables_help(), 'variables', variablesBody)}
 					{/if}
 				</div>
 			</details>
@@ -340,7 +299,7 @@
 		{/each}
 		{#if validation?.ok}
 			<div>
-				<p class="opacity-70">{onDisk === null ? m.lv_config_new_file() : changed ? m.lv_config_diff() : m.lv_config_no_changes()}</p>
+				{#if onDisk !== null}<p class="opacity-70">{changed ? m.lv_config_diff() : m.lv_config_no_changes()}</p>{/if}
 				{#if onDisk !== null && changed}
 					<pre class="mt-1 max-h-40 overflow-auto rounded border border-surface-300-700 p-2 text-xs" data-testid="lv-config-diff">{#each rows as r}{#if r.kind === 'skip'}<div class="opacity-50">{m.lv_config_skipped_lines({ count: r.count })}</div>{:else}<div class={r.kind === 'add' ? 'text-success-500' : r.kind === 'remove' ? 'text-error-500' : 'opacity-70'}>{r.kind === 'add' ? '+ ' : r.kind === 'remove' ? '- ' : '  '}{r.text}</div>{/if}{/each}</pre>
 				{/if}
@@ -357,9 +316,14 @@
 			</p>
 		{/if}
 		<div class="flex justify-end gap-2">
-			<button class="rounded px-2 py-1 hover:bg-surface-200-800" onclick={close}>{m.lv_close()}</button>
-			<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-save" disabled={busy || !validation?.ok || !!subfolder} onclick={() => save()}>{m.lv_config_save()}</button>
-			<button class="rounded bg-primary-500 px-3 py-1 text-white" data-testid="lv-config-run" title={m.lv_config_run_title()} disabled={busy || !validation?.ok || !editing || !!subfolder} onclick={() => save(true)}>{m.lv_config_run()}</button>
+			{#if required}
+				<p class="mr-auto self-center text-xs opacity-70" data-testid="lv-config-required">{m.lv_config_required()}</p>
+				<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-other-folder" onclick={openAnother}>{m.lv_config_other_folder()}</button>
+			{:else}
+				<button class="rounded px-2 py-1 hover:bg-surface-200-800" onclick={close}>{m.lv_close()}</button>
+			{/if}
+			<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-run" title={m.lv_config_run_title()} disabled={busy || !validation?.ok || !editing || !!subfolder} onclick={() => save(true)}>{m.lv_config_run()}</button>
+			<button class="rounded bg-primary-500 px-3 py-1 text-white" data-testid="lv-config-save" disabled={busy || !validation?.ok || !!subfolder} onclick={() => save()}>{m.lv_config_save()}</button>
 		</div>
 	</div>
 </div>

@@ -351,31 +351,6 @@ fn sonda_de_synctex(sonda: &Sonda) -> Vec<Hallazgo> {
 
 // --- proyecto -----------------------------------------------------------------------------------------------------------------
 
-fn sin_comentario(l: &str) -> &str {
-    crate::graph::sin_comentario(l)
-}
-
-/// Un `\def\X` (o `\gdef`, `\edef`, `\xdef`) sin guardia de una variable declarada: pisa el valor que pone el driver antes de cargar la raíz.
-pub(crate) fn defs_sin_guardia(texto: &str, nombre: &str) -> Vec<u32> {
-    let def = Regex::new(&format!(r"\\[gex]?def\s*\\{}\b", regex::escape(nombre))).expect("patrón válido");
-    let guardia = Regex::new(&format!(r"\\(?:ifdefined|@ifundefined|ifx|providecommand|IfFileExists|ifcsname)\b[^\n]*\\?{}\b|\\ifx\s*\\{}\s*\\(?:undefined|@undefined)", regex::escape(nombre), regex::escape(nombre))).expect("patrón válido");
-    let lineas: Vec<&str> = texto.lines().collect();
-    let mut v = Vec::new();
-    for (i, l) in lineas.iter().enumerate() {
-        let l = sin_comentario(l);
-        if !def.is_match(l) {
-            continue;
-        }
-        // Con guardia: en la misma línea o en alguna de las tres anteriores (`\ifdefined\X\else` / `\ifx\X\undefined` en la línea de arriba).
-        let desde = i.saturating_sub(3);
-        let guardada = guardia.is_match(l) || lineas[desde..i].iter().any(|p| guardia.is_match(sin_comentario(p)));
-        if !guardada {
-            v.push(i as u32 + 1);
-        }
-    }
-    v
-}
-
 /// Cómo carga `texto` los archivos en las definiciones de `cmd` (un comando de `parts.commands`, `\Capitulo`): la línea de la primera
 /// definición que lo hace por `\input` (o `\subfile`) y si alguna lo hace por `\include`. `\includeonly` sólo vale para `\include`: si
 /// ninguna definición usa `\include`, un perfil de partes elegidas compila todo igual. Una definición con `\input` junto a otra con
@@ -441,29 +416,6 @@ pub fn chequeos_de_proyecto(e: &EntradaDeProyecto) -> Vec<Hallazgo> {
                 .con_arreglo("Rename the main file without # % { } \\ \" ~ ^ $.")
                 .en(e.root_file, 1),
         );
-    }
-
-    // Variables declaradas con un `\def` incondicional: el driver las define ANTES de cargar la raíz y el `\def` del proyecto las pisa.
-    let mut con_def = 0;
-    for nombre in e.config.variables.keys() {
-        for rel in e.ix.reachable.iter().filter(|r| r.to_ascii_lowercase().ends_with(".tex")) {
-            let Some(b) = leer(rel) else { continue };
-            for linea in defs_sin_guardia(&String::from_utf8_lossy(&b), nombre) {
-                con_def += 1;
-                h.push(
-                    Hallazgo::nuevo(
-                        "variable-def",
-                        Nivel::Info,
-                        format!("\\{nombre} is defined without a guard: profiles override it"),
-                        format!("{rel}:{linea} defines it again unconditionally. A profile that sets it compiles a copy of that file without the definition, so the profile's value wins and the project is not touched."),
-                    )
-                    .en(rel, linea),
-                );
-            }
-        }
-    }
-    if con_def == 0 && !e.config.variables.is_empty() {
-        h.push(Hallazgo::nuevo("variable-def", Nivel::Ok, "The project's variables have guarded defaults", ""));
     }
 
     // Partes que entran por `\input`: `\includeonly` no las toma, así que un perfil de partes elegidas igual compila todo.
@@ -733,18 +685,6 @@ mod tests {
         assert_eq!(ver(&h, "path-latexmk")[0].nivel, Nivel::Ok);
     }
 
-    #[test]
-    fn un_def_incondicional_de_una_variable_se_encuentra_y_con_guardia_no() {
-        let sin = "% el pie\n\\def\\OpcionPie{completo}\n\\InputIfFileExists{opciones}{}{}\n";
-        assert_eq!(defs_sin_guardia(sin, "OpcionPie"), [2]);
-        assert!(defs_sin_guardia("\\ifdefined\\OpcionPie\\else\\def\\OpcionPie{completo}\\fi\n", "OpcionPie").is_empty(), "la guardia en la misma línea");
-        assert!(defs_sin_guardia("\\ifdefined\\OpcionPie\\else\n  \\def\\OpcionPie{completo}\n\\fi\n", "OpcionPie").is_empty(), "la guardia en la línea de arriba");
-        assert!(defs_sin_guardia("\\ifx\\OpcionPie\\undefined\n\\gdef\\OpcionPie{x}\\fi\n", "OpcionPie").is_empty());
-        assert!(defs_sin_guardia("% \\def\\OpcionPie{x}\n", "OpcionPie").is_empty(), "comentado");
-        assert!(defs_sin_guardia("\\def\\OpcionPieLarga{x}\n", "OpcionPie").is_empty(), "otro nombre que empieza igual");
-        assert_eq!(defs_sin_guardia("a\n\n\n\n\\edef\\OpcionPie{x}\n", "OpcionPie"), [5], "una guardia lejos no cuenta");
-    }
-
     fn proyecto(archivos: &[(&str, &[u8])]) -> tempfile::TempDir {
         let d = tempfile::tempdir().unwrap();
         for (rel, b) in archivos {
@@ -760,7 +700,7 @@ mod tests {
     }
 
     #[test]
-    fn el_doctor_de_proyecto_encuentra_la_variable_sin_guardia_el_bom_y_el_autoclean() {
+    fn el_doctor_de_proyecto_encuentra_el_bom_y_el_autoclean() {
         let d = proyecto(&[
             ("main.tex", b"\\documentclass{book}\n\\input{structure}\n\\input{conbom}\n\\begin{document}\n\\Capitulo{Cap/uno}\n\\end{document}\n"),
             ("structure.tex", b"\\def\\OpcionPie{completo}\n\\newcommand{\\Capitulo}[1]{\\input{#1}}\n"),
@@ -768,13 +708,11 @@ mod tests {
             ("Cap/uno.tex", b"uno\n"),
             (".vscode/settings.json", br#"{ "latex-workshop.latex.autoClean.run": "onBuilt" }"#),
         ]);
-        let cfg = config(r#"{ "root": "main.tex", "parts": { "commands": ["Capitulo"] }, "variables": { "OpcionPie": { "choices": ["completo", "autor"] } }, "profiles": { "parcial": { "parts": "selection" } } }"#);
+        let cfg = config(r#"{ "root": "main.tex", "parts": { "commands": ["Capitulo"] }, "profiles": { "parcial": { "parts": "selection" } } }"#);
         let ix = ProjectIndex::build(d.path(), "main.tex", &cfg.parts.commands);
         let h = chequeos_de_proyecto(&EntradaDeProyecto { root: d.path(), root_file: "main.tex", config: &cfg, ix: &ix });
-        let v = &ver(&h, "variable-def")[0];
-        // Ya no es un aviso: el perfil que la fija compila una copia sin esa definición.
-        assert_eq!((v.nivel, v.archivo.as_deref(), v.linea), (Nivel::Info, Some("structure.tex"), Some(1)), "{h:#?}");
-        assert!(v.titulo.contains("OpcionPie") && v.titulo.contains("override") && v.arreglo.is_none());
+        // the document's own `\def`s are its business: nothing is said about them
+        assert!(ver(&h, "variable-def").is_empty(), "{h:#?}");
         assert_eq!(ver(&h, "bom-input")[0].archivo.as_deref(), Some("conbom.tex"));
         assert!(ver(&h, "autoclean")[0].detalle.contains("onBuilt"));
         // `\Capitulo` se define con `\input`: `\includeonly` no sirve para sus partes.

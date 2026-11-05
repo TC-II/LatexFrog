@@ -20,6 +20,7 @@ pub mod fswatch;
 pub mod graph;
 pub mod historial;
 pub mod logparse;
+pub mod macros;
 pub mod migration;
 pub mod piezas;
 pub mod procesos;

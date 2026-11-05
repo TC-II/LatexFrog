@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Beside Compile: when this project compiles by itself, with whichever profile is chosen. It is the project's choice, not a
-	// profile's: on saving, once typing stops, or only with the Compile button. Kept in the project's state on this machine.
+	// profile's: on saving, once typing stops, or only with the Compile button. Kept in the project's state on this machine. The bar shows
+	// its icon only; the menu names each choice.
 	import { Hand, Save, Timer } from '@lucide/svelte';
 	import { menuItemClass, menuPanelClass } from '$lib/menus/menuStyles';
 	import { m } from '$lib/paraglide/messages';
@@ -37,7 +38,6 @@
 		data-testid="lv-compile-when"
 	>
 		<current.icon class="size-3.5" />
-		{#if !compact}<span class="cap-center @max-[44rem]:hidden">{current.label()}</span>{/if}
 	</button>
 	{#if menu.open}
 		<div bind:this={menu.el} class="{menuPanelClass} fixed z-1300 flex min-w-56 flex-col" style={menu.style} role="menu">

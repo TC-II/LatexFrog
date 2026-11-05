@@ -39,6 +39,12 @@ fn main() {
             }
         }
     }
+    // `--sections` prints the outline.
+    if args.iter().any(|a| a == "--sections") {
+        for x in &s.sections {
+            println!("  {}{} ({}:{})", "  ".repeat(x.level as usize), x.title, x.file, x.line);
+        }
+    }
     for p in s.lint.iter().take(15) {
         println!("  {:?} {} {}:{} {}", p.severity, p.kind, p.file.as_deref().unwrap_or("-"), p.line.unwrap_or(0), p.message);
     }

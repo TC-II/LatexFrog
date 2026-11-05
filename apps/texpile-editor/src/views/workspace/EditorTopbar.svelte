@@ -10,6 +10,7 @@
 	import CompileOptionsMenu from './CompileOptionsMenu.svelte';
 	import LvProgress from '$lib/lv/LvProgress.svelte';
 	import LvTarget from '$lib/lv/LvTarget.svelte';
+	import LvFollow from '$lib/lv/LvFollow.svelte';
 	import LvCompileWhen from '$lib/lv/LvCompileWhen.svelte';
 	import { AnchoredMenu } from '$lib/pdf-view/anchoredMenu.svelte';
 	import type { ComponentProps } from 'svelte';
@@ -185,8 +186,6 @@
 </script>
 
 <div class="flex items-center gap-2 @max-[20rem]:gap-0.5">
-	<LvTarget />
-	<LvProgress />
 	<div class="flex items-center gap-2 @max-[20rem]:gap-0.5">
 		<!-- Compile first: the end of the bar nearest the editor -->
 		{#if fileMode.current}
@@ -245,6 +244,9 @@
 				</button>
 			{/if}
 		{/if}
+		<LvTarget />
+		<LvFollow />
+		<LvProgress />
 		{#if compileLog.current && (compileLog.current.errors.length > 0 || compileLog.current.warnings.length > 0)}
 			<button
 				class="{quiet} gap-1 {compileLog.current.errors.length > 0 ? 'text-error-ink' : 'text-warning-ink'}"

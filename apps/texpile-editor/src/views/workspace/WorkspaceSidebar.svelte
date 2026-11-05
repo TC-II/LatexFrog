@@ -358,7 +358,7 @@
 			onClose={onCloseGlobalSearch}
 			onReplace={onReplaceInFolder}
 		/>
-	{:else if view === 'outline'}
+	{:else if view === 'outline' && lvProject.active}
 		<LvProjectOutline {onOpenFileAt} />
 	{:else if view === 'scm'}
 		<!-- the panel owns its own scrolling: it is two regions with a splitter between them, each

@@ -1,13 +1,14 @@
 <script lang="ts">
-	// The profiles: chips on top, then name, color and the document's pieces in book order, and how it compiles and where the PDF goes.
+	// The profiles: chips on top, then name, color and the document's pieces in book order, how it compiles, its watermark and where the PDF
+	// goes.
 	// Edits the copy of latexfrog.json that Project Configuration holds; only its Save writes.
 	import { Plus, X } from '@lucide/svelte';
 	import { pickFolder } from '$lib/workspace/fileSystem';
 	import { m } from '$lib/paraglide/messages';
 	import LvFrog from './LvFrog.svelte';
+	import LvWatermark from './LvWatermark.svelte';
 	import {
 		DEFAULT_OUTPUT,
-		choiceLabel,
 		emptyProfile,
 		outputName,
 		PER_PART_PATTERN,
@@ -20,7 +21,6 @@
 		setProfile,
 		shortName,
 		toParts,
-		variableLabel,
 		type ConfigJson,
 		type Piece,
 		type ProfileJson,
@@ -50,7 +50,6 @@
 	const selection = $derived(selectionOf(profile));
 	const omit = $derived(profile.omit ?? []);
 	const output = $derived(profile.output ?? outputs[id] ?? DEFAULT_OUTPUT);
-	const variables = $derived(Object.entries(config.variables ?? {}));
 	const INPUT = 'rounded border border-surface-300-700 bg-transparent px-1 py-0.5';
 	const CARD = 'flex flex-col gap-1 rounded border border-surface-300-700 p-2';
 
@@ -60,7 +59,7 @@
 		const number = ids.length + 1;
 		const label = m.lv_profiles_new({ number });
 		const next = profileId(label, ids);
-		onChange(setProfile(config, next, emptyProfile(config, pieces, number, label)));
+		onChange(setProfile(config, next, emptyProfile(pieces, number, label)));
 		chosen = next;
 	}
 
@@ -175,22 +174,13 @@
 							<option value="scratch">{m.lv_profiles_figures_scratch()}</option>
 						</select>
 					</label>
-					{#each variables as [name, v] (name)}
-						<label class="flex items-center justify-between gap-2">
-							<span title={m.lv_profiles_var_title()}>{variableLabel(name, v)}</span>
-							<select class={INPUT} value={profile.vars?.[name] ?? ''} data-testid="lv-profile-var" onchange={(e) => change({ vars: { ...(profile.vars ?? {}), [name]: e.currentTarget.value } })}>
-								<option value="">{v.default ? m.lv_profiles_default_value({ value: choiceLabel(v, v.default) }) : m.lv_profiles_default()}</option>
-								{#each v.choices ?? [] as choice (choice)}
-									<option value={choice}>{choiceLabel(v, choice)}</option>
-								{/each}
-							</select>
-						</label>
-					{/each}
 					<label class="flex items-center gap-2">
 						<input type="checkbox" checked={profile.draftImages === true} onchange={(e) => change({ draftImages: e.currentTarget.checked })} />
 						{m.lv_draft_images()}
 					</label>
 				</div>
+
+				<LvWatermark value={profile.watermark} profile={profile.label ?? id} onChange={(watermark) => change({ watermark })} />
 
 				<div class={CARD}>
 					<div class="text-xs opacity-70">{m.lv_profiles_output()}</div>

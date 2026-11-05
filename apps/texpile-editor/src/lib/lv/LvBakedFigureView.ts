@@ -29,12 +29,41 @@ export function leaveFiguresToBaked(nv: NodeView, node: Node): NodeView {
 	return nv;
 }
 
+/** how recently a key in a figure's code view counts as typing in it */
+const TYPING_MS = 5000;
+
+/** how long after a jump the visual editor keeps its caret in sight while figures turn into pictures */
+const LANDING_MS = 6000;
+let landingAt = 0;
+
+/** a jump is landing in the visual editor (maybe in a file still opening): see keepLandingInSight. Scrolling or typing ends it. */
+export function markLanding() {
+	landingAt = Date.now();
+}
+
+const endLanding = () => (landingAt = 0);
+
+/**
+ * A figure drawn as its picture changes the height of the page. Right after a jump (the Figures panel, SyncTeX, a file just opened)
+ * the figures above the target are still tall code views and turn into short pictures one by one, carrying the target out of sight:
+ * each one drawn brings the block that holds the caret back to the middle.
+ */
+function keepLandingInSight(view: PMView) {
+	if (Date.now() - landingAt > LANDING_MS) return;
+	const $head = view.state.selection.$head;
+	if ($head.depth === 0) return;
+	const dom = view.nodeDOM($head.before(1));
+	if (dom instanceof HTMLElement && dom.isConnected) dom.scrollIntoView({ block: 'center' });
+}
+
 export class LvBakedFigureView implements NodeView {
 	dom: HTMLElement;
 	private raw: RawLatexView;
 	private strip: HTMLElement;
 	private showing: FigureImage[] = [];
 	private destroyed = false;
+	/** when a key was last pressed in the code view */
+	private typedAt = 0;
 
 	constructor(
 		private node: Node,
@@ -43,6 +72,8 @@ export class LvBakedFigureView implements NodeView {
 		private filePath: () => string | null
 	) {
 		this.raw = new RawLatexView(node, view, getPos);
+		// the reader taking over ends the landing: the view no longer moves on its own
+		for (const type of ['wheel', 'keydown', 'mousedown'] as const) view.dom.addEventListener(type, endLanding, { passive: true });
 		this.dom = document.createElement('div');
 		this.dom.className = 'lv-baked-figure';
 		this.strip = document.createElement('div');
@@ -53,7 +84,8 @@ export class LvBakedFigureView implements NodeView {
 			this.showSource(this.showing[0]);
 		});
 		this.dom.appendChild(this.raw.dom);
-		// code kept open because the cursor was in it becomes the picture again once the cursor leaves
+		this.raw.dom.addEventListener('keydown', () => (this.typedAt = Date.now()));
+		// code kept open because someone was typing in it becomes the picture again once the cursor leaves
 		this.raw.dom.addEventListener('focusout', () => setTimeout(() => !this.baked && !this.raw.dom.contains(document.activeElement) && void this.look(), 0));
 		void this.look();
 	}
@@ -78,8 +110,9 @@ export class LvBakedFigureView implements NodeView {
 		const mine = own >= 0 ? assign(blocks, figures)[own] : [];
 		// a block whose figures are not all baked keeps its code: half a figure as a picture would hide the rest
 		if (mine.length === 0 || mine.some((f) => !f.pdf)) return this.toCode();
-		// the code view keeps the focus while someone is typing in it
-		if (this.raw.dom.contains(document.activeElement)) return;
+		// the code view stays while someone is typing in it. A caret that only landed there (switching from the source editor, a
+		// jump from the Figures panel or SyncTeX) is no reason to hide the picture: the visual editor always shows figures as pictures.
+		if (this.raw.dom.contains(document.activeElement) && Date.now() - this.typedAt < TYPING_MS) return;
 		this.showing = mine;
 		await this.drawStrip();
 	}
@@ -110,6 +143,8 @@ export class LvBakedFigureView implements NodeView {
 		});
 		this.strip.appendChild(button);
 		this.dom.replaceChildren(this.strip);
+		const view = this.view;
+		requestAnimationFrame(() => keepLandingInSight(view));
 	}
 
 	private toCode() {
@@ -135,7 +170,11 @@ export class LvBakedFigureView implements NodeView {
 	}
 
 	setSelection(anchor: number, head: number) {
-		if (!this.baked) this.raw.setSelection(anchor, head);
+		markLanding();
+		if (!this.baked) return this.raw.setSelection(anchor, head);
+		// a caret placed in a figure shown as its picture (a jump from the Figures panel, SyncTeX, a mode switch) has no DOM to sit
+		// in, and ProseMirror scrolls only to a DOM selection of its own: the picture brings itself into view instead
+		requestAnimationFrame(() => keepLandingInSight(this.view));
 	}
 
 	selectNode() {

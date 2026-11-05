@@ -26,7 +26,7 @@ fn como_config(p: &lv_core::detectar::Propuesta) -> ProjectConfig {
 }
 
 /// Desde «Perfiles por piezas» (848f290, `docs/handoff-perfiles.md`) la detección no propone perfiles: los arma la persona. Lo demás
-/// de la configuración (raíz, partes, flags, figuras, salidas, variables) se sigue comparando con el fixture. `publish.names` va por
+/// de la configuración (raíz, partes, flags, figuras, salidas) se sigue comparando con el fixture. `publish.names` va por
 /// perfil (`entrega`), así que sin perfiles tampoco hay nombres.
 fn sin_perfiles(mut c: ProjectConfig) -> ProjectConfig {
     c.profiles.clear();
@@ -56,21 +56,8 @@ fn el_libro_de_inspo_llega_a_su_configuracion_sin_escribir_nada_a_mano() {
     assert!(p.perfiles.is_empty() && p.config.get("profiles").map_or(true, |x| x.as_object().map_or(false, |o| o.is_empty())));
     assert_eq!(p.partes.len(), 8);
     assert_eq!(p.parts_commands, ["include", "Capitulo"]);
-    // El `\def` incondicional de la variable del libro sin parchear se explica ahí.
-    let v = p.variables.iter().find(|v| v.nombre == "OpcionPie").expect("la variable OpcionPie");
-    assert_eq!(v.choices, ["completo", "autor", "ninguno"]);
-    assert!(!v.def_sin_guardia.is_empty() || libro.join("structure.tex").is_file());
-
-    // La configuración que sale es la del fixture. La etiqueta de la variable no se puede deducir de los textos («Pie» contra «Pie de
-    // página»): es lo único que se edita a mano en la pantalla, y acá se iguala.
-    let mut sale = como_config(&p);
-    let mut debe = sin_perfiles(esperada("libro-tc.latexfrog.json"));
-    for c in [&mut sale, &mut debe] {
-        for v in c.variables.values_mut() {
-            v.label = None;
-        }
-    }
-    assert_eq!(sale, debe);
+    // La configuración que sale es la del fixture.
+    assert_eq!(como_config(&p), sin_perfiles(esperada("libro-tc.latexfrog.json")));
     assert_eq!(p.salidas.ejemplo_nombre.as_deref(), Some("PDF/Capítulos/01 - Funciones de Aproximación.pdf"));
 }
 

@@ -1,0 +1,21 @@
+% The exercise macros: the path is built two macros down, and the title is drawn by hand.
+\makeatletter
+\newcounter{exercise}
+\newcommand{\Exercise}[1]{%
+  \stepcounter{exercise}%
+  \edef\ex@num{\arabic{exercise}}%
+  \expandafter\ex@load\expandafter{\ex@num}{#1}%
+}
+\newcommand{\ex@load}[2]{%
+  \clearpage
+  \input{exercises/#2}%
+  \IfFileExists{solutions/#2.tex}{\ex@solution{#2}}{}%
+}
+\newcommand{\ex@solution}[1]{\clearpage\input{solutions/#1}}
+\newcommand{\metaExercise}[3][]{%
+  \begin{center}
+    \large Exercises \\[0.5em]
+    \LARGE\textbf{#2} \\[1em]
+  \end{center}
+}
+\makeatother

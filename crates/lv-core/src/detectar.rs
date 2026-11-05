@@ -8,7 +8,7 @@
 //! sólo confirmando.
 
 use crate::config::{
-    nombre_de_exportacion, FlagsCfg, PartsCfg, ProfileCfg, ProjectConfig, PublishCfg, VariableCfg, PATRON_DE_EXPORTACION,
+    nombre_de_exportacion, FlagsCfg, PartsCfg, ProfileCfg, ProjectConfig, PublishCfg, PATRON_DE_EXPORTACION,
 };
 use crate::doctor;
 use crate::error::{Error, Result};
@@ -119,18 +119,6 @@ pub struct UbicacionDef {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VariableDetectada {
-    pub nombre: String,
-    pub label: String,
-    pub choices: Vec<String>,
-    pub default: String,
-    /// Dónde se define sin guardia (`\def` incondicional): ahí el menú de compilación no puede cambiarla.
-    pub def_sin_guardia: Vec<UbicacionDef>,
-    pub frase: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Propuesta {
     pub raiz: String,
     pub candidatas: Vec<Candidata>,
@@ -142,7 +130,6 @@ pub struct Propuesta {
     pub figuras: FigurasDetectadas,
     pub perfiles: Vec<PerfilPropuesto>,
     pub salidas: SalidasDetectadas,
-    pub variables: Vec<VariableDetectada>,
     pub avisos: Vec<String>,
     /// La configuración propuesta como **texto** (JSON con sangría, en el orden de claves de `latexfrog.json`): es lo que la pantalla
     /// edita y guarda. Como valor (`config`) las claves saldrían ordenadas por nombre.
@@ -577,99 +564,22 @@ fn figuras_detectadas(archivos: &[Archivo], raiz: &str, auxiliares: &BTreeSet<St
 
 // --- variables ---------------------------------------------------------------------------------------------------------------
 
-fn humanizar(nombre: &str) -> String {
-    // `OpcionPie` -> `Pie`: se saca el prefijo «Opcion» y se separan las mayúsculas.
-    let sin = nombre.strip_prefix("Opcion").filter(|r| !r.is_empty()).unwrap_or(nombre);
-    let mut s = String::new();
-    for (i, c) in sin.chars().enumerate() {
-        if i > 0 && c.is_uppercase() {
-            s.push(' ');
-            s.push(c.to_lowercase().next().unwrap_or(c));
-        } else {
-            s.push(c);
-        }
-    }
-    s
-}
-
-/// La interfaz va en inglés y los nombres de las variables salen de las macros del proyecto, que suelen estar en castellano: las
-/// palabras de opción más comunes tienen su nombre en inglés. Lo que no está acá queda como está (y se puede editar en Variables).
-pub fn en_ingles(palabra: &str) -> Option<&'static str> {
-    let p = palabra.trim().to_lowercase();
-    Some(match p.as_str() {
-        "pie" | "pie de pagina" | "pie de página" => "Footer",
-        "encabezado" | "cabecera" => "Header",
-        "completo" | "completa" => "Full",
-        "autor" => "Author",
-        "ninguno" | "ninguna" | "nada" => "None",
-        "borrador" => "Draft",
-        "final" => "Final",
-        "si" | "sí" => "Yes",
-        "no" => "No",
-        "corto" | "corta" => "Short",
-        "largo" | "larga" => "Long",
-        "fecha" => "Date",
-        "marca de agua" => "Watermark",
-        "idioma" => "Language",
-        "version" | "versión" => "Version",
-        _ => return None,
-    })
-}
-
-fn variables_detectadas(archivos: &[Archivo], flags: &BTreeSet<String>) -> Vec<VariableDetectada> {
+/// The macros a project compares with `\\ifx` against other macros it defines (`\\ifx\\OpcionPie\\PieOpcionNinguno`): a value the
+/// document switches on, not a flag for a reduced compilation. LatexFrog does not override them: a document compiles as it is written.
+fn variables_ifx(archivos: &[Archivo], flags: &BTreeSet<String>) -> BTreeSet<String> {
     static DEF: OnceLock<Regex> = OnceLock::new();
     static IFX: OnceLock<Regex> = OnceLock::new();
     let def = re(&DEF, r"\\[gex]?def\s*\\([A-Za-z@]+)\s*\{([^{}]*)\}");
     let ifx = re(&IFX, r"\\ifx\s*\\([A-Za-z@]+)\s*\\([A-Za-z@]+)");
-    // nombre -> (valor, orden de definición)
-    let mut defs: BTreeMap<String, (String, (usize, usize))> = BTreeMap::new();
-    for (i, a) in archivos.iter().enumerate() {
-        for c in def.captures_iter(&a.texto) {
-            let pos = c.get(0).map_or(0, |m| m.start());
-            defs.entry(c[1].to_string()).or_insert((c[2].trim().to_string(), (i, pos)));
-        }
-    }
-    // variable -> las macros con las que se compara (`\ifx\OpcionPie\PieOpcionNinguno`)
-    let mut comparaciones: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let definidas: BTreeSet<String> = archivos.iter().flat_map(|a| def.captures_iter(&a.texto).map(|c| c[1].to_string()).collect::<Vec<_>>()).collect();
+    let mut out = BTreeSet::new();
     for a in archivos {
         for c in ifx.captures_iter(&a.texto) {
-            let (x, y) = (c[1].to_string(), c[2].to_string());
-            if defs.contains_key(&x) && defs.contains_key(&y) && x != y && !flags.contains(&x) && !matches!(y.as_str(), "undefined" | "relax" | "empty") {
-                comparaciones.entry(x).or_default().insert(y);
+            let (x, y) = (&c[1], &c[2]);
+            if definidas.contains(x) && definidas.contains(y) && x != y && !flags.contains(x) && !matches!(y, "undefined" | "relax" | "empty") {
+                out.insert(x.to_string());
             }
         }
-    }
-    let mut out = Vec::new();
-    for (x, ys) in comparaciones {
-        let (valor, _) = defs[&x].clone();
-        if valor.is_empty() {
-            continue;
-        }
-        let mut otros: Vec<(&String, (usize, usize))> = ys.iter().map(|y| (&defs[y].0, defs[y].1)).collect();
-        otros.sort_by_key(|(_, orden)| *orden);
-        let mut choices = vec![valor.clone()];
-        for (v, _) in otros {
-            if !v.is_empty() && !choices.contains(v) {
-                choices.push(v.clone());
-            }
-        }
-        if choices.len() < 2 {
-            continue;
-        }
-        let mut sin_guardia = Vec::new();
-        for a in archivos {
-            for l in doctor::defs_sin_guardia(&a.texto, &x) {
-                sin_guardia.push(UbicacionDef { archivo: a.rel.clone(), linea: l });
-            }
-        }
-        let mut frase = format!("\\{x} takes one of these values: {} (default \"{valor}\"). Each profile can set it without touching the project.", choices.join(", "));
-        if let Some(u) = sin_guardia.first() {
-            frase.push_str(&format!(
-                " {}:{} defines it without a guard: LatexFrog compiles a copy without that definition, so the profile's value wins and the project is not touched.",
-                u.archivo, u.linea
-            ));
-        }
-        out.push(VariableDetectada { label: humanizar(&x), nombre: x, choices, default: valor, def_sin_guardia: sin_guardia, frase });
     }
     out
 }
@@ -721,8 +631,7 @@ pub fn detectar(root: &Path, raiz: Option<&str>, actual: Option<&ProjectConfig>,
 
     // Las variables salen primero: lo que se compara con `\ifx` no es un flag.
     let nombres_de_flags: BTreeSet<String> = condiciones.clone();
-    let variables = variables_detectadas(&archivos, &nombres_de_flags);
-    let de_variables: BTreeSet<String> = variables.iter().map(|v| v.nombre.clone()).collect();
+    let de_variables = variables_ifx(&archivos, &nombres_de_flags);
     let mut flags = flags_detectados(&archivos, &de_variables);
     // Una guardia `\ifdefined\X\else\def\X{...}\fi` de una variable no es un flag.
     flags.retain(|f| !de_variables.contains(&f.nombre));
@@ -766,21 +675,12 @@ pub fn detectar(root: &Path, raiz: Option<&str>, actual: Option<&ProjectConfig>,
             Some(v)
         }
     };
-    let variables_cfg: IndexMap<String, VariableCfg> = variables
-        .iter()
-        .map(|v| {
-            let choice_labels = v.choices.iter().filter_map(|c| en_ingles(c).map(|e| (c.clone(), e.to_string()))).collect();
-            let label = en_ingles(&v.label).map(str::to_string).unwrap_or_else(|| v.label.clone());
-            (v.nombre.clone(), VariableCfg { label: Some(label), choices: v.choices.clone(), default: Some(v.default.clone()), choice_labels })
-        })
-        .collect();
     let cfg = ProjectConfig {
         root: raiz.clone(),
         engine: motor_de(&archivos, &raiz),
         parts: PartsCfg { commands: parts_commands.clone() },
         flags: flags_cfg,
         figure_cache,
-        variables: variables_cfg,
         profiles: perfiles,
         publish,
         export,
@@ -810,7 +710,6 @@ pub fn detectar(root: &Path, raiz: Option<&str>, actual: Option<&ProjectConfig>,
         figuras,
         perfiles: tarjetas,
         salidas,
-        variables,
         avisos,
         config: serde_json::to_value(&cfg).map_err(|e| Error::Other(e.to_string()))?,
     })
@@ -872,20 +771,9 @@ mod tests {
     }
 
     #[test]
-    fn la_variable_con_opciones_sale_de_def_y_de_los_ifx_en_orden_de_definicion() {
-        let a = ns("\\def\\OpcionPie{completo}\n\\def\\PieOpcionAutor{autor}\n\\def\\PieOpcionNinguno{ninguno}\n\\ifx\\OpcionPie\\PieOpcionNinguno\\else x\\ifx\\OpcionPie\\PieOpcionAutor\\else y\\fi\\fi\n");
-        let v = variables_detectadas(&[a], &BTreeSet::new());
-        assert_eq!(v.len(), 1);
-        assert_eq!((v[0].nombre.as_str(), v[0].default.as_str(), v[0].label.as_str()), ("OpcionPie", "completo", "Pie"));
-        assert_eq!(v[0].choices, ["completo", "autor", "ninguno"]);
-        // El `\def` del valor por omisión de este texto no tiene guardia (línea 1): la frase lo explica.
-        assert_eq!(v[0].def_sin_guardia.iter().map(|u| (u.archivo.as_str(), u.linea)).collect::<Vec<_>>(), [("x.tex", 1)]);
-        assert!(v[0].frase.contains("without a guard") && v[0].frase.contains("profile's value wins"), "{}", v[0].frase);
-        assert_eq!(humanizar("OpcionPieDePagina"), "Pie de pagina");
-        // Con la guardia, no hay nada que avisar.
-        let a = ns("\\ifdefined\\OpcionPie\\else\\def\\OpcionPie{completo}\\fi\n\\def\\PieOpcionAutor{autor}\n\\ifx\\OpcionPie\\PieOpcionAutor x\\fi\n");
-        let v = variables_detectadas(&[a], &BTreeSet::new());
-        assert!(v[0].def_sin_guardia.is_empty() && !v[0].frase.contains("without a guard"), "{:?}", v[0]);
+    fn a_macro_compared_with_ifx_is_a_value_of_the_document_not_a_flag() {
+        let a = ns("\\def\\OpcionPie{completo}\n\\def\\PieOpcionAutor{autor}\n\\ifx\\OpcionPie\\PieOpcionAutor x\\fi\n\\ifx\\Otra\\undefined y\\fi\n");
+        assert_eq!(variables_ifx(&[a], &BTreeSet::new()).into_iter().collect::<Vec<_>>(), ["OpcionPie"]);
     }
 
     #[test]

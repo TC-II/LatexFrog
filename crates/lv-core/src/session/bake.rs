@@ -157,6 +157,8 @@ pub struct FiguresStatus {
     /// The last check still holds: nothing that can change a figure was edited since. False means the states may be stale.
     pub revisado: bool,
     pub sin_revisar: usize,
+    /// The images the code inserts outside TikZ, listed whatever the figures mode: the Figures tree shows them among the figures.
+    pub imagenes: Vec<crate::figimages::ImagenEnCodigo>,
 }
 
 fn ahora_ms() -> u64 {
@@ -317,18 +319,13 @@ impl Session {
         if cfg.flags.figure_list.is_empty() && fcfg.modo == Modo::Project {
             return Err(otro("`project` mode needs `flags.figureList` in latexfrog.json: the macro that puts pgf in `mode=list and make`"));
         }
-        let vars: Vec<(String, String)> = cfg
-            .variables
-            .iter()
-            .filter_map(|(n, v)| d.state.variables.get(n).or(v.default.as_ref()).map(|x| (n.clone(), x.clone())))
-            .collect();
         let figuras = self.inyeccion_de_figuras(&cfg, &ix, true)?;
         let driver = render_driver_spec(&DriverSpec {
             perfil: PERFIL_COCINA.into(),
             root_rel: rf.clone(),
             partial: true,
             flags,
-            vars,
+            marca: None,
             includeonly,
             draft_images: false,
             figuras,
@@ -797,9 +794,11 @@ impl Session {
         let lista = figcache::leer_figlist(&self.root);
         let mut vale = false;
         let mut revisado = false;
+        let mut imagenes = Vec::new();
         let slugs = match &rf {
             Some(rf) => {
                 let ix = ProjectIndex::build(&self.root, rf, &cfg.parts.commands);
+                imagenes = crate::figimages::imagenes_del_proyecto(&self.root, &ix);
                 vale = lista.as_ref().zip(hoy.as_deref()).is_some_and(|(l, h)| l.completa && l.vale_para(h, rf, &self.partes_con_figuras(&fcfg, &ix)));
                 revisado = vale && lista.as_ref().and_then(|l| l.huella_listado.as_ref()).is_some_and(|h| Some(h) == self.huella_actual(&ix, &fcfg).as_ref());
                 if fcfg.modo == Modo::App {
@@ -917,6 +916,7 @@ impl Session {
             cocinando: self.bake.cocinando.lock().ok().and_then(|g| g.clone()),
             errores,
             revisado,
+            imagenes,
         })
     }
 

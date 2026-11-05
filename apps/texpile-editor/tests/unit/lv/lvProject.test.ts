@@ -4,8 +4,8 @@ import { resolveGotoTarget } from '$lib/editor/source/sourceGotoTarget';
 import { refineClick } from '$lib/lv/lvSync';
 import { fileTier, fuzzyScore } from '$lib/palette/paletteFilter';
 import { jobReason } from '$lib/lv/lvFormat';
-import { cleanBlock, figureTree, type Figure, type Heading } from '$lib/lv/lvFigures';
-import { exportName, figuresOf, flagUse, outputsOf, partCommands, removeVariable, setFigures, setFlag, setOutputs, setPartCommands, setVariable, useDetected, type ConfigJson } from '$lib/lv/lvProfiles';
+import { cleanBlock, figureTree, imageRows, type Figure, type Heading } from '$lib/lv/lvFigures';
+import { exportName, figuresOf, flagUse, outputsOf, partCommands, setFigures, setFlag, setOutputs, setPartCommands, useDetected, type ConfigJson } from '$lib/lv/lvProfiles';
 
 const figure = (nombre: string, estado: Figure['estado'], at?: { codigo: string; linea: number; archivo?: string; dondeLinea?: number }): Figure => ({
 	nombre,
@@ -40,6 +40,12 @@ describe('figures', () => {
 		expect(tree.nodes[1].figures.map((f) => f.nombre)).toEqual(['cap']);
 		expect(tree.beforeHeadings.map((f) => f.nombre)).toEqual(['cover']);
 		expect(tree.notInCode.map((f) => f.nombre)).toEqual(['gone']);
+	});
+
+	it('mixes images with the figures in line order', () => {
+		const images = imageRows([{ imagen: 'img/photo.png', codigo: 'ch1.tex', linea: 3, archivo: 'ch1.tex', dondeLinea: 3, caption: 'A photo' }]);
+		const tree = figureTree(headings, [figure('wire', 'aldia', { codigo: 'ch1.tex', linea: 5 }), figure('first', 'aldia', { codigo: 'ch1.tex', linea: 2 }), ...images]);
+		expect(tree.nodes[0].children[0].figures.map((f) => f.imagen ?? f.nombre)).toEqual(['first', 'img/photo.png', 'wire']);
 	});
 
 	it('only a complete list of today and of this root allows cleaning', () => {
@@ -81,12 +87,6 @@ describe('project edits', () => {
 		const empty = setOutputs(c, { ...outputsOf(c), publish: '' });
 		expect(empty.publish).toBeUndefined();
 		expect(empty.export).toBeUndefined();
-	});
-
-	it('removing the last variable removes the section', () => {
-		const c = setVariable({}, 'Pie', { label: 'Pie', choices: ['a'] });
-		expect(c.variables?.Pie.choices).toEqual(['a']);
-		expect(removeVariable(c, 'Pie').variables).toBeUndefined();
 	});
 
 	it('use detected copies one section and removes it when nothing was detected', () => {

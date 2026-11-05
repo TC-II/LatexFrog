@@ -3,7 +3,7 @@
 //! figures mode and, where there are TikZ figures, their captions. Nothing is written into the fixtures.
 
 use lv_core::detectar::detectar;
-use lv_core::figimages::figuras_del_archivo;
+use lv_core::figimages::{figuras_del_archivo, imagenes_del_proyecto};
 use lv_core::graph::ProjectIndex;
 use lv_core::symbols::Symbols;
 use serde_json::Value;
@@ -46,6 +46,13 @@ fn check(dir: &Path) -> Vec<String> {
     let got: Vec<String> = sym.sections.iter().map(|s| s.title.clone()).collect();
     if got != strings(&exp["headings"]) {
         bad.push(format!("headings {got:?}, expected {:?}", strings(&exp["headings"])));
+    }
+    if exp.get("imageCaptions").is_some() {
+        // the `\includegraphics` images, by file
+        let captions: Vec<String> = imagenes_del_proyecto(&root, &ix).into_iter().map(|i| i.caption.unwrap_or_default()).collect();
+        if captions != strings(&exp["imageCaptions"]) {
+            bad.push(format!("image captions {captions:?}, expected {:?}", strings(&exp["imageCaptions"])));
+        }
     }
     if exp.get("figureCaptions").is_some() {
         // the main file first, then the others in the order their headings come

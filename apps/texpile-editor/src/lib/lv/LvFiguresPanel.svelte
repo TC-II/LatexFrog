@@ -2,18 +2,20 @@
 	// The project's figures under the document's headings, the way Contents shows them; figures above every heading and compiled figures
 	// the code no longer has come last. A color says whether a figure's PDF is its code's only after a check of the code as it is now:
 	// Check figures compares without compiling, Compile changed compiles what changed. Nothing is deleted without the preview: Clean asks
-	// the engine what it would remove, shows it, and only the second button removes it.
+	// the engine what it would remove, shows it, and only the second button removes it. Images the code inserts (`\includegraphics`)
+	// sit among the figures with a file icon. A row opens its code in the view that is showing; the arrow keys go on to the next row.
 	import { onDestroy } from 'svelte';
+	import { FileImage } from '@lucide/svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { lvProject } from './lvEngine.svelte';
-	import { cleanBlock, figureTree, megabytes, needsCompile, type Figure, type FigureNode, type FiguresStatus, type Heading } from './lvFigures';
+	import { cleanBlock, figureTree, imageRows, megabytes, needsCompile, type Figure, type FigureNode, type FiguresStatus, type Heading } from './lvFigures';
 
 	type Cleanup = { archivos: string[]; bytes: number; figuras: number };
 	type BakeEvent = { type: string; done?: number; total?: number; error?: string; cooked?: number; failed?: number; remaining?: number };
-	type Shown = 'ok' | 'changed' | 'failed' | 'unknown';
+	type Shown = 'ok' | 'changed' | 'failed' | 'unknown' | 'image';
 
-	const ICON: Record<Shown, string> = { ok: '●', changed: '●', failed: '✘', unknown: '◌' };
-	const COLOR: Record<Shown, string> = { ok: 'text-success-500', changed: 'text-warning-500', failed: 'text-error-500', unknown: 'opacity-50' };
+	const ICON: Record<Shown, string> = { ok: '●', changed: '●', failed: '✘', unknown: '◌', image: '' };
+	const COLOR: Record<Shown, string> = { ok: 'text-success-500', changed: 'text-warning-500', failed: 'text-error-500', unknown: 'opacity-50', image: 'opacity-70' };
 	const BUTTON = 'hover:preset-tonal rounded border border-surface-300-700 px-2 py-0.5 disabled:opacity-50';
 
 	let status = $state<FiguresStatus | null>(null);
@@ -24,8 +26,12 @@
 	let notice = $state('');
 	let error = $state('');
 	let cancelling = $state(false);
+	/** which groups are open, by key: a reload after a check or a build keeps the tree as it was */
+	let opened = $state<Record<string, boolean>>({});
+	/** the row last opened: the arrow keys move from it */
+	let selected = $state<string | null>(null);
 
-	const tree = $derived(figureTree(headings, status?.figuras ?? []));
+	const tree = $derived(figureTree(headings, [...(status?.figuras ?? []), ...imageRows(status?.imagenes ?? [])]));
 	const checked = $derived(status?.revisado ?? false);
 	const toCompile = $derived((status?.figuras ?? []).filter(needsCompile).length);
 	const block = $derived(cleanBlock(status?.figlist ?? null));
@@ -38,6 +44,7 @@
 
 	/** before a check of today's code only the facts show: a failed figure; whether a PDF is its code's is not known */
 	function shown(f: Figure): Shown {
+		if (f.imagen) return 'image';
 		if (f.estado === 'fallo') return 'failed';
 		if (f.estado === 'falta') return 'changed';
 		if (!checked || f.estado === 'sinrevisar') return 'unknown';
@@ -99,9 +106,30 @@
 			notice = m.lv_figures_cleaned({ count: done.figuras, mb: megabytes(done.bytes) });
 		});
 
-	const openCode = (f: Figure) => {
-		if (f.codigo) (lvProject.onShowSource ?? lvProject.onOpenAt)?.(f.codigo, f.linea ?? 1);
+	const isOpen = (key: string, byDefault: boolean) => opened[key] ?? byDefault;
+
+	/** the figure's code in the view that is showing (the visual editor stays visual); the row keeps the focus for the arrow keys */
+	const openCode = (f: Figure, row: HTMLElement) => {
+		if (!f.codigo) return;
+		selected = f.nombre;
+		// a figure kept in a file of its own (`\input` in the chapter): the visual editor shows it where the chapter brings it
+		const brought = f.archivo && f.archivo !== f.codigo && f.dondeLinea != null ? { file: f.archivo, line: f.dondeLinea } : undefined;
+		lvProject.onOpenAt?.(f.codigo, f.linea ?? 1, brought);
+		for (const ms of [0, 150, 400]) setTimeout(() => selected === f.nombre && row.isConnected && row.focus({ preventScroll: true }), ms);
 	};
+
+	function onKey(e: KeyboardEvent) {
+		if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+		const here = (e.target as HTMLElement).closest<HTMLElement>('[data-testid=lv-figure-row]');
+		if (!here) return;
+		// the rows that can be seen: a closed group hides its rows
+		const rows = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-testid=lv-figure-row]:not(:disabled)')].filter((r) => r.offsetParent !== null);
+		const next = rows[rows.indexOf(here) + (e.key === 'ArrowDown' ? 1 : -1)];
+		if (!next) return;
+		e.preventDefault();
+		next.scrollIntoView({ block: 'nearest' });
+		next.click();
+	}
 
 	const unsubscribe = lvProject.subscribe((event) => {
 		const ev = event as BakeEvent;
@@ -124,15 +152,15 @@
 	{@const state = shown(f)}
 	<button
 		type="button"
-		class="hover:preset-tonal flex w-full items-center gap-1.5 rounded px-1 text-left text-xs disabled:cursor-default"
-		title="{f.nombre.split('/').pop()}{f.codigo ? ` · ${f.codigo}:${f.linea}` : ''}"
+		class="hover:preset-tonal flex w-full items-center gap-1.5 rounded px-1 text-left text-xs outline-none disabled:cursor-default {selected === f.nombre ? 'preset-tonal-primary' : ''}"
+		title="{(f.imagen ?? f.nombre).split('/').pop()}{f.codigo ? ` · ${f.codigo}:${f.linea}` : ''}"
 		disabled={!f.codigo}
 		data-testid="lv-figure-row"
 		data-state={state}
-		onclick={() => openCode(f)}
+		onclick={(e) => openCode(f, e.currentTarget)}
 	>
-		<span class="shrink-0 {COLOR[state]}">{ICON[state]}</span>
-		<span class="truncate">{f.caption || f.nombre.split('/').pop()}</span>
+		{#if f.imagen}<FileImage class="size-3 shrink-0 {COLOR[state]}" aria-hidden="true" />{:else}<span class="shrink-0 {COLOR[state]}">{ICON[state]}</span>{/if}
+		<span class="truncate">{f.caption || (f.imagen ?? f.nombre).split('/').pop()}</span>
 	</button>
 {/snippet}
 
@@ -143,7 +171,7 @@
 {/snippet}
 
 {#snippet node(n: FigureNode, depth: number)}
-	<details class="group" open={depth > 0} data-testid="lv-figure-group">
+	<details class="group" open={isOpen(n.key, depth > 0)} ontoggle={(e) => (opened[n.key] = e.currentTarget.open)} data-testid="lv-figure-group">
 		<summary class="flex cursor-pointer items-center gap-1.5 rounded py-0.5 pr-1 {n.heading.level <= 1 ? 'font-semibold' : ''}" title="{n.heading.file}:{n.heading.line}">
 			<span class="shrink-0 text-xs opacity-60 transition-transform group-open:rotate-90" aria-hidden="true">▸</span>
 			<span class="min-w-0 flex-1 truncate">{n.heading.title}</span>
@@ -156,11 +184,39 @@
 	</details>
 {/snippet}
 
+{#snippet treeView()}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="mt-2 flex flex-col gap-0.5" data-testid="lv-figure-tree" onkeydown={onKey}>
+		{#if tree.beforeHeadings.length}
+			<details class="group" open={isOpen('before', true)} ontoggle={(e) => (opened.before = e.currentTarget.open)} data-testid="lv-figure-group">
+				<summary class="flex cursor-pointer items-center gap-1.5 py-0.5 pr-1 italic">
+					<span class="shrink-0 text-xs opacity-60 transition-transform group-open:rotate-90" aria-hidden="true">▸</span>
+					<span class="min-w-0 flex-1 truncate">{headings.length ? m.lv_figures_before_headings() : m.lv_figures_body()}</span>
+					{@render counts(tree.beforeHeadings.length, tree.beforeHeadings.filter((f) => shown(f) === 'changed').length, tree.beforeHeadings.filter((f) => f.estado === 'fallo').length)}
+				</summary>
+				<div class="pl-3">{#each tree.beforeHeadings as f (f.nombre)}{@render row(f)}{/each}</div>
+			</details>
+		{/if}
+		{#each tree.nodes as n (n.key)}{@render node(n, 0)}{/each}
+		{#if tree.notInCode.length}
+			<details class="group" open={isOpen('gone', false)} ontoggle={(e) => (opened.gone = e.currentTarget.open)} data-testid="lv-figure-group">
+				<summary class="flex cursor-pointer items-center gap-1.5 py-0.5 pr-1 italic" title={m.lv_figures_not_in_code_title()}>
+					<span class="shrink-0 text-xs opacity-60 transition-transform group-open:rotate-90" aria-hidden="true">▸</span>
+					<span class="min-w-0 flex-1 truncate">{m.lv_figures_not_in_code()}</span>
+					<span class="shrink-0 text-xs opacity-70">{tree.notInCode.length}</span>
+				</summary>
+				<div class="pl-3">{#each tree.notInCode as f (f.nombre)}{@render row(f)}{/each}</div>
+			</details>
+		{/if}
+	</div>
+{/snippet}
+
 <div class="h-full overflow-y-auto p-2 text-sm" data-testid="lv-figures">
 	{#if status === null}
 		{#if error}<p class="text-error-500">{error}</p>{:else}<p class="opacity-60">{m.lv_figures_reading()}</p>{/if}
 	{:else if status.modo === 'off'}
 		<p class="opacity-70" data-testid="lv-figures-off">{m.lv_figures_off()}</p>
+		{@render treeView()}
 	{:else}
 		<div class="mb-2 flex flex-wrap items-center gap-2">
 			<button class={BUTTON} disabled={baking !== null} title={m.lv_figures_check_title()} data-testid="lv-figures-check" onclick={() => start('figures-check')}>{m.lv_figures_check()}</button>
@@ -183,6 +239,7 @@
 			<span><span class={COLOR.changed}>{ICON.changed}</span> {m.lv_figures_legend_changed()}</span>
 			<span><span class={COLOR.failed}>{ICON.failed}</span> {m.lv_figures_legend_failed()}</span>
 			<span><span class={COLOR.unknown}>{ICON.unknown}</span> {m.lv_figures_legend_unknown()}</span>
+			<span class="inline-flex items-center gap-1"><FileImage class="size-3 {COLOR.image}" aria-hidden="true" /> {m.lv_figures_legend_image()}</span>
 		</p>
 		<p class="mt-1 text-xs opacity-60" data-testid="lv-figures-status">
 			{m.lv_figures_status({ current: status.actuales, old: status.viejas, mb: megabytes(status.bytes) })}
@@ -215,28 +272,6 @@
 			</div>
 		{/each}
 
-		<div class="mt-2 flex flex-col gap-0.5" data-testid="lv-figure-tree">
-			{#if tree.beforeHeadings.length}
-				<details class="group" open data-testid="lv-figure-group">
-					<summary class="flex cursor-pointer items-center gap-1.5 py-0.5 pr-1 italic">
-						<span class="shrink-0 text-xs opacity-60 transition-transform group-open:rotate-90" aria-hidden="true">▸</span>
-						<span class="min-w-0 flex-1 truncate">{m.lv_figures_before_headings()}</span>
-						{@render counts(tree.beforeHeadings.length, tree.beforeHeadings.filter((f) => shown(f) === 'changed').length, tree.beforeHeadings.filter((f) => f.estado === 'fallo').length)}
-					</summary>
-					<div class="pl-3">{#each tree.beforeHeadings as f (f.nombre)}{@render row(f)}{/each}</div>
-				</details>
-			{/if}
-			{#each tree.nodes as n (n.key)}{@render node(n, 0)}{/each}
-			{#if tree.notInCode.length}
-				<details class="group" data-testid="lv-figure-group">
-					<summary class="flex cursor-pointer items-center gap-1.5 py-0.5 pr-1 italic" title={m.lv_figures_not_in_code_title()}>
-						<span class="shrink-0 text-xs opacity-60 transition-transform group-open:rotate-90" aria-hidden="true">▸</span>
-						<span class="min-w-0 flex-1 truncate">{m.lv_figures_not_in_code()}</span>
-						<span class="shrink-0 text-xs opacity-70">{tree.notInCode.length}</span>
-					</summary>
-					<div class="pl-3">{#each tree.notInCode as f (f.nombre)}{@render row(f)}{/each}</div>
-				</details>
-			{/if}
-		</div>
+		{@render treeView()}
 	{/if}
 </div>

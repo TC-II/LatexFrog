@@ -24,29 +24,23 @@ fn sonda_sana(nombre: &str, args: &[&str], _: Option<&Path>) -> Salida {
 }
 
 #[test]
-fn el_doctor_de_la_sesion_ve_el_def_sin_guardia_al_abrir_una_copia_sin_parchear() {
+fn el_doctor_de_la_sesion_no_da_errores_en_un_proyecto_sano() {
     let d = tempfile::tempdir().unwrap();
     fs::write(d.path().join("main.tex"), "\\documentclass{book}\n\\input{structure}\n\\begin{document}\nHola\n\\end{document}\n").unwrap();
     fs::write(d.path().join("structure.tex"), "\\def\\OpcionPie{completo}\n").unwrap();
     fs::write(
         d.path().join("latexfrog.json"),
-        r#"{ "root": "main.tex", "variables": { "OpcionPie": { "choices": ["completo", "autor"], "default": "completo" } }, "profiles": { "completo": {} } }"#,
+        r#"{ "root": "main.tex", "profiles": { "completo": {} } }"#,
     )
     .unwrap();
     let s = sesion(d.path());
     let i = s.doctor_con(&sonda_sana).unwrap();
-    let v: Vec<_> = i.hallazgos.iter().filter(|h| h.id == "variable-def").collect();
-    assert_eq!(v.len(), 1, "{:#?}", i.hallazgos);
-    // Una nota y no un aviso: el perfil que fija la variable compila una copia de structure.tex sin esa definición.
-    assert_eq!((v[0].nivel, v[0].archivo.as_deref(), v[0].linea), (Nivel::Info, Some("structure.tex"), Some(1)));
+    // A document's own definitions are its business: profiles no longer override them, so there is nothing to say about them.
+    assert!(!i.hallazgos.iter().any(|h| h.id == "variable-def"), "{:#?}", i.hallazgos);
     assert_eq!(i.distribucion.as_deref(), Some("MiKTeX 26.5"));
     // Lo grave va primero: no hay errores, y lo que sigue nunca es más grave que lo anterior.
     assert!(i.hallazgos.iter().all(|h| h.nivel != Nivel::Error), "{:#?}", i.hallazgos);
     assert!(i.hallazgos.windows(2).all(|w| w[0].nivel >= w[1].nivel), "{:#?}", i.hallazgos);
-    // Con la guardia puesta, la nota desaparece.
-    fs::write(d.path().join("structure.tex"), "\\ifdefined\\OpcionPie\\else\\def\\OpcionPie{completo}\\fi\n").unwrap();
-    s.refresh().unwrap();
-    let i = s.doctor_con(&sonda_sana).unwrap();
     // El aviso de autoClean del settings.json de VS Code del usuario (%APPDATA%) es de la máquina, no de este proyecto de prueba.
     let raiz = d.path().to_string_lossy().to_string();
     let del_usuario = |h: &&lv_core::doctor::Hallazgo| h.id == "autoclean" && !h.detalle.contains(&raiz);

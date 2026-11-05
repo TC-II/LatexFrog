@@ -31,20 +31,24 @@ const plain = (t: string) => t.replace(/\r\n?/g, '\n');
 
 /**
  * Which figures fall in each of the document's raw blocks, given in order: each figure is looked for after the previous one, so two
- * blocks with the same text still get their own picture.
+ * blocks with the same text still get their own picture. A figure no raw block holds (the editor drew its code some other way) is
+ * skipped: it must not hold back the figures after it.
  */
 export function assign(blocks: string[], figures: FigureImage[]): FigureImage[][] {
 	const out: FigureImage[][] = blocks.map(() => []);
-	let k = 0;
-	for (let b = 0; b < blocks.length && k < figures.length; b++) {
-		const text = plain(blocks[b]);
-		let from = 0;
-		while (k < figures.length) {
-			const at = text.indexOf(plain(figures[k].snippet).trim(), from);
-			if (at < 0) break;
-			out[b].push(figures[k]);
+	const texts = blocks.map(plain);
+	let b = 0;
+	let from = 0;
+	for (const f of figures) {
+		const snippet = plain(f.snippet).trim();
+		if (!snippet) continue;
+		for (let i = b; i < texts.length; i++) {
+			const at = texts[i].indexOf(snippet, i === b ? from : 0);
+			if (at < 0) continue;
+			out[i].push(f);
+			b = i;
 			from = at + 1;
-			k++;
+			break;
 		}
 	}
 	return out;

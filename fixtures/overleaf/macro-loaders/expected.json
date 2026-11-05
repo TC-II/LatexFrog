@@ -1,0 +1,12 @@
+{
+  "main": "main.tex",
+  "parts": 0,
+  "headings": [
+    "Voltage divider",
+    "Wheatstone bridge"
+  ],
+  "imageCaptions": [
+    "A divider",
+    "A bridge"
+  ]
+}

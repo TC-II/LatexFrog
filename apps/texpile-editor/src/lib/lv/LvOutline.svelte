@@ -10,10 +10,16 @@
 
 	let symbols = $state<Symbols | null>(null);
 	let error = $state('');
+	let shownRoot: string | undefined;
 
 	$effect(() => {
 		void lvProject.revision;
 		const root = lvProject.view?.root;
+		// another folder (or one that is not a project yet): nothing of the previous project's outline stays
+		if (root !== shownRoot) {
+			shownRoot = root;
+			symbols = null;
+		}
 		if (!root) return;
 		let stale = false;
 		lvProject
@@ -44,8 +50,26 @@
 	{:else if !symbols}
 		<p class="p-2 opacity-60">{m.lv_outline_loading()}</p>
 	{:else if symbols.sections.length === 0}
-		<p class="p-2 opacity-60">{m.lv_outline_empty()}</p>
+		<!-- a document with no headings still has a body: one entry for it, as if it were one chapter -->
+		{#if lvProject.view?.rootFile}
+			{@const main = lvProject.view.rootFile}
+			<button
+				type="button"
+				class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left font-semibold {isActive(main) ? 'text-primary-ink' : ''}"
+				style="padding-left: 4px"
+				title={main}
+				data-testid="lv-outline-body"
+				onclick={() => onOpenFileAt(joinPath(root, main), 1)}
+			>
+				<span class="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true"></span>
+				<span class="truncate">{m.lv_outline_body({ file: main.split('/').pop() ?? main })}</span>
+			</button>
+			<p class="p-2 text-xs opacity-60">{m.lv_outline_empty()}</p>
+		{:else}
+			<p class="p-2 opacity-60">{m.lv_outline_empty()}</p>
+		{/if}
 	{:else}
+		{@const top = Math.min(...symbols.sections.map((x) => x.level))}
 		{#each symbols.sections as s, i (`${s.file}:${s.line}:${i}`)}
 			{@const parent = (symbols.sections[i + 1]?.level ?? -1) > s.level}
 			<button
@@ -56,8 +80,8 @@
 				data-parent={parent || undefined}
 				onclick={() => onOpenFileAt(joinPath(root, s.file), s.line)}
 			>
-				<!-- a heading with headings under it: a dot, so the tree reads at a glance -->
-				<span class="size-1.5 shrink-0 rounded-full {parent ? 'bg-current' : 'bg-transparent'}" aria-hidden="true"></span>
+				<!-- a heading with headings under it: a dot, so the tree reads at a glance; solid at the top level, hollow below it -->
+				<span class="size-1.5 shrink-0 rounded-full {parent ? (s.level === top ? 'bg-current' : 'border border-current') : 'bg-transparent'}" aria-hidden="true"></span>
 				<span class="truncate">{s.title || m.lv_outline_untitled()}</span>
 			</button>
 		{/each}

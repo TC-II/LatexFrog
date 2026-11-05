@@ -134,6 +134,8 @@ export class SyncTexNav {
 		const res = await synctexForward(pdf, path, line);
 		console.debug('[synctex] forward', { tex: path, line, pdf, res });
 		if (!res.ok) {
+			// LatexFrog: Follow asks on its own (a folder just opened, before any compile); only a jump someone asked for reports
+			if (follow) return;
 			const missing = programNotFound(res.error);
 			if (missing && askForProgram(missing)) return;
 			toaster.error({ title: 'SyncTeX', description: res.error ?? m.wsview_toast_synctex_no_match() });

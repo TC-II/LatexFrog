@@ -63,7 +63,7 @@ impl Session {
 
     /// El texto de `latexfrog.json` tal como está en el disco (sin el BOM), o `None` si no existe.
     pub fn config_on_disk(&self) -> Result<Option<String>> {
-        match std::fs::read(self.root.join(config::CONFIG_FILE)) {
+        match std::fs::read(config::config_file(&self.root)) {
             Ok(b) => Ok(Some(String::from_utf8_lossy(b.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&b)).into_owned())),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(Error::Io(format!("{}: {e}", config::CONFIG_FILE))),
@@ -149,14 +149,13 @@ impl Session {
             None => partes.first().cloned(),
         };
         let flags: Vec<String> = cfg.flags.partial.iter().chain(&cfg.flags.externalize).chain(&cfg.flags.figure_list).cloned().collect();
-        let vars: Vec<(String, String)> = cfg.variables.iter().filter_map(|(n, v)| v.default.clone().map(|x| (n.clone(), x))).collect();
         let figuras = self.inyeccion_de_figuras(cfg, &ix, true)?;
         let driver = render_driver_spec(&DriverSpec {
             perfil: PERFIL_COCINA.into(),
             root_rel: cfg.root.clone(),
             partial: true,
             flags,
-            vars,
+            marca: None,
             includeonly: parte.clone().map(|p| vec![p]),
             draft_images: false,
             figuras,

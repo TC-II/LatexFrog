@@ -22,6 +22,7 @@ import type { ViewModeSwitch } from '$lib/workspace/viewModeSwitch.svelte';
 import { samePath } from '$lib/workspace/fileSystem';
 import { labelLine, definitionLine } from './definitionLines';
 import { selectInVisual, visualCaret, watchVisualCaret } from '$lib/lv/lvVisualSync';
+import { markLanding } from '$lib/lv/LvBakedFigureView';
 
 type NavDeps = {
 	doc: DocumentBuffer;
@@ -52,9 +53,16 @@ export class WorkspaceNav {
 	constructor(private d: NavDeps) {
 		lvProject.onFollow = () => void this.syncTex.forwardFromCursor(true);
 		watchVisualCaret(() => (this.inVisual() ? editorViewStore.current : null));
-		lvProject.onOpenAt = (file, line) => {
+		lvProject.onOpenAt = (file, line, visual) => {
 			const root = lvProject.view?.root ?? '';
+			if (visual && this.inVisual()) ({ file, line } = visual);
 			this.syncJumpToFileLine(joinPath(root, file), line);
+		};
+		lvProject.onLand = (file) => {
+			this.d.modes.mode = 'visual';
+			updateLayout({ viewMode: 'visual' });
+			const target = sessionRelativeTarget(file, this.d.guest());
+			if (needsActivate(target)) openFile(target);
 		};
 		lvProject.onShowSource = (file, line) => this.openFileAtLine(joinPath(lvProject.view?.root ?? '', file), line);
 		this.syncTex = new SyncTexNav({
@@ -116,6 +124,7 @@ export class WorkspaceNav {
 						? offsetToRowCol(doc.texSource, resolveGotoTarget(Text.of(doc.texSource.split('\n')), { line, selectText }).from)
 						: { row: line - 1, column: 0 };
 			const v = editorViewStore.current;
+			markLanding();
 			// LatexFrog: the clicked word itself, selected and centred
 			if (here && v && column !== undefined && lvProject.active && selectInVisual(v, doc.texSource, doc.sourceMap, line - 1, column, columnEnd ?? column)) return;
 			docPositions.set(target, { ...at, firstVisibleLine: at.row + 1 }, { jump: true });

@@ -118,7 +118,9 @@ impl Caso {
     }
 
     fn escribir(&self, rel: &str, t: &str) {
-        fs::write(self.d.path().join(rel), t).unwrap();
+        let p = self.d.path().join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, t).unwrap();
     }
 
     /// Cambia el archivo de estilo (y el sello con el que el motor falso nombra las figuras).
@@ -377,7 +379,7 @@ fn un_perfil_que_consume_el_cache_deja_en_el_historial_si_se_salteo_el_listado_y
 #[test]
 fn un_perfil_que_consume_el_cache_no_publica() {
     let c = caso();
-    c.escribir("latexfrog.json", &CONFIG.replace("\"parallelJobs\": 2 }", "\"parallelJobs\": 2 },\n  \"publish\": { \"dir\": \"PDF\" }"));
+    c.escribir(".latexfrog/latexfrog.json", &CONFIG.replace("\"parallelJobs\": 2 }", "\"parallelJobs\": 2 },\n  \"publish\": { \"dir\": \"PDF\" }"));
     let s = Session::open_with_cocinero(
         c.d.path(),
         c.r.sink.clone(),
@@ -655,7 +657,7 @@ fn la_limpieza_con_el_parcial_activo_no_borra_las_figuras_de_las_partes_que_no_i
 fn con_el_cache_apagado_no_hay_coccion() {
     let c = caso();
     let cfg = CONFIG.replace("\"mode\": \"project\"", "\"mode\": \"off\"");
-    c.escribir("latexfrog.json", &cfg);
+    c.escribir(".latexfrog/latexfrog.json", &cfg);
     let r = Recolector::nuevo();
     let latexmk = Builder::con_programa("powershell", args_de(&script(OK)));
     let s = Session::open_with_cocinero(c.d.path(), r.sink.clone(), latexmk, Cocinero::new()).unwrap();

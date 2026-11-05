@@ -13,7 +13,6 @@ use tempfile::TempDir;
 const CONFIG: &str = r#"{
   "root": "main.tex",
   "parts": { "commands": ["include"] },
-  "variables": { "A": { "choices": ["a", "b"], "default": "a" } },
   "profiles": { "fast": { "parts": "selection" }, "full": {} }
 }"#;
 
@@ -150,7 +149,9 @@ fn opens_compiles_with_parts_and_reports_events() {
     let d = project("latexfrog.json");
     let o = open(&mut s, d.path(), &mut ev);
     assert_eq!(o["project"]["rootFile"], "main.tex");
-    assert_eq!(o["migration"]["config"], false);
+    // a configuration at the top of the project moves into `.latexfrog/`
+    assert_eq!(o["migration"]["config"], true);
+    assert!(d.path().join(".latexfrog/latexfrog.json").is_file() && !d.path().join("latexfrog.json").exists());
 
     let ack = s.ok(json!({ "cmd": "compile", "profile": "fast", "parts": ["ch/one"] }), &mut ev);
     assert_eq!(ack["kind"], "started");
@@ -165,7 +166,7 @@ fn opens_compiles_with_parts_and_reports_events() {
 }
 
 #[test]
-fn outline_and_variables_and_config() {
+fn outline_state_and_config() {
     let mut s = Sidecar::new(OK);
     let mut ev = vec![];
     let d = project("latexfrog.json");
@@ -173,7 +174,7 @@ fn outline_and_variables_and_config() {
     let sym = s.ok(json!({ "cmd": "symbols" }), &mut ev);
     let sections = sym["sections"].as_array().unwrap();
     assert!(sections.iter().any(|x| x["title"] == "Start" && x["file"] == "ch/one.tex" && x["line"] == 2), "{sections:?}");
-    assert_eq!(s.ok(json!({ "cmd": "set-state", "variables": { "A": "b" } }), &mut ev)["variables"]["A"], "b");
+    assert_eq!(s.ok(json!({ "cmd": "set-state", "profile": "full" }), &mut ev)["activeProfile"], "full");
     assert_eq!(s.ok(json!({ "cmd": "config-read" }), &mut ev), CONFIG);
     assert!(s.ok(json!({ "cmd": "config-validate", "text": "{" }), &mut ev).to_string().contains('{'));
     assert_eq!(s.ok(json!({ "cmd": "history" }), &mut ev), json!([]));

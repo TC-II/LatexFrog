@@ -70,7 +70,6 @@ fn patch(p: &Value) -> Result<StatePatch, String> {
     Ok(StatePatch {
         active_profile: field(p, "profile")?,
         selection: field(p, "selection")?,
-        variables: field(p, "variables")?,
         auto_compile: field(p, "autoCompile")?,
         idle_ms: field(p, "idleMs")?,
         outside_save: field(p, "outsideSave")?,

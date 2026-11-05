@@ -19,7 +19,6 @@ const CONFIG: &str = r#"{
   "root": "main.tex",
   "parts": { "commands": ["include"] },
   "flags": { "partial": ["CompilacionReducida"], "externalize": ["TikzExternalizar"] },
-  "variables": { "OpcionPie": { "choices": ["completo", "autor"], "default": "completo" } },
   "profiles": {
     "parcial":  { "partial": true, "externalize": true, "parts": "selection" },
     "rapido":   { "partial": true, "externalize": true, "parts": "all" },
@@ -96,9 +95,12 @@ fn abre_con_la_configuracion_del_proyecto_las_partes_y_un_estado_valido() {
     assert_eq!(c.profiles.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["parcial", "rapido", "completo"]);
     assert_eq!(v.state.active_profile.as_deref(), Some("parcial"), "el primero que compila al guardar");
     assert_eq!(v.state.selection, ["Secciones/Uno"], "sin selección previa: la primera parte");
-    // Abrir sólo toma el candado del proyecto (`.latexfrog/lock`, F8): ni estado, ni drivers, ni nada del usuario.
-    let en_lv: Vec<String> = fs::read_dir(d.path().join(".latexfrog")).map(|r| r.flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect()).unwrap_or_default();
-    assert_eq!(en_lv, ["lock"], "abrir no escribe nada más que el candado");
+    // Opening takes the project's lock (`.latexfrog/lock`, F8) and moves the configuration into `.latexfrog/`, with the `.gitignore`
+    // that keeps only it: no state, no drivers, nothing of the user's.
+    let mut en_lv: Vec<String> = fs::read_dir(d.path().join(".latexfrog")).map(|r| r.flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect()).unwrap_or_default();
+    en_lv.sort();
+    assert_eq!(en_lv, [".gitignore", "latexfrog.json", "lock"], "opening writes nothing else");
+    assert!(!d.path().join("latexfrog.json").exists());
 }
 
 #[test]
@@ -113,20 +115,20 @@ fn sin_latexfrog_json_infiere_y_ofrece_guardarlo_y_un_json_roto_no_se_pisa() {
     assert_eq!(v.config.unwrap().profiles.len(), 3, "con partes: parcial, rápido y completo");
     let v = s.save_config().unwrap();
     assert!(v.config_saved);
-    let guardado = fs::read_to_string(d.path().join("latexfrog.json")).unwrap();
+    let guardado = fs::read_to_string(d.path().join(".latexfrog/latexfrog.json")).unwrap();
     assert!(guardado.contains("\"root\": \"main.tex\""), "{guardado}");
 
     // Un JSON que no se entiende: se avisa y se trabaja con lo inferido, sin tocar el archivo.
-    fs::write(d.path().join("latexfrog.json"), "{ roto").unwrap();
+    fs::write(d.path().join(".latexfrog/latexfrog.json"), "{ roto").unwrap();
     let (s2, _) = abrir(&d, OK);
     let v = s2.view().unwrap();
     assert!(v.config_error.as_deref().is_some_and(|e| e.contains("latexfrog.json")));
     assert!(!v.config_saved && v.config.is_some());
-    assert_eq!(fs::read_to_string(d.path().join("latexfrog.json")).unwrap(), "{ roto");
+    assert_eq!(fs::read_to_string(d.path().join(".latexfrog/latexfrog.json")).unwrap(), "{ roto");
 }
 
 #[test]
-fn el_driver_del_parcial_lleva_flags_variables_e_includeonly_de_la_seleccion() {
+fn el_driver_del_parcial_lleva_flags_e_includeonly_de_la_seleccion() {
     let d = proyecto();
     let (s, r) = abrir(&d, OK);
     s.set_state(StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
@@ -134,15 +136,14 @@ fn el_driver_del_parcial_lleva_flags_variables_e_includeonly_de_la_seleccion() {
     esperar_finales(&r, 1, 60);
     assert_eq!(
         driver(&d, "parcial"),
-        "% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\def\\OpcionPie{completo}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Dos}}\n\\input{\"main\"}\n"
+        "% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Dos}}\n\\input{\"main\"}\n"
     );
-    // Cambiar la variable y compilar el rápido: con el valor nuevo y, como es de todas las partes, con la lista COMPLETA en el \includeonly
-    // (F8b: una raíz con su propio \includeonly no lo recorta, S6).
-    s.set_state(StatePatch { variables: Some([("OpcionPie".to_string(), "autor".to_string())].into()), ..Default::default() }).unwrap();
+    // El rápido es de todas las partes: va con la lista COMPLETA en el \includeonly (F8b: una raíz con su propio \includeonly no lo
+    // recorta, S6). El documento compila como está escrito: ninguna variable suya entra al driver.
     s.request_build(Some("rapido")).unwrap();
     esperar_finales(&r, 2, 60);
     let rapido = driver(&d, "rapido");
-    assert!(rapido.contains("\\def\\OpcionPie{autor}") && rapido.contains("\\includeonly{Secciones/Uno,Secciones/Dos}"), "{rapido}");
+    assert!(!rapido.contains("OpcionPie") && rapido.contains("\\includeonly{Secciones/Uno,Secciones/Dos}"), "{rapido}");
     // El completo no lleva flags ni parcial, y también la lista completa de partes.
     s.request_build(Some("completo")).unwrap();
     esperar_finales(&r, 3, 60);
@@ -176,7 +177,7 @@ fn el_interruptor_de_borrador_pone_graphicx_y_graphics_pero_no_en_lo_que_se_entr
     assert!(s.publish("completo").is_ok());
     // El interruptor es de esta máquina: queda en `.latexfrog/state.json`, no en `latexfrog.json`.
     assert!(fs::read_to_string(d.path().join(".latexfrog/state.json")).unwrap().contains("\"draftImages\": true"));
-    assert!(!fs::read_to_string(d.path().join("latexfrog.json")).unwrap().contains("draftImages"));
+    assert!(!fs::read_to_string(d.path().join(".latexfrog/latexfrog.json")).unwrap().contains("draftImages"));
     // Apagado, el rápido vuelve a compilar completo y se puede publicar.
     s.set_state(StatePatch { draft_images: Some(false), ..Default::default() }).unwrap();
     s.request_build(Some("rapido")).unwrap();
@@ -203,8 +204,6 @@ fn el_estado_se_guarda_en_lv_y_se_valida() {
     let (s, _) = abrir(&d, OK);
     assert!(s.set_state(StatePatch { active_profile: Some("no-existe".into()), ..Default::default() }).is_err());
     assert!(s.set_state(StatePatch { selection: Some(vec!["Secciones/Fantasma".into()]), ..Default::default() }).is_err());
-    assert!(s.set_state(StatePatch { variables: Some([("OpcionPie".to_string(), "otra".to_string())].into()), ..Default::default() }).is_err());
-    assert!(s.set_state(StatePatch { variables: Some([("Nada".to_string(), "x".to_string())].into()), ..Default::default() }).is_err());
     s.set_state(StatePatch { active_profile: Some("rapido".into()), idle_ms: Some(10), ..Default::default() }).unwrap();
     let st = lv_core::config::read_state(d.path());
     assert_eq!(st.active_profile.as_deref(), Some("rapido"));

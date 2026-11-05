@@ -19,58 +19,54 @@ export type ProfileJson = {
 	/** pieces the profile leaves out (`toc`, `bibliography`, `index`, `pdf:<file>`) */
 	omit?: string[];
 	color?: string;
-	vars?: Record<string, string>;
+	watermark?: WatermarkJson;
 	output?: ProfileOutput;
 	compileOn?: 'save' | 'idle';
 	[key: string]: unknown;
 };
 
-export type VariableJson = { label?: string; choices?: string[]; default?: string; choiceLabels?: Record<string, string> };
+export type WatermarkPosition = 'center' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
-/** the common option words in a project's macros, in English: the same list the engine's detection uses (`detectar::en_ingles`) */
-const ENGLISH: Record<string, string> = {
-	pie: 'Footer',
-	'pie de pagina': 'Footer',
-	'pie de página': 'Footer',
-	encabezado: 'Header',
-	cabecera: 'Header',
-	completo: 'Full',
-	completa: 'Full',
-	autor: 'Author',
-	ninguno: 'None',
-	ninguna: 'None',
-	nada: 'None',
-	borrador: 'Draft',
-	final: 'Final',
-	si: 'Yes',
-	sí: 'Yes',
-	no: 'No',
-	corto: 'Short',
-	corta: 'Short',
-	largo: 'Long',
-	larga: 'Long',
-	fecha: 'Date',
-	'marca de agua': 'Watermark',
-	idioma: 'Language',
-	version: 'Version',
-	versión: 'Version'
+/**
+ * A profile's watermark (`config::WatermarkCfg`): plain text with the fields `{date}`, `{page}` and `{profile}`, drawn under the page's
+ * content in a tint of its color. Off keeps the settings without stamping them.
+ */
+export type WatermarkJson = {
+	on?: boolean;
+	text: string;
+	position?: WatermarkPosition;
+	color?: string;
+	opacity?: number;
+	size?: number;
+	angle?: number;
+	bold?: boolean;
 };
 
-export const inEnglish = (word: string): string | null => ENGLISH[word.trim().toLowerCase()] ?? null;
+export const WATERMARK_POSITIONS: WatermarkPosition[] = ['center', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
 
-/** what the screen calls a variable: its label, in English when it is one of the common words */
-export const variableLabel = (name: string, v: VariableJson): string => {
-	const label = v.label?.trim() || name;
-	return inEnglish(label) ?? label;
-};
+/** the engine's defaults, so the screen shows what will be drawn */
+export function watermarkDefaults(w: WatermarkJson): Required<WatermarkJson> {
+	const position = w.position ?? 'center';
+	const center = position === 'center';
+	return {
+		on: w.on ?? true,
+		text: w.text,
+		position,
+		color: w.color ?? '#808080',
+		opacity: w.opacity ?? 30,
+		size: w.size ?? (center ? 60 : 9),
+		angle: w.angle ?? (center ? 45 : 0),
+		bold: w.bold ?? false
+	};
+}
 
-/** what the screen calls one of its values; the project still gets the value itself */
-export const choiceLabel = (v: VariableJson, choice: string): string => v.choiceLabels?.[choice]?.trim() || inEnglish(choice) || choice;
+/** the watermark's text with its fields filled for a preview */
+export const watermarkPreviewText = (text: string, profile: string, date: string) =>
+	text.replaceAll('{date}', date).replaceAll('{page}', '1').replaceAll('{profile}', profile);
 
 export type ConfigJson = {
 	root?: string;
 	engine?: string;
-	variables?: Record<string, VariableJson>;
 	profiles?: Record<string, ProfileJson>;
 	[key: string]: unknown;
 };
@@ -81,7 +77,7 @@ export type FlagUse = 'partial' | 'externalize' | 'figureList' | 'ninguno';
 export type FiguresEdit = { mode: 'project' | 'app' | 'off'; dir: string; stampFiles: string[] };
 export type OutputsEdit = { publish: string; exportDir: string; pattern: string };
 /** what "use detected" copies back, one part of the screen at a time */
-export type ConfigSection = 'root' | 'parts' | 'flags' | 'figures' | 'outputs' | 'variables';
+export type ConfigSection = 'root' | 'parts' | 'flags' | 'figures' | 'outputs';
 
 export const PROFILE_COLORS = ['#378ADD', '#1D9E75', '#D85A30', '#7F77DD', '#D4537E', '#BA7517'];
 export const DEFAULT_OUTPUT: ProfileOutput = { dir: '../PDF', pattern: '{profile}.pdf' };
@@ -96,7 +92,12 @@ export const shortName = (name: string) => name.split('/').pop() ?? name;
 export function parseConfig(text: string): ConfigJson | null {
 	try {
 		const value = JSON.parse(text) as unknown;
-		return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as ConfigJson) : null;
+		if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+		// project variables that profiles overrode are gone (a document compiles as written): the next save leaves them out
+		const config = value as ConfigJson;
+		delete config.variables;
+		for (const p of Object.values(config.profiles ?? {})) delete p.vars;
+		return config;
 	} catch {
 		return null;
 	}
@@ -130,7 +131,8 @@ export function setProfile(config: ConfigJson, id: string, change: ProfileJson):
 	// when a profile compiles by itself is now the project's choice, beside Compile: the old keys go as the profile is edited
 	delete next.compileOn;
 	delete next.autoCompile;
-	if (next.vars && Object.keys(next.vars).length === 0) delete next.vars;
+	delete next.vars;
+	if (!next.watermark) delete next.watermark;
 	out.profiles = { ...(out.profiles ?? {}), [id]: next };
 	return out;
 }
@@ -142,20 +144,14 @@ export function removeProfile(config: ConfigJson, id: string): ConfigJson {
 }
 
 /** a new profile starts empty: no piece and no chapter ticked; figures from the cache, which is the fast way */
-export function emptyProfile(config: ConfigJson, pieces: Piece[], number: number, label: string): ProfileJson {
-	const noFooter = Object.fromEntries(
-		Object.entries(config.variables ?? {})
-			.filter(([, v]) => (v.choices ?? []).includes('ninguno'))
-			.map(([name]) => [name, 'ninguno'])
-	);
+export function emptyProfile(pieces: Piece[], number: number, label: string): ProfileJson {
 	return {
 		label,
 		color: PROFILE_COLORS[(number - 1) % PROFILE_COLORS.length],
 		parts: 'list',
 		partList: [],
 		omit: pieces.map((p) => p.clave),
-		externalize: true,
-		vars: noFooter
+		externalize: true
 	};
 }
 
@@ -169,8 +165,7 @@ export function defaultProfiles(config: ConfigJson, pieces: Piece[], hasParts: b
 	const cache = usesFigureCache(config);
 	let out = setProfile(config, 'default', { label: labels.full, color: PROFILE_COLORS[0], externalize: cache });
 	if (!hasParts) return out;
-	const noFooter = emptyProfile(config, [], 1, '').vars;
-	out = setProfile(out, 'current', { label: labels.current, color: PROFILE_COLORS[1], parts: 'current', omit: pieces.map((p) => p.clave), externalize: cache, vars: noFooter });
+	out = setProfile(out, 'current', { label: labels.current, color: PROFILE_COLORS[1], parts: 'current', omit: pieces.map((p) => p.clave), externalize: cache });
 	return out;
 }
 
@@ -285,26 +280,13 @@ export function setOutputs(config: ConfigJson, o: OutputsEdit): ConfigJson {
 
 export const MACRO_NAME = /^[A-Za-z@]+$/;
 
-export function setVariable(config: ConfigJson, name: string, variable: VariableJson): ConfigJson {
-	const out = clone(config);
-	out.variables = { ...(out.variables ?? {}), [name]: variable };
-	return out;
-}
-
-export function removeVariable(config: ConfigJson, name: string): ConfigJson {
-	const out = clone(config);
-	if (out.variables) delete out.variables[name];
-	if (out.variables && Object.keys(out.variables).length === 0) delete out.variables;
-	return out;
-}
-
 export function useDetected(config: ConfigJson, detected: ConfigJson, section: ConfigSection): ConfigJson {
 	const out = clone(config);
 	const copy = (key: string) => {
 		if (detected[key] === undefined) delete out[key];
 		else out[key] = clone(detected[key]);
 	};
-	const keys: Record<ConfigSection, string[]> = { root: ['root'], parts: ['parts'], flags: ['flags'], figures: ['figureCache'], outputs: ['publish', 'export'], variables: ['variables'] };
+	const keys: Record<ConfigSection, string[]> = { root: ['root'], parts: ['parts'], flags: ['flags'], figures: ['figureCache'], outputs: ['publish', 'export'] };
 	keys[section].forEach(copy);
 	return out;
 }

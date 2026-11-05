@@ -1,4 +1,4 @@
-// The window's end of the compile engine. A folder with a latexfrog.json (or a latexviewer.json still to migrate) is an
+// The window's end of the compile engine. A folder with a .latexfrog/latexfrog.json (or a latexfrog.json or latexviewer.json at the top, still to migrate) is an
 // engine project: Compile, Stop and the Problems panel go through the sidecar, and the terminal path stays for other folders.
 import { m } from '$lib/paraglide/messages';
 import type { LogEntry } from '$lib/compileLog/compileLog';
@@ -13,7 +13,6 @@ import { fileMode } from '$lib/workspace/fileMode.svelte';
 import { collabGuest } from '$lib/collab/guestStore.svelte';
 
 export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; compileOn: string | null; output?: { dir: string; pattern: string; perPart?: boolean } | null };
-export type Variable = { name: string; label: string; choices: string[]; default: string | null };
 export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean };
 export type OutlineTab = 'contents' | 'figures';
 export type Typical = { ms: number; pasadas: number; n: number };
@@ -21,8 +20,8 @@ export type Progress = { profile: string; startedAt: number; tool: string | null
 export type ProjectView = {
 	root: string;
 	rootFile: string | null;
-	config: { profiles: Profile[]; variables: Variable[] } | null;
-	state: { activeProfile: string | null; selection: string[]; variables: Record<string, string>; draftImages: boolean; currentPart?: string | null; idleMs: number; autoCompile: string };
+	config: { profiles: Profile[] } | null;
+	state: { activeProfile: string | null; selection: string[]; draftImages: boolean; currentPart?: string | null; idleMs: number; autoCompile: string };
 	parts: { name: string; file?: string | null }[];
 	lockedBy: number | null;
 	piezas: { clave: string; nombre: string; lugar?: string }[];
@@ -108,12 +107,15 @@ class LvProject {
 	/** which list the sidebar's Project outline shows */
 	outlineTab = $state<OutlineTab>('contents');
 	/** opens a project-relative file at a line */
-	onOpenAt: ((file: string, line: number) => void) | null = null;
+	/** `visual`: where to go instead when the visual editor is showing (a figure file's code is a raw block there; its `\input` in the chapter reads better) */
+	onOpenAt: ((file: string, line: number, visual?: { file: string; line: number }) => void) | null = null;
 	/** the source editor at a project-relative file and line, whatever view is showing */
 	onShowSource: ((file: string, line: number) => void) | null = null;
 	/** bumped when the figure cache may have changed */
 	figureRevision = $state(0);
 	onFollow: (() => void) | null = null;
+	/** a project opened for the first time: show this file (absolute), in the visual editor */
+	onLand: ((file: string) => void) | null = null;
 	isBusy: () => boolean = () => false;
 	/** the profile saving one PDF per part, while it runs: its parts' builds report as one run */
 	private exportingProfile: string | null = null;
@@ -167,7 +169,8 @@ class LvProject {
 		this.sessionOpen = false;
 		if (wasOpen) await this.request('close');
 		if (!root) return;
-		const known = (await exists(joinPath(root, 'latexfrog.json'))) || (await exists(joinPath(root, 'latexviewer.json')));
+		// the configuration lives in .latexfrog/; one at the top (or the old latexviewer.json) moves there when the engine opens the folder
+		const known = (await exists(joinPath(root, '.latexfrog/latexfrog.json'))) || (await exists(joinPath(root, 'latexfrog.json'))) || (await exists(joinPath(root, 'latexviewer.json')));
 		if (!known) {
 			void this.offerSetup(root);
 			return;
@@ -182,19 +185,38 @@ class LvProject {
 		this.sessionOpen = true;
 		void import('./lvPanels').then((p) => p.offerOrphans());
 		void this.runDoctor().catch(() => {});
+		void this.landFirstTime(root);
 	}
 
-	/** folders already offered setup in this window: closing the dialog reopens the folder, which must not offer it again */
-	private setupOffered = new Set<string>();
+	/**
+	 * The first time a project opens here, the editor shows where its content starts, the file of the first heading of Contents,
+	 * rather than whatever file sorts first. A document without headings has its body in the main file. Later openings keep the tabs
+	 * that were left open.
+	 */
+	private async landFirstTime(root: string) {
+		const key = `lv:landed:${root.replace(/\\/g, '/').toLowerCase()}`;
+		try {
+			if (localStorage.getItem(key)) return;
+			localStorage.setItem(key, '1');
+		} catch {
+			return;
+		}
+		const symbols = await this.symbols().catch(() => null);
+		if (this.view?.root !== root) return;
+		const first = symbols?.sections[0]?.file ?? this.view.rootFile;
+		if (first) this.onLand?.(joinPath(root, first));
+	}
 
-	/** every LaTeX folder is meant to be a LatexFrog project: one that is not yet opens on Project Configuration */
+	/**
+	 * Every LaTeX folder is a LatexFrog project: one that is not yet opens on Project Configuration, and the dialog cannot be put
+	 * away. It is left by saving a configuration or by opening another folder, never into the plain terminal workflow.
+	 */
 	private async offerSetup(root: string) {
-		if (this.setupOffered.has(root) || fileMode.current || collabGuest.joined) return;
-		this.setupOffered.add(root);
+		if (fileMode.current || collabGuest.joined) return;
 		const files = await fileService.scanTexFiles(root).catch(() => []);
 		if (this.folder.root !== root || !files.some((f) => /\.tex$/i.test(f.path))) return;
 		const { openConfigPanel } = await import('./lvPanels');
-		if (this.folder.root === root && !this.view) openConfigPanel();
+		if (this.folder.root === root && !this.view) openConfigPanel(true);
 	}
 
 	async runDoctor() {
@@ -289,7 +311,8 @@ class LvProject {
 
 	/** the cursor moved; 200 ms after it rests, the PDF catches up */
 	caretMoved() {
-		if (!this.follow) return;
+		// Follow is the engine's: a folder that is not a project yet has no PDF of its own to follow
+		if (!this.follow || !this.active) return;
 		if (this.followTimer) clearTimeout(this.followTimer);
 		this.followTimer = setTimeout(() => {
 			this.followTimer = null;

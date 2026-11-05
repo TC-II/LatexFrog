@@ -8,10 +8,23 @@ use crate::fsio;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::BTreeMap;
 use std::path::Path;
 
 pub const CONFIG_FILE: &str = "latexfrog.json";
+/// Where the configuration lives: inside the project's own folder, so a project gets one entry of LatexFrog's and no more. A
+/// `latexfrog.json` at the top (where it lived before) is moved here when the project opens (`migration`).
+pub const CONFIG_REL: &str = ".latexfrog/latexfrog.json";
+
+/// The configuration file to read: `.latexfrog/latexfrog.json`, or the one at the top while it could not be moved yet.
+pub fn config_file(root: &Path) -> std::path::PathBuf {
+    let dentro = root.join(CONFIG_REL);
+    let arriba = root.join(CONFIG_FILE);
+    if !dentro.exists() && arriba.is_file() {
+        arriba
+    } else {
+        dentro
+    }
+}
 pub const STATE_FILE: &str = ".latexfrog/state.json";
 
 pub const ENGINES: [&str; 3] = ["pdflatex", "xelatex", "lualatex"];
@@ -62,19 +75,6 @@ pub struct FlagsCfg {
     pub figure_list: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-pub struct VariableCfg {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-    #[serde(default)]
-    pub choices: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default: Option<String>,
-    /// El nombre que la interfaz muestra para cada valor (`completo` → `Full`). El valor es lo que recibe el proyecto y no cambia.
-    #[serde(rename = "choiceLabels", default, skip_serializing_if = "IndexMap::is_empty")]
-    pub choice_labels: IndexMap<String, String>,
-}
-
 /// Qué partes entran en el perfil.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -91,6 +91,81 @@ pub enum PartsSel {
     Current,
     /// Sólo las de `partList`.
     List,
+}
+
+/// Where a watermark goes on the page.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum WatermarkPos {
+    /// Across the middle of the page, turned by `angle`.
+    #[default]
+    Center,
+    Top,
+    Bottom,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+/// A profile's watermark (a draft mark, a footer with the author and the date). The text is plain text with fields: `{date}`,
+/// `{page}` and `{profile}`. It is drawn under the page's content, in a tint of `color`: `opacity` percent of it on white.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WatermarkCfg {
+    /// Off keeps the settings without stamping them.
+    #[serde(default = "verdadero")]
+    pub on: bool,
+    pub text: String,
+    #[serde(default)]
+    pub position: WatermarkPos,
+    /// `#rrggbb`.
+    #[serde(default = "gris")]
+    pub color: String,
+    /// 1 to 100.
+    #[serde(default = "opacidad")]
+    pub opacity: u8,
+    /// The letter size in points; none for the position's own (large across the middle, small at the edges).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<f32>,
+    /// Degrees, counterclockwise; none for the position's own (45 across the middle, 0 at the edges).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle: Option<f32>,
+    #[serde(default, skip_serializing_if = "es_falso")]
+    pub bold: bool,
+}
+
+fn gris() -> String {
+    "#808080".into()
+}
+
+fn opacidad() -> u8 {
+    30
+}
+
+impl WatermarkCfg {
+    pub fn validate(&self) -> std::result::Result<(), String> {
+        if self.text.trim().is_empty() {
+            return Err("it has no text".into());
+        }
+        if self.text.contains(['\n', '\r']) {
+            return Err("its text is one line".into());
+        }
+        let c = &self.color;
+        if !(c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|x| x.is_ascii_hexdigit())) {
+            return Err(format!("the color {c:?} is not #rrggbb"));
+        }
+        if !(1..=100).contains(&self.opacity) {
+            return Err("the opacity goes from 1 to 100".into());
+        }
+        if self.size.is_some_and(|s| !(1.0..=400.0).contains(&s)) {
+            return Err("the size goes from 1 to 400 points".into());
+        }
+        if self.angle.is_some_and(|a| !(-360.0..=360.0).contains(&a)) {
+            return Err("the angle goes from -360 to 360 degrees".into());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -132,10 +207,9 @@ pub struct ProfileCfg {
     /// Color del perfil en la interfaz (`#rrggbb`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
-    /// Valores de las variables del proyecto para este perfil (el pie de la entrega no es el del borrador). Ganan sobre los de la
-    /// máquina (`state.json`).
-    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
-    pub vars: IndexMap<String, String>,
+    /// A watermark stamped on every page of this profile's PDF: the app draws it from the driver, the project is not touched.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watermark: Option<WatermarkCfg>,
     /// Adónde va el PDF. Sin `output` el perfil es sólo para ver en la app.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<OutputCfg>,
@@ -179,7 +253,7 @@ impl Default for ProfileCfg {
             part_list: vec![],
             omit: vec![],
             color: None,
-            vars: IndexMap::new(),
+            watermark: None,
             output: None,
             compile_on: None,
         }
@@ -208,8 +282,6 @@ pub struct ProjectConfig {
     /// Se lee en F6; hasta entonces sólo se conserva (y `dir` dice dónde están los `.md5` que hay que mover).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub figure_cache: Option<Value>,
-    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
-    pub variables: IndexMap<String, VariableCfg>,
     #[serde(default)]
     pub profiles: IndexMap<String, ProfileCfg>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -327,11 +399,14 @@ impl ProjectConfig {
             if let Some(o) = p.omit.iter().find(|o| crate::piezas::Pieza::de_clave(o).is_none()) {
                 return mal(format!("the profile {id:?} omits {o:?}, which is not a piece (toc, bibliography, index or pdf:<file>)"));
             }
+            if let Some(w) = &p.watermark {
+                w.validate().map_err(|e| Error::Other(format!("the watermark of profile {id:?}: {e}")))?;
+            }
             if p.parts == PartsSel::List && p.part_list.is_empty() {
                 return mal(format!("the profile {id:?} compiles an empty list of parts"));
             }
         }
-        for m in self.flags.partial.iter().chain(&self.flags.externalize).chain(&self.flags.figure_list).chain(self.variables.keys()) {
+        for m in self.flags.partial.iter().chain(&self.flags.externalize).chain(&self.flags.figure_list) {
             if !macro_valida(m) {
                 return mal(format!("{m:?} cannot be a macro name (letters only)"));
             }
@@ -420,7 +495,6 @@ pub fn infer_config(root_file: &str, hay_partes: bool) -> ProjectConfig {
         parts: PartsCfg::default(),
         flags: FlagsCfg::default(),
         figure_cache: None,
-        variables: IndexMap::new(),
         profiles,
         publish: None,
         export: None,
@@ -430,14 +504,16 @@ pub fn infer_config(root_file: &str, hay_partes: bool) -> ProjectConfig {
 
 /// `None` si no existe. Un JSON roto o inválido es un error con el nombre del archivo: no se pisa en silencio.
 pub fn read_config(root: &Path) -> Result<Option<ProjectConfig>> {
-    let path = root.join(CONFIG_FILE);
+    let path = config_file(root);
     let bytes = match std::fs::read(&path) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(Error::Io(format!("{CONFIG_FILE}: {e}"))),
     };
     let sin_bom = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&bytes);
-    let cfg: ProjectConfig = serde_json::from_slice(sin_bom).map_err(|e| Error::Other(format!("{CONFIG_FILE}: {e}")))?;
+    let mut cfg: ProjectConfig = serde_json::from_slice(sin_bom).map_err(|e| Error::Other(format!("{CONFIG_FILE}: {e}")))?;
+    // project variables that profiles overrode are gone: a document compiles as it is written (a watermark is what profiles add)
+    cfg.extra.remove("variables");
     cfg.validate()?;
     Ok(Some(cfg))
 }
@@ -447,9 +523,12 @@ pub fn save_config(root: &Path, cfg: &ProjectConfig) -> Result<()> {
     cfg.validate()?;
     let mut texto = serde_json::to_string_pretty(cfg).map_err(|e| Error::Other(e.to_string()))?;
     texto.push('\n');
-    let destino = root.join(CONFIG_FILE);
+    let destino = config_file(root);
     if std::fs::read(&destino).is_ok_and(|b| b == texto.as_bytes()) {
         return Ok(());
+    }
+    if let Some(dir) = destino.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
     }
     fsio::escribir_atomico(&destino, texto.as_bytes()).map_err(|e| Error::Io(format!("{CONFIG_FILE}: {e}")))
 }
@@ -489,7 +568,6 @@ pub struct State {
     pub active_profile: Option<String>,
     /// Nombres de las partes tildadas, tal como las lleva `\includeonly`.
     pub selection: Vec<String>,
-    pub variables: BTreeMap<String, String>,
     pub auto_compile: AutoCompile,
     pub idle_ms: u64,
     pub outside_save: OutsideSave,
@@ -508,7 +586,6 @@ impl Default for State {
         State {
             active_profile: None,
             selection: vec![],
-            variables: BTreeMap::new(),
             auto_compile: AutoCompile::Save,
             idle_ms: 1500,
             outside_save: OutsideSave::Warn,
@@ -525,7 +602,6 @@ impl Default for State {
 pub struct StatePatch {
     pub active_profile: Option<String>,
     pub selection: Option<Vec<String>>,
-    pub variables: Option<BTreeMap<String, String>>,
     pub auto_compile: Option<AutoCompile>,
     pub idle_ms: Option<u64>,
     pub outside_save: Option<OutsideSave>,
@@ -549,26 +625,18 @@ pub fn write_state(root: &Path, st: &State) -> Result<()> {
     Ok(())
 }
 
-/// El plan dice que la app agrega `.latexfrog/` al `.gitignore`. Sólo si el proyecto es un repositorio (hay `.git` o ya hay un
-/// `.gitignore`), y conservando el salto de línea del archivo. Devuelve si escribió.
+/// What git should keep of `.latexfrog/`: the configuration and nothing else (builds, state, history are this machine's).
+pub const GITIGNORE_INTERNO: &str = "# LatexFrog: only the configuration is the project's; the rest is this machine's.\n*\n!.gitignore\n!latexfrog.json\n";
+
+/// Writes `.latexfrog/.gitignore` if it is not there. The project's own `.gitignore` is never touched: everything of LatexFrog's stays
+/// inside its folder. Returns whether it wrote.
 pub fn ensure_gitignore(root: &Path) -> Result<bool> {
-    let path = root.join(".gitignore");
-    let actual = std::fs::read(&path).ok();
-    if actual.is_none() && !root.join(".git").exists() {
+    let path = root.join(".latexfrog").join(".gitignore");
+    if path.exists() {
         return Ok(false);
     }
-    let bytes = actual.unwrap_or_default();
-    let texto = String::from_utf8_lossy(&bytes);
-    if texto.lines().any(|l| matches!(l.trim(), ".latexfrog" | ".latexfrog/" | "/.latexfrog" | "/.latexfrog/")) {
-        return Ok(false);
-    }
-    let eol = if texto.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut nuevo = bytes.clone();
-    if !nuevo.is_empty() && !nuevo.ends_with(b"\n") {
-        nuevo.extend_from_slice(eol.as_bytes());
-    }
-    nuevo.extend_from_slice(format!(".latexfrog/{eol}").as_bytes());
-    fsio::escribir_atomico(&path, &nuevo).map_err(|e| Error::Io(format!(".gitignore: {e}")))?;
+    std::fs::create_dir_all(root.join(".latexfrog")).map_err(|e| Error::Io(format!(".latexfrog: {e}")))?;
+    fsio::escribir_atomico(&path, GITIGNORE_INTERNO.as_bytes()).map_err(|e| Error::Io(format!(".latexfrog/.gitignore: {e}")))?;
     Ok(true)
 }
 
@@ -716,18 +784,14 @@ mod tests {
     }
 
     #[test]
-    fn gitignore_se_completa_sin_cambiar_el_eol_ni_duplicar() {
+    fn the_gitignore_lives_inside_latexfrogs_folder_and_the_projects_is_left_alone() {
         let d = tempfile::tempdir().unwrap();
-        assert!(!ensure_gitignore(d.path()).unwrap(), "sin repositorio no se crea nada");
-        assert!(!d.path().join(".gitignore").exists());
-        std::fs::create_dir(d.path().join(".git")).unwrap();
+        std::fs::write(d.path().join(".gitignore"), b"*.aux\r\n").unwrap();
         assert!(ensure_gitignore(d.path()).unwrap());
-        assert_eq!(std::fs::read(d.path().join(".gitignore")).unwrap(), b".latexfrog/\n");
-        std::fs::write(d.path().join(".gitignore"), b"*.aux\r\n*.log").unwrap();
-        assert!(ensure_gitignore(d.path()).unwrap());
-        assert_eq!(std::fs::read(d.path().join(".gitignore")).unwrap(), b"*.aux\r\n*.log\r\n.latexfrog/\r\n");
-        assert!(!ensure_gitignore(d.path()).unwrap(), "ya estaba");
-        std::fs::write(d.path().join(".gitignore"), b"/.latexfrog\n").unwrap();
-        assert!(!ensure_gitignore(d.path()).unwrap());
+        assert_eq!(std::fs::read(d.path().join(".latexfrog/.gitignore")).unwrap(), GITIGNORE_INTERNO.as_bytes());
+        assert_eq!(std::fs::read(d.path().join(".gitignore")).unwrap(), b"*.aux\r\n");
+        std::fs::write(d.path().join(".latexfrog/.gitignore"), b"mine\n").unwrap();
+        assert!(!ensure_gitignore(d.path()).unwrap(), "a .gitignore already there is kept as it is");
+        assert_eq!(std::fs::read(d.path().join(".latexfrog/.gitignore")).unwrap(), b"mine\n");
     }
 }

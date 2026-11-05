@@ -19,21 +19,25 @@ export function bootOpen(): BootOpen | null {
 	return nativeBridge()?.bootstrap?.open ?? null;
 }
 
-/** the main file latexfrog.json names, relative to the folder; null when it is not an engine project */
+/** the main file the configuration names, relative to the folder; null when it is not an engine project. The configuration lives in
+ * .latexfrog/latexfrog.json; one at the top is from before it moved there. */
 async function engineRoot(root: string): Promise<string | null> {
-	try {
-		const config = JSON.parse(await readTextFile(joinPath(root, 'latexfrog.json'))) as { root?: unknown };
-		return typeof config.root === 'string' ? config.root : null;
-	} catch {
-		return null;
+	for (const file of [joinPath(root, '.latexfrog/latexfrog.json'), joinPath(root, 'latexfrog.json')]) {
+		try {
+			const config = JSON.parse((await readTextFile(file)).replace(/^\uFEFF/, '')) as { root?: unknown };
+			if (typeof config.root === 'string') return config.root;
+		} catch {
+			// not there, or not a configuration: the next place
+		}
 	}
+	return null;
 }
 
 /**
  * A project is the folder its main file is in: the engine compiles from the open folder and resolves each \input against it, so
  * a main file in a subfolder gave an empty outline and failed on its first \input. The subfolder's own project opens instead.
  */
-async function projectFolder(root: string): Promise<string> {
+export async function projectFolder(root: string): Promise<string> {
 	const main = await engineRoot(root);
 	if (main) {
 		if (!/[\\/]/.test(main)) return root;

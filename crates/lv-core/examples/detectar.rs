@@ -2,7 +2,7 @@
 //!
 //!   cargo run -p lv-core --example detectar -- <carpeta> [--root <raíz.tex>] [--json]
 //!
-//! Imprime las raíces candidatas con su motivo, las partes, los flags, las figuras, los perfiles, las salidas y las variables, y el
+//! Imprime las raíces candidatas con su motivo, las partes, los flags, las figuras, los perfiles, las salidas, y el
 //! `latexfrog.json` propuesto (o sólo ese JSON con `--json`). No escribe nada en la carpeta. Sirve para revisar una detección antes de
 //! escribir su prueba y para medir cuánto tarda (en el libro, unos 100 ms).
 
@@ -57,9 +57,5 @@ fn main() {
         println!("  {} «{}»: {} (publica: {:?})", x.id, x.label, x.uso, x.publica);
     }
     println!("\nSalidas: publicar {:?}, exportar {:?}, ejemplo {:?}", p.salidas.publicar, p.salidas.exportar, p.salidas.ejemplo_nombre);
-    println!("\nVariables:");
-    for v in &p.variables {
-        println!("  {} «{}» {:?} por omisión {:?}\n    {}", v.nombre, v.label, v.choices, v.default, v.frase);
-    }
     println!("\n{json}");
 }

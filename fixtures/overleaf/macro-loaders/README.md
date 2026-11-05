@@ -1,0 +1,1 @@
+A collection of exercises with no sectioning commands: `\Exercise{slug}` reaches `\input{exercises/#2}` through a second macro, and each exercise draws its title with `\metaExercise`. The index follows the macros and the outline lists the titles.
