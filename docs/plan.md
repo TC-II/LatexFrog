@@ -34,6 +34,12 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 - [x] Export parts with the printed number; delivery profile.
 - [x] History, doctor, orphans, project lock.
 - [x] Config editor with Detect, validation and diff; project migration.
+- [x] Visual profile editor, active profile beside Compile, automatic compile from the profile.
+- [x] Parts panel and Ctrl+Alt+C; SyncTeX to the exact word; Follow.
+- [x] Project screen: detection reasons per section and the variables form.
+- [x] Figures panel per figure, as a tab of the bottom dock.
+- [x] Inverse SyncTeX with the neighbour search; a selection of lines refines each line.
+- [x] Engine text in English; the keys kept in `history.jsonl` stay as they were.
 
 ### M4. Release
 - [ ] Installer that bundles the sidecar (`extraResources`).

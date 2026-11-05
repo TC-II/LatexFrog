@@ -1,20 +1,14 @@
 <script lang="ts">
-	// Figures and delivery of an engine project. Nothing is deleted without the preview: Clean asks the engine what it would
-	// remove, shows it, and only the second button removes it.
+	// Delivery of an engine project: exporting parts and publishing. The figure cache lives in the Figures tab of the bottom dock.
 	import { onDestroy } from 'svelte';
 	import { lvProject } from '$lib/lv/lvEngine.svelte';
 	import { revealItem } from '$lib/workspace/fileSystem';
 	import { m } from '$lib/paraglide/messages';
 
-	type Status = { dir: string; actuales: number; viejas: number; bytes: number; pendientes: number; fallidas: number; necesitaCocer: boolean; errores: { nombre?: string }[] };
-	type Cleanup = { archivos: string[]; bytes: number; figuras: number };
 	type EngineEvent = { type: string; done?: number; total?: number; name?: string; part?: string; num?: string | number | null; file?: string; ok?: boolean; cooked?: number; failed?: number; exported?: number; error?: string | null };
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
-	let status = $state<Status | null>(null);
-	let cleanup = $state<Cleanup | null>(null);
-	let baking = $state<string | null>(null);
 	let exporting = $state<string | null>(null);
 	let exported = $state<{ num: string; file: string; ok: boolean }[]>([]);
 	let notice = $state('');
@@ -24,8 +18,7 @@
 	const parts = $derived(lvProject.view?.parts ?? []);
 	const chosen = $derived(parts.map((p) => p.name).filter((n) => !unticked.includes(n)));
 	const profile = $derived(lvProject.view?.state.activeProfile ?? null);
-	const running = $derived(baking !== null || exporting !== null);
-	const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
+	const running = $derived(exporting !== null);
 	const short = (name: string) => name.replace(/^.*\//, '');
 
 	async function attempt(action: () => Promise<unknown>) {
@@ -37,36 +30,6 @@
 			error = e instanceof Error ? e.message : String(e);
 		}
 	}
-
-	const loadStatus = async () => {
-		status = await lvProject.request<Status>('figures-status');
-	};
-
-	$effect(() => {
-		if (open) void attempt(loadStatus);
-	});
-
-	const bake = () =>
-		attempt(async () => {
-			cleanup = null;
-			baking = m.lv_figures_listing();
-			await lvProject.request('figures-bake');
-		}).then(() => {
-			if (error) baking = null;
-		});
-
-	const previewClean = () =>
-		attempt(async () => {
-			cleanup = await lvProject.request<Cleanup>('figures-clean-preview');
-		});
-
-	const confirmClean = () =>
-		attempt(async () => {
-			const done = await lvProject.request<Cleanup>('figures-clean');
-			cleanup = null;
-			await loadStatus();
-			notice = m.lv_figures_cleaned({ count: done.figuras, mb: mb(done.bytes) });
-		});
 
 	const runExport = () =>
 		attempt(async () => {
@@ -90,13 +53,7 @@
 
 	const unsubscribe = lvProject.subscribe((event) => {
 		const ev = event as EngineEvent;
-		if (ev.type === 'bake-started') baking = m.lv_figures_progress({ done: 0, total: ev.total ?? 0 });
-		else if (ev.type === 'bake-progress') baking = m.lv_figures_progress({ done: ev.done ?? 0, total: ev.total ?? 0 });
-		else if (ev.type === 'bake-finished') {
-			baking = null;
-			// after the reload: `attempt` clears the notice when it starts
-			void attempt(loadStatus).then(() => (notice = ev.error ?? m.lv_figures_baked({ cooked: ev.cooked ?? 0, failed: ev.failed ?? 0 })));
-		} else if (ev.type === 'export-progress') {
+		if (ev.type === 'export-progress') {
 			exporting = m.lv_figures_progress({ done: ev.done ?? 0, total: ev.total ?? 0 });
 			exported.push({ num: String(ev.num ?? ''), file: ev.file ?? ev.part ?? '', ok: ev.ok !== false });
 		} else if (ev.type === 'export-finished') {
@@ -116,36 +73,6 @@
 				<h2 class="text-base font-semibold">{m.lv_delivery_title()}</h2>
 				<button class={BUTTON} onclick={() => (open = false)}>{m.lv_close()}</button>
 			</header>
-
-			<section class="flex flex-col gap-2" aria-label={m.lv_figures_title()}>
-				<h3 class="font-medium">{m.lv_figures_title()}</h3>
-				{#if status}
-					<p data-testid="lv-figures-status">
-						{m.lv_figures_status({ current: status.actuales, old: status.viejas, mb: mb(status.bytes) })}
-						{#if status.pendientes}{m.lv_figures_pending({ count: status.pendientes })}{/if}
-						{#if status.fallidas}{m.lv_figures_failed({ count: status.fallidas })}{/if}
-					</p>
-				{/if}
-				{#if baking}<p data-testid="lv-figures-progress">{baking}</p>{/if}
-				<div class="flex gap-2">
-					<button class={BUTTON} disabled={running} onclick={bake}>{m.lv_figures_bake()}</button>
-					<button class={BUTTON} disabled={running} onclick={previewClean}>{m.lv_figures_clean()}</button>
-					{#if running}<button class={BUTTON} onclick={() => attempt(() => lvProject.cancel())}>{m.lv_cancel()}</button>{/if}
-				</div>
-				{#if cleanup}
-					<div class="flex flex-col gap-1 rounded border border-surface-300-700 p-2" data-testid="lv-clean-preview">
-						{#if cleanup.archivos.length === 0}
-							<p>{m.lv_figures_clean_nothing()}</p>
-						{:else}
-							<p>{m.lv_figures_clean_preview({ count: cleanup.figuras, files: cleanup.archivos.length, mb: mb(cleanup.bytes) })}</p>
-							<ul class="max-h-32 overflow-y-auto font-mono text-xs">
-								{#each cleanup.archivos as f (f)}<li>{f}</li>{/each}
-							</ul>
-							<button class={BUTTON} onclick={confirmClean}>{m.lv_figures_clean_confirm()}</button>
-						{/if}
-					</div>
-				{/if}
-			</section>
 
 			<section class="flex flex-col gap-2" aria-label={m.lv_export_title()}>
 				<h3 class="font-medium">{m.lv_export_title()}</h3>

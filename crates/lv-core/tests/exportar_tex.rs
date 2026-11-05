@@ -129,7 +129,7 @@ fn exportar_deja_un_pdf_por_parte_con_el_numero_impreso_y_no_toca_la_seleccion_n
     let x = h.iter().find(|e| e.entrada.tipo == "export").expect("la línea de la exportación");
     assert_eq!(h.iter().filter(|e| e.entrada.perfil.as_deref() == Some("export")).count(), 1, "{h:#?}");
     assert_eq!(x.entrada.partes.iter().map(|p| (p.parte.as_str(), p.num.as_deref(), p.ok)).collect::<Vec<_>>(), [("Cap/uno", Some("5"), true), ("Cap/dos", Some("6"), true)]);
-    assert!(x.pistas.iter().any(|p| p.contains("2 de 2 partes exportadas")), "{:?}", x.pistas);
+    assert!(x.pistas.iter().any(|p| p.contains("2 of 2 parts exported")), "{:?}", x.pistas);
 }
 
 #[test]

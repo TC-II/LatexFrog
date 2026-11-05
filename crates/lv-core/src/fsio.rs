@@ -95,22 +95,22 @@ fn es_reservado(componente: &str) -> bool {
 pub fn resolver(root: &Path, rel: &str, permitir_raiz: bool) -> Result<PathBuf> {
     let mal = |m: &str| Error::InvalidPath(format!("{rel:?}: {m}"));
     if rel.is_empty() {
-        return if permitir_raiz { Ok(root.to_path_buf()) } else { Err(mal("vacía")) };
+        return if permitir_raiz { Ok(root.to_path_buf()) } else { Err(mal("empty")) };
     }
     // `:` cubre `C:foo`, `C:\x` y los flujos alternativos (`a.tex:x`); `\` y `/` inicial, las absolutas y las UNC.
     if rel.contains('\0') || rel.contains('\\') || rel.contains(':') || rel.starts_with('/') {
-        return Err(mal("tiene que ser relativa a la raíz del proyecto y separar con /"));
+        return Err(mal("must be relative to the project root and use /"));
     }
     let mut destino = root.to_path_buf();
     for comp in rel.split('/') {
         if comp.is_empty() || comp == "." || comp == ".." {
-            return Err(mal("componente vacío, `.` o `..`"));
+            return Err(mal("empty component, `.` or `..`"));
         }
         if es_reservado(comp) {
-            return Err(mal("nombre reservado de Windows"));
+            return Err(mal("reserved Windows name"));
         }
         if comp.ends_with('.') || comp.ends_with(' ') {
-            return Err(mal("Windows ignora el punto o el espacio final"));
+            return Err(mal("Windows ignores the trailing dot or space"));
         }
         destino.push(comp);
     }
@@ -119,11 +119,11 @@ pub fn resolver(root: &Path, rel: &str, permitir_raiz: bool) -> Result<PathBuf> 
     let real = if destino.exists() {
         dunce::canonicalize(&destino).map_err(|e| Error::Io(format!("{}: {e}", destino.display())))?
     } else {
-        let padre = destino.parent().ok_or_else(|| mal("sin carpeta"))?;
-        dunce::canonicalize(padre).map_err(|_| Error::NotFound(format!("la carpeta de {rel:?} no existe")))?
+        let padre = destino.parent().ok_or_else(|| mal("no folder"))?;
+        dunce::canonicalize(padre).map_err(|_| Error::NotFound(format!("the folder of {rel:?} does not exist")))?
     };
     if !real.starts_with(&raiz_real) {
-        return Err(mal("sale de la raíz del proyecto"));
+        return Err(mal("leaves the project root"));
     }
     Ok(destino)
 }
@@ -162,14 +162,14 @@ fn detectar_eol(b: &[u8]) -> (Eol, bool) {
 /// Bytes de disco -> texto normalizado y formato. Rechaza lo que no sea UTF-8.
 pub fn decodificar(bytes: &[u8]) -> Result<(String, Format)> {
     if bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
-        return Err(Error::NotText("está en UTF-16".into()));
+        return Err(Error::NotText("it is UTF-16".into()));
     }
     if bytes.contains(&0) {
-        return Err(Error::NotText("tiene bytes nulos (¿es binario?)".into()));
+        return Err(Error::NotText("it has null bytes (binary?)".into()));
     }
     let bom = bytes.starts_with(&[0xEF, 0xBB, 0xBF]);
     let cuerpo = if bom { &bytes[3..] } else { bytes };
-    let texto = std::str::from_utf8(cuerpo).map_err(|e| Error::NotText(format!("UTF-8 inválido en el byte {}", e.valid_up_to())))?;
+    let texto = std::str::from_utf8(cuerpo).map_err(|e| Error::NotText(format!("invalid UTF-8 at byte {}", e.valid_up_to())))?;
     let (eol, mixed) = detectar_eol(cuerpo);
     let normalizado = texto.replace("\r\n", "\n").replace('\r', "\n");
     Ok((normalizado, Format { eol, bom, mixed }))
@@ -178,7 +178,7 @@ pub fn decodificar(bytes: &[u8]) -> Result<(String, Format)> {
 /// Texto normalizado -> bytes de disco con el formato dado.
 pub fn codificar(text: &str, f: Format) -> Result<Vec<u8>> {
     if text.contains('\r') {
-        return Err(Error::InvalidText("trae `\\r`: el texto llega normalizado a `\\n`".into()));
+        return Err(Error::InvalidText("contains `\\r`: text arrives normalized to `\\n`".into()));
     }
     let mut out = Vec::with_capacity(text.len() + 16);
     if f.bom {
@@ -236,7 +236,7 @@ pub fn write_file(root: &Path, rel: &str, text: &str, expected_version: Option<&
         return Ok(WriteOutcome { written: false, version: version_of(&nuevos) });
     }
     if existente.is_some() && fs::metadata(&path).map(|m| m.permissions().readonly()).unwrap_or(false) {
-        return Err(Error::Io(format!("{rel}: el archivo es de sólo lectura")));
+        return Err(Error::Io(format!("{rel}: the file is read-only")));
     }
     escribir_atomico(&path, &nuevos).map_err(|e| Error::Io(format!("{rel}: {e}")))?;
     Ok(WriteOutcome { written: true, version: version_of(&nuevos) })
@@ -279,5 +279,5 @@ pub(crate) fn escribir_atomico(destino: &Path, bytes: &[u8]) -> std::io::Result<
         }
     }
     limpiar(&temporal);
-    Err(ultimo.unwrap_or_else(|| std::io::Error::other("rename falló")))
+    Err(ultimo.unwrap_or_else(|| std::io::Error::other("rename failed")))
 }

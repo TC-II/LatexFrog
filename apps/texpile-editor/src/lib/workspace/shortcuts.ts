@@ -7,6 +7,7 @@ import { focusedTab, showTab } from '$lib/workspace/workspaceStore';
 import { tabs, tabKey, type Tab } from '$lib/workspace/tabs.svelte';
 import { settings, updateSettings } from '$lib/settings';
 import { nativeBridge } from '$lib/workspace/fileSystem';
+import { lvProject } from '$lib/lv/lvEngine.svelte';
 import { elementOf, pdfFindFor } from '$lib/preview/pdfViewFind';
 import { isMac } from '$lib/platform';
 import { editorGroups } from './groups/editorGroups.svelte';
@@ -122,6 +123,10 @@ export function createKeydownHandler(deps: ShortcutDeps): (e: KeyboardEvent) => 
 		} else if (mod && e.key === '0') {
 			e.preventDefault();
 			uiZoomReset();
+		} else if (mod && e.altKey && e.key.toLowerCase() === 'c' && lvProject.active) {
+			// compiles the part of the open file: the one key that goes around the active profile, as agreed
+			e.preventDefault();
+			void lvProject.compileActivePart();
 		} else if (mod && e.altKey && e.key === 'Enter' && deps.terminalAvailable()) {
 			// was ctrl/cmd+alt+b (LaTeX Workshop's default build chord), but macOS treats option+b
 			// as a dead key for a special character, so e.key never reliably comes through as "b"

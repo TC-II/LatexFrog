@@ -33,7 +33,7 @@ pub fn is_suspect(root: &Path, perfil: &str) -> bool {
 pub fn mark_suspect(root: &Path, perfil: &str) -> Result<()> {
     let dir = build_dir(root, perfil);
     fs::create_dir_all(&dir).map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
-    fs::write(marcador(root, perfil), "el último build de este perfil no terminó bien: sus .aux no se siembran\n")
+    fs::write(marcador(root, perfil), "the last build of this profile did not end well: its .aux files are not seeded\n")
         .map_err(|e| Error::Io(format!("{}: {e}", marcador(root, perfil).display())))
 }
 

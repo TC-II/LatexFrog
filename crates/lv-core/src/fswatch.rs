@@ -66,8 +66,8 @@ pub fn observar(root: &Path, ignorar: Ignorar, aviso: Aviso, silencio: Duration)
     let mut watcher = notify::recommended_watcher(move |e| {
         let _ = tx.send(e);
     })
-    .map_err(|e| Error::Other(format!("no se pudo crear el observador de archivos: {e}")))?;
-    watcher.watch(&root, RecursiveMode::Recursive).map_err(|e| Error::Other(format!("no se pudo observar {}: {e}", root.display())))?;
+    .map_err(|e| Error::Other(format!("could not create the file watcher: {e}")))?;
+    watcher.watch(&root, RecursiveMode::Recursive).map_err(|e| Error::Other(format!("could not watch {}: {e}", root.display())))?;
     std::thread::spawn(move || bucle(&root, rx, ignorar, aviso, silencio));
     Ok(Observador { _watcher: watcher })
 }

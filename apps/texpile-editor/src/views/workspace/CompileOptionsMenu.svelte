@@ -1,11 +1,11 @@
 <script lang="ts">
 	// the Compile button's chevron menu: actions on the compile's output, then the command itself
-	import { BrushCleaning, FolderOpen, PackageCheck, RotateCcw, Settings2 } from '@lucide/svelte';
+	import { BrushCleaning, FolderOpen, PackageCheck, RotateCcw, Settings2, Images } from '@lucide/svelte';
 	import { menuItemClass, menuPanelClass, separatorClass } from '$lib/menus/menuStyles';
 	import { m } from '$lib/paraglide/messages';
 	import type { AnchoredMenu } from '$lib/pdf-view/anchoredMenu.svelte';
-	import LvBuildSection from '$lib/lv/LvBuildSection.svelte';
 	import LvDeliveryDialog from '$lib/lv/LvDeliveryDialog.svelte';
+	import LvFrog from '$lib/lv/LvFrog.svelte';
 	import { lvProject } from '$lib/lv/lvEngine.svelte';
 	import LvProjectRows from '$lib/lv/LvProjectRows.svelte';
 
@@ -32,11 +32,16 @@
 
 {#if menu.open}
 	<div bind:this={menu.el} class="{menuPanelClass} fixed z-1300 flex min-w-48 flex-col" style={menu.style} role="menu">
-		<LvBuildSection />
 		{#if lvProject.active}
+			<button class={ROW} onclick={() => pick(() => lvProject.onShowDock?.('figures'))} data-testid="lv-figures-row">
+				<Images class="size-4 shrink-0" />
+				<span class="cap-center">{m.lv_figures_menu()}</span>
+				<LvFrog />
+			</button>
 			<button class={ROW} onclick={() => pick(() => (deliveryOpen = true))}>
 				<PackageCheck class="size-4 shrink-0" />
 				<span class="cap-center">{m.lv_delivery_menu()}</span>
+				<LvFrog />
 			</button>
 		{/if}
 		<LvProjectRows onPick={() => menu.close()} />

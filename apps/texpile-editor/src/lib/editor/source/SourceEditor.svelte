@@ -16,6 +16,7 @@
 	import { bindModalKeymap, modalKeymapCompartment } from '$lib/editor/source/extensions/keybindings/modalKeymap';
 	import { typstServerGen } from '$lib/languages/typst/intellisense/lspClient';
 	import { addPackageElsewhere, sourceCmView } from '$lib/stores/editorStore';
+	import { lvProject } from '$lib/lv/lvEngine.svelte';
 	import { showSourceEditor } from '$lib/editor/editorsOnScreen.svelte';
 	import { docText } from '$lib/editor/source/docText';
 	import { countedByEditor, setSourceDocCount, setSourceSelectionCount, sourceCounting } from '$lib/stores/countStore.svelte';
@@ -63,7 +64,7 @@
 		filename?: string;
 		/** absolute path, for remembering this file's caret across tab switches */
 		docPath?: string | null;
-		gotoLine?: { line: number; token: number; selectText?: string; column?: number; path?: string };
+		gotoLine?: { line: number; token: number; selectText?: string; column?: number; columnEnd?: number; path?: string };
 		onSyncToPdf?: (line: number) => void;
 		initialScrollPos?: { scroll: number | null; cursor: number | null } | null;
 		diagnostics?: SourceDiagnostic[];
@@ -156,6 +157,7 @@
 			deferredDocCount(text); // word/char count is display-only, off the keystroke path
 		}
 		if (u.docChanged || u.selectionSet) deferredSelectionCount();
+		if (u.selectionSet) lvProject.caretMoved();
 		if (u.selectionSet && onCaretMove) {
 			const head = u.state.selection.main.head;
 			const docLine = u.state.doc.lineAt(head);

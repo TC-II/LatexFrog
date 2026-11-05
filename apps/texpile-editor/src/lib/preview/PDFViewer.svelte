@@ -9,7 +9,7 @@
 	import { FLOATING_BAR_BOTTOM } from '$lib/editor/floatingBar';
 	import { pdfFindToggle } from '$lib/stores/editorStore';
 	import { pdfViewFind } from './pdfViewFind';
-	import { PictureInPicture2 } from '@lucide/svelte';
+	import { PictureInPicture2, LocateFixed } from '@lucide/svelte';
 	import PdfSplitViews from './PdfSplitViews.svelte';
 	import PdfViewScope from '$lib/pdf-view/PdfViewScope.svelte';
 	import { tip } from '$lib/components/tooltip.svelte';
@@ -19,6 +19,8 @@
 	import { pagesInverted } from './invertColors/pagesInverted';
 	import { untrack, type Snippet } from 'svelte';
 	import { editorGroups } from '$lib/workspace/groups/editorGroups.svelte';
+	import { lvProject } from '$lib/lv/lvEngine.svelte';
+	import LvFrog from '$lib/lv/LvFrog.svelte';
 
 	type Props = {
 		filename?: string;
@@ -158,6 +160,13 @@
 <!-- pinned outside the collapsing groups: the one control that is not a viewer setting must not
      disappear into the "..." when the pane narrows -->
 {#snippet trailing()}
+	{#if lvProject.active}
+		<button class="btn btn-xs gap-1 {lvProject.follow ? 'preset-tonal-primary' : ''}" style="width: auto; padding-inline: 0.375rem" aria-pressed={lvProject.follow} aria-label={m.lv_follow()} use:tip={m.lv_follow_title()} data-testid="lv-follow" onclick={() => lvProject.setFollow(!lvProject.follow)}>
+			<LvFrog />
+			<LocateFixed size={14} />
+			<span class="cap-center @max-[40rem]:hidden">{m.lv_follow()}</span>
+		</button>
+	{/if}
 	{#if onPopout}
 		<button onclick={() => onPopout?.()} use:tip={m.wsview_popout_preview()} aria-label={m.wsview_popout_preview()}>
 			<PictureInPicture2 size={16} />
@@ -171,7 +180,7 @@
 		<PdfToolbar
 			leading={place > 0 ? undefined : (controls ?? (filename && !inEditor ? leading : undefined))}
 			leadIsControls={place === 0 && !!controls}
-			trailing={place === 0 && onPopout ? trailing : undefined}
+			trailing={place === 0 && (onPopout || lvProject.active) ? trailing : undefined}
 			{asTabStrip}
 			{inEditor}
 			inPopout={placement === 'window'}

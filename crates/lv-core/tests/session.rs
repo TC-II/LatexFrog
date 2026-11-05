@@ -172,7 +172,7 @@ fn el_interruptor_de_borrador_pone_graphicx_y_graphics_pero_no_en_lo_que_se_entr
     assert!(!driver(&d, "completo").contains("draft") && !s.esta_en_borrador("completo"), "{}", driver(&d, "completo"));
     // Un PDF en borrador no se publica; el de entrega sí.
     let e = s.publish("rapido").unwrap_err().to_string();
-    assert!(e.contains("imágenes en borrador") && !d.path().join("pub").exists(), "{e}");
+    assert!(e.contains("draft images") && !d.path().join("pub").exists(), "{e}");
     assert!(s.publish("completo").is_ok());
     // El interruptor es de esta máquina: queda en `.latexfrog/state.json`, no en `latexfrog.json`.
     assert!(fs::read_to_string(d.path().join(".latexfrog/state.json")).unwrap().contains("\"draftImages\": true"));
@@ -221,7 +221,7 @@ fn un_perfil_de_partes_sin_seleccion_o_desconocido_no_lanza_nada() {
     s.set_state(StatePatch { selection: Some(vec![]), ..Default::default() }).unwrap();
     // Seleccionar nada vuelve a dejar la primera: el perfil nunca se queda sin partes por accidente en la vista.
     assert_eq!(s.view().unwrap().state.selection, Vec::<String>::new(), "el estado guarda lo que se pidió");
-    assert!(s.request_build(Some("parcial")).unwrap_err().to_string().contains("al menos una parte"));
+    assert!(s.request_build(Some("parcial")).unwrap_err().to_string().contains("at least one part"));
     assert!(s.request_build(Some("no-existe")).is_err());
     assert!(!s.is_building());
     assert_eq!(contar(&r, |_| true), 0);
@@ -352,7 +352,7 @@ fn un_aux_truncado_se_repara_y_se_reintenta_una_sola_vez() {
     let h = s.history(10);
     assert_eq!(h.len(), 1, "{h:#?}");
     assert!(h[0].entrada.reparado && h[0].entrada.ok, "{:?}", h[0].entrada);
-    assert!(h[0].pistas.iter().any(|x| x.contains("el .aux quedó truncado")), "{:?}", h[0].pistas);
+    assert!(h[0].pistas.iter().any(|x| x.contains("the .aux was truncated")), "{:?}", h[0].pistas);
 }
 
 #[test]
@@ -461,7 +461,7 @@ fn el_pdf_para_un_salto_se_elige_por_especificidad_y_no_por_fecha() {
     let (s, _) = abrir(&d, OK);
     // Sin ningún SyncTeX no hay a dónde saltar.
     assert!(s.elegir_pdf("Secciones/Dos.tex").unwrap().is_none());
-    assert!(s.synctex_forward("main.tex", 3).unwrap_err().to_string().contains("compilá"));
+    assert!(s.synctex_forward("main.tex", 3).unwrap_err().to_string().contains("compile first"));
 
     escribir_synctex(&s.root, "rapido");
     assert_eq!(s.elegir_pdf("Secciones/Dos.tex").unwrap().as_deref(), Some("rapido"), "el único con synctex");
@@ -558,7 +558,7 @@ fn publicar_copia_el_pdf_y_el_synctex_con_el_nombre_configurado() {
     assert!(s.publish("rapido").unwrap().pdf.ends_with("main (rapido).pdf"));
     // Un perfil sospechoso no se publica.
     fs::write(p.join(".latexfrog/build/rapido/.sospechoso"), "x").unwrap();
-    assert!(s.publish("rapido").unwrap_err().to_string().contains("no terminó bien"));
+    assert!(s.publish("rapido").unwrap_err().to_string().contains("did not end well"));
 }
 
 #[test]

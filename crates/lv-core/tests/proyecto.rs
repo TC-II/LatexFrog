@@ -128,11 +128,11 @@ fn una_configuracion_con_errores_no_se_escribe_y_dice_cual_es_el_problema() {
     let d = proyecto();
     let s = abrir(&d);
     let v = s.validate_config("{ \"root\": \"main.tex\", \"profiles\": {} }");
-    assert!(!v.ok && v.errores[0].contains("perfil"), "{:?}", v.errores);
+    assert!(!v.ok && v.errores[0].contains("profile"), "{:?}", v.errores);
     let v = s.validate_config("{ esto no es json");
     assert!(!v.ok && v.errores[0].contains("latexfrog.json"), "{:?}", v.errores);
     let v = s.validate_config(r#"{ "root": "no-existe.tex", "profiles": { "completo": {} } }"#);
-    assert!(!v.ok && v.errores.iter().any(|e| e.contains("no existe")), "{:?}", v.errores);
+    assert!(!v.ok && v.errores.iter().any(|e| e.contains("does not exist")), "{:?}", v.errores);
     assert!(matches!(s.write_config(r#"{ "root": "no-existe.tex", "profiles": { "completo": {} } }"#), Err(Error::NotFound(_))));
     assert!(matches!(s.write_config("{ esto no es json"), Err(_)));
     assert!(!d.path().join("latexfrog.json").exists(), "nada se escribió");
@@ -172,5 +172,5 @@ fn probar_lista_las_figuras_de_la_parte_con_la_configuracion_propuesta_sin_guard
     // Una configuración sin cache de figuras no tiene nada que listar y lo dice.
     let sin_cache = r#"{ "root": "main.tex", "profiles": { "completo": {} } }"#;
     let r = s.probe_config_con(sin_cache, None, &sonda_muda).unwrap();
-    assert!(r.listado.omitido.as_deref().is_some_and(|m| m.contains("no usa cache")), "{:?}", r.listado);
+    assert!(r.listado.omitido.as_deref().is_some_and(|m| m.contains("does not use a figure cache")), "{:?}", r.listado);
 }

@@ -9,6 +9,7 @@
 	import CompileButton, { COMPILE_TONE } from '$lib/preview/CompileButton.svelte';
 	import CompileOptionsMenu from './CompileOptionsMenu.svelte';
 	import LvProgress from '$lib/lv/LvProgress.svelte';
+	import LvTarget from '$lib/lv/LvTarget.svelte';
 	import { AnchoredMenu } from '$lib/pdf-view/anchoredMenu.svelte';
 	import type { ComponentProps } from 'svelte';
 	import { m } from '$lib/paraglide/messages';
@@ -183,6 +184,7 @@
 </script>
 
 <div class="flex items-center gap-2 @max-[20rem]:gap-0.5">
+	<LvTarget />
 	<LvProgress />
 	<div class="flex items-center gap-2 @max-[20rem]:gap-0.5">
 		<!-- Compile first: the end of the bar nearest the editor -->

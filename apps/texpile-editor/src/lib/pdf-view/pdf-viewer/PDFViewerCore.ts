@@ -21,6 +21,10 @@ import { PDFPageView, RenderingStates } from './PDFPageView';
 import { SimpleLinkService } from './SimpleLinkService';
 import { wheelZoomFactor } from '$lib/preview/zoom/wheelZoom';
 import { keepPointUnder } from '$lib/preview/zoom/zoomAnchor';
+import { ownClick, ownFollowMark, takeRefine, type SyncRefine } from '$lib/lv/lvSync';
+import { clave } from '$lib/lv/sync/texto';
+import { palabrasDelTramo } from '$lib/lv/sync/metricas';
+import type { PalabraPdf, Rect } from '$lib/lv/sync/buscar';
 
 export type PDFViewerOptions = {
 	container: HTMLElement;
@@ -59,6 +63,9 @@ export class PDFViewerCore {
 	readonly eventBus: EventBus;
 
 	private pdfDocument: PDFDocumentProxy | null = null;
+	private wordsByDocument = new WeakMap<PDFDocumentProxy, Map<number, PalabraPdf[]>>();
+	private measureContext: CanvasRenderingContext2D | null = null;
+	private followMarks: HTMLElement[] = [];
 	private pages: PDFPageView[] = [];
 	private currentScale: number;
 	private currentRotation: number;
@@ -135,6 +142,7 @@ export class PDFViewerCore {
 				// selection, so send nothing rather than a garbage anchor
 				let selectText: string | undefined = sel?.toString().trim() || undefined;
 				if (selectText && (selectText.length > 80 || /\n/.test(selectText))) selectText = undefined;
+				ownClick(this);
 				this.onPageClick(pageNumber, x, y, selectText);
 			},
 			{ signal: this.scrollAbortController!.signal }
@@ -146,6 +154,89 @@ export class PDFViewerCore {
 	// corners through the page transform (a size can't go through a rotating point transform) and
 	// take their axis-aligned bounding rect, which stays correct on rotated pages.
 	scrollToPosition(pageNumber: number, x: number, y: number, width = 0, height = 0): void {
+		const refine = takeRefine();
+		if (refine) {
+			void refine.rects(this).then(
+				(rects) => this.showRects(rects, refine),
+				() => this.jumpToBox(pageNumber, x, y, width, height)
+			);
+			return;
+		}
+		this.jumpToBox(pageNumber, x, y, width, height);
+	}
+
+	/**
+	 * The words of a page's text layer with their rectangles, in points from the top left: SyncTeX's space. pdf.js gives one string
+	 * per run of text; the words inside come from measuring with the run's font, as its text layer does.
+	 */
+	async pageWords(page: number): Promise<PalabraPdf[]> {
+		const pdf = this.pdfDocument;
+		if (!pdf || page < 1 || page > pdf.numPages) return [];
+		let cache = this.wordsByDocument.get(pdf);
+		if (!cache) this.wordsByDocument.set(pdf, (cache = new Map()));
+		const known = cache.get(page);
+		if (known) return known;
+		const pdfPage = await pdf.getPage(page);
+		const [x0, y0, , y1] = pdfPage.view;
+		const height = y1 - y0;
+		const content = await pdfPage.getTextContent();
+		// the page's fonts load with its operator list, as when drawing it; without them the canvas measures with some other font
+		await pdfPage.getOperatorList().catch(() => {});
+		const ctx = (this.measureContext ??= document.createElement('canvas').getContext('2d'));
+		const out: PalabraPdf[] = [];
+		for (const item of content.items) {
+			if (!('str' in item) || !item.str.trim() || !item.transform) continue;
+			const [, , c, d, e, f] = item.transform as number[];
+			const size = Math.hypot(c, d) || item.height || 10;
+			const width = item.width || size * 0.5 * item.str.length;
+			const family = content.styles?.[item.fontName]?.fontFamily;
+			let measure: ((text: string) => number) | null = null;
+			if (ctx && family) {
+				ctx.font = `${size}px ${family}`;
+				measure = (text) => ctx.measureText(text).width;
+			}
+			for (const word of palabrasDelTramo(item.str, width, measure)) {
+				const key = clave(word.texto);
+				if (key) out.push({ texto: word.texto, clave: key, page, x: e - x0 + word.x, y: height - (f - y0) - size * 0.78, w: word.w, h: size });
+			}
+		}
+		cache.set(page, out);
+		return out;
+	}
+
+	/** the refined rectangles of a jump, in points from the top left */
+	private showRects(rects: Rect[], refine: SyncRefine): void {
+		if (rects.length === 0) return;
+		const first = rects.reduce((a, b) => (b.page < a.page || (b.page === a.page && b.y < a.y) ? b : a), rects[0]);
+		const pageView = this.pages[first.page - 1];
+		if (!pageView) return;
+		const boxes = rects
+			.filter((r) => r.page === first.page)
+			.map((r) => {
+				const a = pageView.pdfToPixel(r.x, r.y);
+				const b = pageView.pdfToPixel(r.x + r.w, r.y + r.h);
+				return { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) };
+			});
+		const pageRect = pageView.div.getBoundingClientRect();
+		const contRect = this.container.getBoundingClientRect();
+		const y = pageRect.top - contRect.top + boxes[0].top;
+		// following keeps the page still while the word is on screen
+		if (refine.scroll && (!refine.mark || y < 0 || y > contRect.height - 20)) {
+			this.container.scrollTo({ top: Math.max(0, this.container.scrollTop + y - this.container.clientHeight / 3), behavior: refine.mark ? 'auto' : 'smooth' });
+		}
+		if (refine.mark) {
+			this.clearFollowMarks();
+			this.followMarks = boxes.map((b) => pageView.mark(b.left, b.top, b.width, b.height));
+			ownFollowMark(() => this.clearFollowMarks());
+		} else for (const b of boxes) pageView.highlight(b.left, b.top, b.width, b.height);
+	}
+
+	private clearFollowMarks(): void {
+		for (const el of this.followMarks) el.remove();
+		this.followMarks = [];
+	}
+
+	private jumpToBox(pageNumber: number, x: number, y: number, width: number, height: number): void {
 		const pageView = this.pages[pageNumber - 1];
 		if (!pageView) return;
 		const a = pageView.pdfToPixel(x, y - height);

@@ -123,7 +123,7 @@ impl Cocinero {
     fn error_de_lanzamiento(&self, o: &Opciones, e: std::io::Error) -> Error {
         let programa = self.programa.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| o.engine.clone());
         match e.kind() {
-            std::io::ErrorKind::NotFound => Error::NoLatexmk(format!("{programa}: no está en el PATH (¿está instalado MiKTeX o TeX Live?)")),
+            std::io::ErrorKind::NotFound => Error::NoLatexmk(format!("{programa}: not in the PATH (is MiKTeX or TeX Live installed?)")),
             _ => Error::NoLatexmk(format!("{programa}: {e}")),
         }
     }
@@ -178,7 +178,7 @@ impl Cocinero {
         let figlist = salida.join(format!("{JOB_COCINA}.figlist"));
         let texto = fs::read_to_string(&figlist).map_err(|_| {
             Error::Other(format!(
-                "el listado de figuras no generó {JOB_COCINA}.figlist: el documento no compila hasta ahí (revisá .latexfrog/build/{PERFIL_COCINA}/{JOB_COCINA}.log)"
+                "the figure listing did not produce {JOB_COCINA}.figlist: the document does not compile that far (see .latexfrog/build/{PERFIL_COCINA}/{JOB_COCINA}.log)"
             ))
         })?;
         // Con errores (código distinto de 0) sigue sospechoso aunque haya llegado a escribir la lista de figuras.

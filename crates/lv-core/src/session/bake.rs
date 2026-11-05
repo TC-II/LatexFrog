@@ -175,7 +175,7 @@ impl Session {
         let hoy = figcache::sello(&self.root, &fcfg.stamp_files);
         let estado = figcache::estado_del_cache(&figcache::escanear(&self.root, &fcfg.dir), hoy.as_deref());
         if figcache::necesita_cocer(&fcfg, &estado) {
-            return Some("faltan las figuras del sello de hoy (cambió el estilo)".into());
+            return Some("today's stamp has no figures (the style changed)".into());
         }
         let (hoy, rf) = (hoy?, d.root_file.as_ref()?);
         // El índice que dejó el último guardado (`file_info`); si no hay, se arma.
@@ -205,10 +205,10 @@ impl Session {
         // La lista no tiene que ser del sello de hoy, sólo de esta raíz y de estas partes: con otro sello las figuras se llaman igual salvo el
         // prefijo (deshacer un cambio de estilo no debería obligar a volver a listar).
         let Some(lista) = figcache::leer_figlist(&self.root).filter(|l| l.cubre(rf, &necesarias)) else {
-            return Some("todavía no se sabe qué figuras necesitan las partes de este perfil (no hay lista, o es de otra raíz o de otras partes)".into());
+            return Some("which figures this profile's parts need is not known yet (no list, or one from another root or other parts)".into());
         };
         let faltan = lista.nombres_con_sello(&hoy).iter().filter(|n| parte_de(n).is_some_and(|p| en_el_perfil(&p)) && !self.root.join(format!("{n}.pdf")).is_file()).count();
-        (faltan > 0).then(|| format!("faltan {faltan} figuras de las partes del perfil"))
+        (faltan > 0).then(|| format!("{faltan} figures of the profile's parts are missing"))
     }
 
     /// slug de figura -> archivo que lo declara (modo `project`: `\FigurasDe{slug}`; modo `app`: el slug que la app le puso al archivo).
@@ -240,7 +240,7 @@ impl Session {
             return Ok(None);
         }
         let sello = figcache::sello(&self.root, &f.stamp_files)
-            .ok_or_else(|| otro("no se pudo calcular el sello del cache de figuras: falta un archivo de `figureCache.stampFiles`"))?;
+            .ok_or_else(|| otro("could not compute the figure cache stamp: a file of `figureCache.stampFiles` is missing"))?;
         let slugs = figcache::slugs_app(&ix.reachable).into_iter().collect();
         Ok(Some(crate::build::FigureInject { dir: f.dir, sello, solo_en_figure: f.only_in_figure_env, lista, slugs }))
     }
@@ -253,25 +253,25 @@ impl Session {
             PartsSel::All => Ok((!nombres.is_empty()).then(|| nombres.to_vec())),
             PartsSel::Selection => {
                 if nombres.is_empty() {
-                    return Err(otro(format!("el perfil {perfil:?} compila partes elegidas, pero el proyecto no tiene partes")));
+                    return Err(otro(format!("the profile {perfil:?} compiles chosen parts, but the project has no parts")));
                 }
                 let sel: Vec<String> = nombres.iter().filter(|n| d.state.selection.contains(n)).cloned().collect();
                 if sel.is_empty() {
-                    return Err(otro("elegí al menos una parte para compilar"));
+                    return Err(otro("choose at least one part to compile"));
                 }
                 Ok(Some(sel))
             }
-            PartsSel::One => Err(otro(format!("el perfil {perfil:?} es de exportación: se lanza desde Exportar"))),
+            PartsSel::One => Err(otro(format!("the profile {perfil:?} is for export: it runs from Export"))),
             PartsSel::Current | PartsSel::List => {
                 if let Some(mala) = pc.part_list.iter().find(|p| !nombres.contains(p)) {
-                    return Err(otro(format!("el perfil {perfil:?} nombra {mala:?}, que ya no es una parte del proyecto")));
+                    return Err(otro(format!("the profile {perfil:?} names {mala:?}, which is no longer a part of the project")));
                 }
                 // Sin un capítulo guardado todavía (el proyecto recién abierto), el primero: mejor un PDF que un error.
                 let actual = (pc.parts == PartsSel::Current)
                     .then(|| d.state.current_part.clone().filter(|p| nombres.contains(p)).or_else(|| nombres.first().cloned()))
                     .flatten();
                 if pc.parts == PartsSel::Current && actual.is_none() && pc.part_list.is_empty() {
-                    return Err(otro(format!("el perfil {perfil:?} compila el capítulo donde estás, pero el proyecto no tiene capítulos")));
+                    return Err(otro(format!("the profile {perfil:?} compiles the chapter you are in, but the project has no chapters")));
                 }
                 // En el orden del documento, sin repetir.
                 let sel: Vec<String> = nombres.iter().filter(|n| pc.part_list.contains(n) || actual.as_ref() == Some(n)).cloned().collect();
@@ -282,17 +282,17 @@ impl Session {
 
     fn plan_bake(&self, fase: &FaseBake) -> Result<PlanBake> {
         let d = self.lock()?;
-        let rf = d.root_file.clone().ok_or_else(|| otro("elegí primero la raíz del documento"))?;
-        let cfg = d.config.clone().ok_or_else(|| otro("no hay configuración"))?;
+        let rf = d.root_file.clone().ok_or_else(|| otro("choose the document root first"))?;
+        let cfg = d.config.clone().ok_or_else(|| otro("no configuration"))?;
         let fcfg = FigureCfg::de(&cfg);
         if fcfg.modo == Modo::Off {
-            return Err(otro("el cache de figuras está apagado (`figureCache.mode` en latexfrog.json)"));
+            return Err(otro("the figure cache is off (`figureCache.mode` in latexfrog.json)"));
         }
         let ix = ProjectIndex::build(&self.root, &rf, &cfg.parts.commands);
         let todas = ix.part_names();
         let includeonly = match fase {
             FaseBake::Perfil(p) => {
-                let pc = cfg.profiles.get(p).ok_or_else(|| otro(format!("no existe el perfil {p:?}")))?;
+                let pc = cfg.profiles.get(p).ok_or_else(|| otro(format!("no profile {p:?}")))?;
                 Self::includeonly_de(&d, p, pc, &todas)?
             }
             FaseBake::Todo => (!todas.is_empty()).then(|| todas.clone()),
@@ -304,7 +304,7 @@ impl Session {
         // Los flags de la cocción son los de `partial` (omite portada e índices), `externalize` y el de listado de pgf.
         let flags: Vec<String> = cfg.flags.partial.iter().chain(&cfg.flags.externalize).chain(&cfg.flags.figure_list).cloned().collect();
         if cfg.flags.figure_list.is_empty() && fcfg.modo == Modo::Project {
-            return Err(otro("el modo `project` necesita `flags.figureList` en latexfrog.json: la macro que pone a pgf en `mode=list and make`"));
+            return Err(otro("`project` mode needs `flags.figureList` in latexfrog.json: the macro that puts pgf in `mode=list and make`"));
         }
         let vars: Vec<(String, String)> = cfg
             .variables
@@ -391,38 +391,38 @@ impl Session {
     /// `Err` dice por qué no: es lo que el historial muestra como «se listaron las figuras antes de compilar: …».
     pub(super) fn cache_al_dia(&self) -> std::result::Result<(), String> {
         let no = |m: &str| Err(m.to_string());
-        let Ok(d) = self.lock() else { return no("no se pudo leer la configuración") };
-        let (Some(cfg), Some(rf)) = (d.config.as_ref(), d.root_file.as_ref()) else { return no("no hay configuración o raíz") };
+        let Ok(d) = self.lock() else { return no("could not read the configuration") };
+        let (Some(cfg), Some(rf)) = (d.config.as_ref(), d.root_file.as_ref()) else { return no("no configuration or root") };
         let f = FigureCfg::de(cfg);
         if f.modo == Modo::Off {
-            return no("el cache de figuras está apagado");
+            return no("the figure cache is off");
         }
         if self.bake.rotas.lock().map(|r| !r.is_empty()).unwrap_or(true) {
-            return no("hay una figura rota sin arreglar");
+            return no("a broken figure is still not fixed");
         }
-        let Some(lista) = figcache::leer_figlist(&self.root) else { return no("todavía no había una lista de las figuras") };
-        let Some(guardada) = lista.huella.as_deref() else { return no("la última lista no quedó cocida del todo") };
+        let Some(lista) = figcache::leer_figlist(&self.root) else { return no("there was no figure list yet") };
+        let Some(guardada) = lista.huella.as_deref() else { return no("the last list was not fully baked") };
         if !lista.completa {
-            return no("la última lista era de un perfil parcial");
+            return no("the last list came from a partial profile");
         }
         if !lista.pendientes.is_empty() || !lista.fallidas.is_empty() {
-            return no("la última cocción dejó figuras sin cocinar");
+            return no("the last bake left figures unbaked");
         }
-        let Some(sello) = figcache::sello(&self.root, &f.stamp_files) else { return no("no se pudo calcular el sello de las figuras") };
+        let Some(sello) = figcache::sello(&self.root, &f.stamp_files) else { return no("could not compute the figure stamp") };
         if lista.sello != sello {
-            return no("cambió el sello de las figuras (el estilo)");
+            return no("the figure stamp changed (the style)");
         }
         let ix = ProjectIndex::build(&self.root, rf, &cfg.parts.commands);
         // La lista tiene que ser de esta raíz y de todas las partes que tienen figuras (la de inspo, armada con `cap_actual.tex`, no lo era).
         if !lista.vale_para(&sello, rf, &self.partes_con_figuras(&f, &ix)) {
-            return no("la última lista es de otra raíz o de otras partes del proyecto");
+            return no("the last list is from another root or other parts of the project");
         }
         let hoy = figcache::huella_de_figuras(&self.root, &ix.reachable, &ix.archivos_de_datos(f.only_in_figure_env), &|rel| ix.part_of(rel).is_some(), &sello);
         if hoy != guardada {
-            return no("cambió algo que puede cambiar una figura (una figura, una definición, el preámbulo o un archivo que una figura lee)");
+            return no("something that can change a figure changed (a figure, a definition, the preamble or a file a figure reads)");
         }
         if !lista.nombres.iter().all(|n| self.root.join(format!("{n}.pdf")).is_file()) {
-            return no("falta el PDF de alguna figura en el cache");
+            return no("a figure's PDF is missing from the cache");
         }
         Ok(())
     }
@@ -459,7 +459,7 @@ impl Session {
         // Para el historial del build que viene: se saltó el listado o por qué no. Un perfil que no consume el cache no decide nada.
         if let Ok(mut l) = self.listado_decidido.lock() {
             *l = al_dia.map(|r| match r {
-                Ok(()) => historial::Listado { salteado: true, motivo: "nada cambió desde la última cocción completa (mismo sello y misma huella de las figuras)".into() },
+                Ok(()) => historial::Listado { salteado: true, motivo: "nothing changed since the last full bake (same stamp and same figure footprint)".into() },
                 Err(m) => historial::Listado { salteado: false, motivo: m },
             });
         }
@@ -508,11 +508,11 @@ impl Session {
 
     pub(super) fn lanzar_bake(self: &Arc<Self>, b: &BakeJob) -> Result<u64> {
         let plan = self.plan_bake(&b.fase)?;
-        let job = Arc::new(JobSistema::new().ok_or_else(|| otro("no se pudo crear el Job Object de la cocción"))?);
+        let job = Arc::new(JobSistema::new().ok_or_else(|| otro("could not create the bake's Job Object"))?);
         let id = self.bake.id.fetch_add(1, Ordering::SeqCst);
         let cancelado = Arc::new(AtomicBool::new(false));
-        *self.bake.activo.lock().map_err(|_| otro("estado de la cocción envenenado"))? = Some(BakeActivo { cancelado: cancelado.clone(), job: job.clone() });
-        *self.bake.cocinando.lock().map_err(|_| otro("estado de la cocción envenenado"))? =
+        *self.bake.activo.lock().map_err(|_| otro("bake state poisoned"))? = Some(BakeActivo { cancelado: cancelado.clone(), job: job.clone() });
+        *self.bake.cocinando.lock().map_err(|_| otro("bake state poisoned"))? =
             Some(Cocinando { fase: b.fase.nombre(), hechas: 0, total: 0, listando: true });
         let me = self.clone();
         let b = b.clone();
@@ -605,7 +605,7 @@ impl Session {
         // Un archivo que una figura lee desde adentro de su `tikzpicture` cambió: sin su `.md5` el listado da esas figuras por pendientes.
         let invalidadas = figcache::invalidar_con_detalle(root, dir, &plan.datos);
         if !invalidadas.figuras.is_empty() {
-            (self.sink)(BuildEvent::Log { id, text: format!("== {} figura(s) leen un archivo que cambió: se recocinan\n", invalidadas.figuras.len()) });
+            (self.sink)(BuildEvent::Log { id, text: format!("== {} figure(s) read a changed file: rebaking\n", invalidadas.figuras.len()) });
         }
         if let Ok(mut d) = self.bake.detalle.lock() {
             *d = super::historia::DetalleDeListado { datos_cambiados: invalidadas.datos, datos_nuevos: invalidadas.nuevos, ..Default::default() };
@@ -620,7 +620,7 @@ impl Session {
         let listing_ms = t_listado.elapsed().as_millis() as u64;
         let (stamp, usa_sello) = {
             let d = self.lock()?;
-            let f = d.config.as_ref().map(FigureCfg::de).ok_or_else(|| otro("no hay configuración"))?;
+            let f = d.config.as_ref().map(FigureCfg::de).ok_or_else(|| otro("no configuration"))?;
             (figcache::sello(root, &f.stamp_files), f.usa_sello())
         };
         let pend = figcache::pendientes(root, &nombres);
@@ -716,7 +716,7 @@ impl Session {
     pub fn figures_status(&self) -> Result<FiguresStatus> {
         let (cfg, rf) = {
             let d = self.lock()?;
-            (d.config.clone().ok_or_else(|| otro("no hay configuración"))?, d.root_file.clone())
+            (d.config.clone().ok_or_else(|| otro("no configuration"))?, d.root_file.clone())
         };
         let fcfg = FigureCfg::de(&cfg);
         let hoy = figcache::sello(&self.root, &fcfg.stamp_files);
@@ -771,7 +771,7 @@ impl Session {
                         let p = f.problemas.first();
                         ErrorFigura {
                             nombre: f.nombre.clone(),
-                            mensaje: p.map(|p| p.message.clone()).unwrap_or_else(|| format!("La figura «{}» no se generó", crate::figures::nombre_corto(&f.nombre))),
+                            mensaje: p.map(|p| p.message.clone()).unwrap_or_else(|| format!("The figure \"{}\" was not generated", crate::figures::nombre_corto(&f.nombre))),
                             file: p.and_then(|p| p.file.clone()),
                             line: p.and_then(|p| p.line),
                             log: format!("{}.log", f.nombre),
@@ -802,16 +802,16 @@ impl Session {
     fn contexto_de_limpieza(&self) -> Result<(FigureCfg, String, Option<Figlist>)> {
         let (cfg, rf) = {
             let d = self.lock()?;
-            (d.config.clone().ok_or_else(|| otro("no hay configuración"))?, d.root_file.clone())
+            (d.config.clone().ok_or_else(|| otro("no configuration"))?, d.root_file.clone())
         };
         let fcfg = FigureCfg::de(&cfg);
-        let hoy = figcache::sello(&self.root, &fcfg.stamp_files).ok_or_else(|| otro("no se pudo calcular el sello: falta un archivo de `stampFiles`"))?;
+        let hoy = figcache::sello(&self.root, &fcfg.stamp_files).ok_or_else(|| otro("could not compute the stamp: a file of `stampFiles` is missing"))?;
         let lista = figcache::leer_figlist(&self.root);
         // Una lista de otra raíz o de otras partes nombraría de menos y la limpieza borraría figuras vivas.
         if let (Some(l), Some(rf)) = (&lista, &rf) {
             let ix = ProjectIndex::build(&self.root, rf, &cfg.parts.commands);
             if l.completa && !l.vale_para(&hoy, rf, &self.partes_con_figuras(&fcfg, &ix)) && l.sello == hoy {
-                return Err(otro("la lista de figuras es de otra raíz o de otras partes del proyecto (por ejemplo, se armó con una raíz que recorta capítulos): cociná todo antes de limpiar"));
+                return Err(otro("the figure list is from another root or other parts of the project (for example, one that trims chapters): bake everything before cleaning"));
             }
         }
         Ok((fcfg, hoy, lista))

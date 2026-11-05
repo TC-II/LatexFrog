@@ -62,17 +62,17 @@ impl Session {
         let (todas, config) = {
             let d = self.lock()?;
             let nombres = d.index.as_ref().map(|i| i.part_names()).unwrap_or_default();
-            (nombres, d.config.clone().ok_or_else(|| otro("no hay configuración"))?)
+            (nombres, d.config.clone().ok_or_else(|| otro("no configuration"))?)
         };
         let ex = config.export_cfg();
         validar_destino(&ex.dir)?;
         if todas.is_empty() {
-            return Err(otro("el proyecto no tiene partes que exportar (¿falta `parts.commands` en latexfrog.json?)"));
+            return Err(otro("the project has no parts to export (is `parts.commands` missing from latexfrog.json?)"));
         }
         let partes = match partes.filter(|p| !p.is_empty()) {
             Some(p) => {
                 if let Some(mala) = p.iter().find(|x| !todas.contains(x)) {
-                    return Err(otro(format!("{mala:?} no es una parte del proyecto")));
+                    return Err(otro(format!("{mala:?} is not a part of the project")));
                 }
                 // En el orden del documento y sin repetidas.
                 todas.iter().filter(|n| p.contains(n)).cloned().collect()
@@ -88,12 +88,12 @@ impl Session {
         self.guardia()?;
         let out = {
             let d = self.lock()?;
-            d.config.as_ref().and_then(|c| c.profiles.get(perfil)).and_then(|p| p.output.clone()).ok_or_else(|| otro(format!("el perfil {perfil:?} no tiene salida")))?
+            d.config.as_ref().and_then(|c| c.profiles.get(perfil)).and_then(|p| p.output.clone()).ok_or_else(|| otro(format!("the profile {perfil:?} has no output")))?
         };
         validar_destino(&out.dir)?;
         let partes = self.partes_del_perfil(perfil)?;
         if partes.is_empty() {
-            return Err(otro("el proyecto no tiene capítulos que compilar por separado"));
+            return Err(otro("the project has no chapters to compile separately"));
         }
         self.encolar_export(ExportJob { partes, perfil: perfil.into(), destino: crate::config::ExportCfg { dir: out.dir, pattern: out.pattern } })
     }
@@ -121,7 +121,7 @@ impl Session {
     pub fn request_fragment(self: &Arc<Self>, texto: String) -> Result<BuildAck> {
         self.guardia()?;
         if texto.trim().is_empty() {
-            return Err(otro("el fragmento está vacío"));
+            return Err(otro("the fragment is empty"));
         }
         self.plan_con(PERFIL_FRAGMENTO, false, &PlanExtra { partes: Some(vec![]), fragmento: Some(texto.clone()), ..Default::default() })?;
         match self.cola.pedir(Job::Fragment(FragmentJob { texto })) {
@@ -170,7 +170,7 @@ impl Session {
         validar_destino(&e.destino.dir)?;
         let id = self.export.id.fetch_add(1, Ordering::SeqCst);
         let cancelado = Arc::new(AtomicBool::new(false));
-        *self.export.cancelado.lock().map_err(|_| otro("estado de la exportación envenenado"))? = Some(cancelado.clone());
+        *self.export.cancelado.lock().map_err(|_| otro("export state poisoned"))? = Some(cancelado.clone());
         let me = self.clone();
         let e = e.clone();
         std::thread::spawn(move || me.correr_export(id, e.partes, &e.perfil, e.destino, cancelado));
@@ -203,8 +203,8 @@ impl Session {
             }
             otro => (me.sink)(otro),
         });
-        self.lanzar_con(plan, perfil, sink, Arc::new(Mutex::new(historia::CtxBuild::nuevo("exportación".into(), None))))?;
-        rx.recv().map_err(|_| otro("el build de la exportación terminó sin avisar"))
+        self.lanzar_con(plan, perfil, sink, Arc::new(Mutex::new(historia::CtxBuild::nuevo("export".into(), None))))?;
+        rx.recv().map_err(|_| otro("the export build ended without notice"))
     }
 
     fn correr_export(self: Arc<Self>, id: u64, partes: Vec<String>, perfil: &str, ex: crate::config::ExportCfg, cancelado: Arc<AtomicBool>) {
@@ -239,7 +239,7 @@ impl Session {
                         match copia {
                             Ok(_) => (true, Some(num), Some(archivo)),
                             Err(e) => {
-                                (self.sink)(BuildEvent::Error { message: format!("no se pudo copiar el PDF de {parte:?} a {archivo:?}: {e}") });
+                                (self.sink)(BuildEvent::Error { message: format!("could not copy the PDF of {parte:?} to {archivo:?}: {e}") });
                                 (false, Some(num), None)
                             }
                         }
@@ -247,7 +247,7 @@ impl Session {
                     Ok(BuildEvent::Finished { cancelled: true, .. }) => break,
                     Ok(_) => (false, None, None),
                     Err(e) => {
-                        (self.sink)(BuildEvent::Error { message: format!("no se pudo compilar {parte:?}: {e}") });
+                        (self.sink)(BuildEvent::Error { message: format!("could not compile {parte:?}: {e}") });
                         (false, None, None)
                     }
                 };
@@ -282,7 +282,7 @@ impl Session {
 /// `export.dir` puede salir de la raíz (`../PDF/Capítulos`, como `publish.dir`) pero no ser absoluta ni tener unidad.
 pub(super) fn validar_destino(dir: &str) -> Result<()> {
     if dir.trim().is_empty() || dir.starts_with('/') || dir.contains(':') || dir.contains('\\') {
-        return Err(otro(format!("`export.dir` {dir:?} no es una carpeta relativa a la raíz del proyecto")));
+        return Err(otro(format!("`export.dir` {dir:?} is not a folder relative to the project root")));
     }
     Ok(())
 }

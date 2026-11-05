@@ -75,6 +75,7 @@ fn patch(p: &Value) -> Result<StatePatch, String> {
         idle_ms: field(p, "idleMs")?,
         outside_save: field(p, "outsideSave")?,
         draft_images: field(p, "draftImages")?,
+        current_part: field(p, "currentPart")?,
     })
 }
 

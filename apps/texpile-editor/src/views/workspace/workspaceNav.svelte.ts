@@ -1,5 +1,7 @@
 // Every "jump somewhere" route in the workspace: SyncTeX forward/inverse, the visual-caret
 // source position, include targets, and the PDF pane scroll plumbing.
+import { lvProject } from '$lib/lv/lvEngine.svelte';
+import { joinPath } from '$lib/workspace/fileSystem';
 import { editorGroups } from '$lib/workspace/groups/editorGroups.svelte';
 import { previewViewOf } from '$lib/workspace/groups/layouts';
 import { editorViewStore } from '$lib/stores/editorStore';
@@ -40,13 +42,18 @@ export class WorkspaceNav {
 	// a SyncTeX-inverse / Find-in-Files jump. the token distinguishes repeat jumps to the same line
 	// so the editor re-fires; selectText is the word double-clicked in the PDF, anchored on to
 	// correct for line drift (see SourceEditor's gotoLine effect)
-	sourceGotoLine = $state<{ line: number; token: number; selectText?: string; column?: number; path: string } | undefined>(undefined);
+	sourceGotoLine = $state<{ line: number; token: number; selectText?: string; column?: number; columnEnd?: number; path: string } | undefined>(undefined);
 	private gotoToken = 0;
 
 	// forward/inverse SyncTeX resolution lives in lib/workspace/syncTexNav.ts
 	private syncTex: SyncTexNav;
 
 	constructor(private d: NavDeps) {
+		lvProject.onFollow = () => void this.syncTex.forwardFromCursor(true);
+		lvProject.onOpenAt = (file, line) => {
+			const root = lvProject.view?.root ?? '';
+			this.syncJumpToFileLine(joinPath(root, file), line);
+		};
 		this.syncTex = new SyncTexNav({
 			isGuest: d.guest,
 			getLoadedPath: () => d.doc.path,
@@ -57,7 +64,7 @@ export class WorkspaceNav {
 			scrollPdfTo: (page, x, y, w, h) => this.jumpPdf(page, x, y, w, h),
 			syncDraftTo: d.syncDraftTo,
 			// inverse clicks land in whichever mode the user is in; see syncJumpToFileLine
-			openFileAtLine: (file, line, selectText) => this.syncJumpToFileLine(file, line, selectText)
+			openFileAtLine: (file, line, selectText, column, columnEnd) => this.syncJumpToFileLine(file, line, selectText, column, columnEnd)
 		});
 	}
 
@@ -85,7 +92,7 @@ export class WorkspaceNav {
 	 * position the visual restore reads back on mount (another file). Source/diff keep the source
 	 * jump. Find-in-Files style jumps keep calling openFileAtLine directly: those want the line.
 	 */
-	syncJumpToFileLine(file: string, line: number, selectText?: string, column?: number): void {
+	syncJumpToFileLine(file: string, line: number, selectText?: string, column?: number, columnEnd?: number): void {
 		const { doc, modes } = this.d;
 		if (modes.mode === 'visual' && hasVisualMode(this.d.kind())) {
 			const target = sessionRelativeTarget(file, this.d.guest());
@@ -108,7 +115,7 @@ export class WorkspaceNav {
 			}
 			return;
 		}
-		this.openFileAtLine(file, line, selectText, column);
+		this.openFileAtLine(file, line, selectText, column, columnEnd);
 	}
 
 	/**
@@ -159,11 +166,11 @@ export class WorkspaceNav {
 	}
 
 	/** open a file in source mode and jump to a 1-based line (SyncTeX inverse + Find-in-Files) */
-	openFileAtLine(file: string, line: number, selectText?: string, column?: number): void {
+	openFileAtLine(file: string, line: number, selectText?: string, column?: number, columnEnd?: number): void {
 		const target = sessionRelativeTarget(file, this.d.guest());
 		this.d.modes.mode = 'source';
 		updateLayout({ viewMode: 'source' });
-		this.sourceGotoLine = { line, token: ++this.gotoToken, selectText, column, path: target };
+		this.sourceGotoLine = { line, token: ++this.gotoToken, selectText, column, columnEnd, path: target };
 		if (needsActivate(target)) openFile(target);
 	}
 

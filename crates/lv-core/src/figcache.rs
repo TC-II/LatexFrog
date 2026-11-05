@@ -623,15 +623,15 @@ fn dir_de_cache_seguro(dir: &str) -> bool {
 /// Lo que se borraría: todo lo de la carpeta del cache cuyo nombre base no está en la figlist. Sólo con una lista completa del
 /// sello de hoy; si no, error (nunca se limpia contra la lista de un parcial ni contra la de otro sello).
 pub fn limpieza_preview(root: &Path, dir: &str, sello_hoy: &str, f: Option<&Figlist>) -> Result<Limpieza> {
-    let Some(f) = f else { return Err(Error::Other("todavía no se listaron las figuras del proyecto: cociná primero".into())) };
+    let Some(f) = f else { return Err(Error::Other("the project's figures have not been listed yet: bake first".into())) };
     if !f.completa {
-        return Err(Error::Other("la última lista es de un perfil parcial: lo que no nombra puede ser de otro capítulo. Cociná todo antes de limpiar".into()));
+        return Err(Error::Other("the last list comes from a partial profile: what it does not name may belong to another chapter. Bake everything before cleaning".into()));
     }
     if f.sello != sello_hoy {
-        return Err(Error::Other("la lista de figuras es de otro sello: cociná antes de limpiar".into()));
+        return Err(Error::Other("the figure list is from another stamp: bake before cleaning".into()));
     }
     if !dir_de_cache_seguro(dir) {
-        return Err(Error::Other(format!("no se limpia la carpeta {dir:?}: no parece un cache de figuras")));
+        return Err(Error::Other(format!("not cleaning the folder {dir:?}: it does not look like a figure cache")));
     }
     let vivos: BTreeSet<&str> = f.nombres.iter().map(|n| n.rsplit('/').next().unwrap_or(n)).collect();
     let mut l = Limpieza::default();
@@ -1052,9 +1052,9 @@ mod tests {
         let r = d.path();
         assert!(limpieza_preview(r, "figuras-cache", "6D06AB", None).is_err());
         let e = limpieza_preview(r, "figuras-cache", "6D06AB", Some(&figlist(false, "6D06AB"))).unwrap_err().to_string();
-        assert!(e.contains("parcial"), "{e}");
+        assert!(e.contains("partial"), "{e}");
         let e = limpieza_preview(r, "figuras-cache", "6D06AB", Some(&figlist(true, "OTRO00"))).unwrap_err().to_string();
-        assert!(e.contains("otro sello"), "{e}");
+        assert!(e.contains("another stamp"), "{e}");
         assert!(r.join("figuras-cache/A1B2C3-a-0.pdf").is_file(), "no se borró nada");
     }
 

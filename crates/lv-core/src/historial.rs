@@ -233,8 +233,16 @@ pub fn tipicos(root: &Path) -> BTreeMap<String, Tipico> {
 
 // --- las pistas ----------------------------------------------------------------------------------------------------------------
 
+/// La fase se guarda como la nombra el motor (`todo`, `perfil x`): esto es lo que lee una persona.
+fn fase_legible(fase: Option<&str>) -> String {
+    match fase {
+        None | Some("todo") => "the whole document".to_string(),
+        Some(f) => f.strip_prefix("perfil ").map_or_else(|| f.to_string(), |x| format!("profile {x}")),
+    }
+}
+
 fn seg(ms: u64) -> String {
-    format!("{:.1} s", ms as f64 / 1000.0).replace('.', ",")
+    format!("{:.1} s", ms as f64 / 1000.0)
 }
 
 fn plural(n: usize, uno: &str, varios: &str) -> String {
@@ -258,72 +266,72 @@ pub fn pistas(e: &Entrada) -> Vec<String> {
         _ => pistas_de_build(e, &mut p),
     }
     if let Some(m) = e.motivo.strip_prefix("afuera: ") {
-        p.push(format!("lo disparó un archivo que cambió afuera de la aplicación: {m}"));
+        p.push(format!("set off by a file changed outside the app: {m}"));
     } else if let Some(m) = e.motivo.strip_prefix("guardado: ") {
-        p.push(format!("lo disparó guardar {m}"));
+        p.push(format!("set off by saving {m}"));
     } else if let Some(m) = e.motivo.strip_prefix("antes del build de ") {
-        p.push(format!("se cocinó antes de compilar «{m}»: sus figuras no estaban al día"));
+        p.push(format!("baked before compiling \"{m}\": its figures were not up to date"));
     } else if e.motivo == "el resto" {
-        p.push("es el resto de las figuras, que se cocina después del build".to_string());
+        p.push("the rest of the figures, baked after the build".to_string());
     }
     if e.cancelado {
-        p.push("se canceló".to_string());
+        p.push("cancelled".to_string());
     }
     p
 }
 
 fn pistas_de_build(e: &Entrada, p: &mut Vec<String>) {
     if e.limpio_antes {
-        p.push("el perfil limpia sus auxiliares antes de compilar (cleanBefore): arranca de cero".to_string());
+        p.push("the profile cleans its auxiliary files before compiling (cleanBefore): it starts from scratch".to_string());
     }
     if e.aux_faltantes.iter().any(|a| a == "fdb_latexmk") {
-        p.push("faltaba el .fdb_latexmk: latexmk no sabía qué había cambiado y recompiló todo".to_string());
+        p.push("the .fdb_latexmk was missing: latexmk did not know what changed and recompiled everything".to_string());
     }
     if e.aux_faltantes.iter().any(|a| a == "aux") && !e.limpio_antes {
-        p.push("faltaban los .aux del perfil: hacen falta pasadas de más para resolver las referencias".to_string());
+        p.push("the profile's .aux files were missing: extra passes are needed to resolve references".to_string());
     }
     if e.sospechoso_antes {
-        p.push("el build anterior de este perfil no terminó bien: sus auxiliares eran sospechosos y no se sembraron desde ahí".to_string());
+        p.push("the previous build of this profile did not end well: its auxiliary files were suspect and were not seeded from there".to_string());
     }
     if e.reparado {
-        p.push("el .aux quedó truncado: se borraron los auxiliares del perfil y se compiló otra vez (son dos builds en uno)".to_string());
+        p.push("the .aux was truncated: the profile's auxiliary files were deleted and it compiled again (two builds in one)".to_string());
     }
     if !e.datos_cambiados.is_empty() {
         let que = e.datos_cambiados.iter().map(|d| nombre_corto(d)).collect::<Vec<_>>().join(", ");
         p.push(format!(
-            "cambió {que}, que una figura lee desde adentro de su tikzpicture: se borraron {} y los .fdb_latexmk, así que latexmk recompiló y pgf recocinó esas figuras",
+            "{que} changed, which a figure reads from inside its tikzpicture: {} and the .fdb_latexmk were deleted, so latexmk recompiled and pgf rebaked those figures",
             plural(e.figuras_invalidadas as usize, ".md5", ".md5")
         ));
     }
     if !e.datos_nuevos.is_empty() {
         let que = e.datos_nuevos.iter().map(|d| nombre_corto(d)).collect::<Vec<_>>().join(", ");
         p.push(format!(
-            "la app veía por primera vez {que}, que una figura lee desde adentro de su tikzpicture: sin registro previo no sabe si cambió, así que por las dudas se borraron {} y los .fdb_latexmk (latexmk recompiló y pgf recocinó esas figuras)",
+            "the app saw {que} for the first time, which a figure reads from inside its tikzpicture: with no earlier record it cannot tell if it changed, so to be safe {} and the .fdb_latexmk were deleted (latexmk recompiled and pgf rebaked those figures)",
             plural(e.figuras_invalidadas as usize, ".md5", ".md5")
         ));
     }
     if !e.figuras_en_el_build.is_empty() {
         let n = e.figuras_en_el_build.len();
         let nombres = e.figuras_en_el_build.iter().take(3).map(|f| nombre_corto(f).to_string()).collect::<Vec<_>>().join(", ");
-        let mas = if n > 3 { format!(" y {} más", n - 3) } else { String::new() };
-        let tiempo = e.herramientas.iter().find(|h| h.nombre.starts_with("pdflatex") || h.nombre.starts_with("xelatex") || h.nombre.starts_with("lualatex")).map(|h| format!(" (la primera pasada tardó {})", seg(h.ms))).unwrap_or_default();
-        p.push(format!("{} dentro de la pasada, de a una: {nombres}{mas}{tiempo}", plural(n, "figura cocinada por pgf", "figuras cocinadas por pgf")));
+        let mas = if n > 3 { format!(" and {} more", n - 3) } else { String::new() };
+        let tiempo = e.herramientas.iter().find(|h| h.nombre.starts_with("pdflatex") || h.nombre.starts_with("xelatex") || h.nombre.starts_with("lualatex")).map(|h| format!(" (the first pass took {})", seg(h.ms))).unwrap_or_default();
+        p.push(format!("{} inside the pass, one at a time: {nombres}{mas}{tiempo}", plural(n, "figure baked by pgf", "figures baked by pgf")));
     }
     if let Some(l) = &e.listado {
         if l.salteado {
-            p.push(format!("se salteó el listado de las figuras: {}", l.motivo));
+            p.push(format!("figure listing skipped: {}", l.motivo));
         } else {
-            p.push(format!("se listaron las figuras antes de compilar: {}", l.motivo));
+            p.push(format!("figures listed before compiling: {}", l.motivo));
         }
     }
     if e.otros_tex > 0 {
-        p.push(format!("había {} corriendo: compiten por la CPU y los archivos", plural(e.otros_tex as usize, "proceso de TeX más", "procesos de TeX más")));
+        p.push(format!("{} running: they compete for the CPU and the files", plural(e.otros_tex as usize, "more TeX process", "more TeX processes")));
     }
     // Lo más lento: sólo si pesa de verdad.
     if e.ms >= 3000 {
         if let Some(h) = e.herramientas.iter().max_by_key(|h| h.ms) {
             if h.ms * 2 >= e.ms && e.herramientas.len() > 1 {
-                p.push(format!("lo más lento fue {}: {} de {}", h.nombre, seg(h.ms), seg(e.ms)));
+                p.push(format!("the slowest was {}: {} of {}", h.nombre, seg(h.ms), seg(e.ms)));
             }
         }
         if let Some(b) = e.herramientas.iter().find(|h| h.nombre == "biber" || h.nombre == "bibtex") {
@@ -333,43 +341,43 @@ fn pistas_de_build(e: &Entrada, p: &mut Vec<String>) {
         }
     }
     if e.pasadas >= 4 {
-        p.push(format!("{} de pdflatex: las referencias, el índice y la bibliografía tardan en estabilizarse", e.pasadas));
+        p.push(format!("{} pdflatex runs: references, contents and bibliography take time to settle", e.pasadas));
     }
     if !e.ok && !e.cancelado {
-        p.push(format!("falló{}", e.codigo.map(|c| format!(" (código {c})")).unwrap_or_default()));
+        p.push(format!("failed{}", e.codigo.map(|c| format!(" (code {c})")).unwrap_or_default()));
     }
 }
 
 fn pistas_de_coccion(e: &Entrada, p: &mut Vec<String>) {
     if e.listado_ms > 0 {
-        p.push(format!("el listado tardó {} (una pasada que no dibuja nada, con {})", seg(e.listado_ms), e.fase.as_deref().unwrap_or("el documento")));
+        p.push(format!("the listing took {} (a pass that draws nothing, with {})", seg(e.listado_ms), fase_legible(e.fase.as_deref())));
     }
     if e.a_cocinar > 0 {
-        let por = if e.cocidas > 0 { format!(", {} por figura", seg((e.ms.saturating_sub(e.listado_ms)) / u64::from(e.cocidas.max(1)))) } else { String::new() };
+        let por = if e.cocidas > 0 { format!(", {} per figure", seg((e.ms.saturating_sub(e.listado_ms)) / u64::from(e.cocidas.max(1)))) } else { String::new() };
         p.push(format!(
-            "cocinó {} de {} figuras con {} a la vez: {}{por}",
+            "baked {} of {} figures with {} at once: {}{por}",
             e.cocidas,
             e.a_cocinar,
             // Con 2 figuras para cocinar no corren 16 a la vez, aunque el máximo sea 16.
-            plural(e.trabajos.min(e.a_cocinar) as usize, "subcompilación", "subcompilaciones"),
+            plural(e.trabajos.min(e.a_cocinar) as usize, "subcompilation", "subcompilations"),
             seg(e.ms.saturating_sub(e.listado_ms))
         ));
     } else {
-        p.push(format!("no había nada para cocinar: sólo el listado ({} figuras al día)", e.figuras_listadas));
+        p.push(format!("nothing to bake: only the listing ({} figures up to date)", e.figuras_listadas));
     }
     if e.cedio {
-        p.push(format!("cedió el paso a un build: quedaron {} sin cocinar", e.restantes));
+        p.push(format!("gave way to a build: {} left to bake", e.restantes));
     }
     if e.fallidas > 0 {
-        p.push(format!("{} no salieron: están en el panel Figuras, con su error", plural(e.fallidas as usize, "figura", "figuras")));
+        p.push(format!("{} failed: they are in the Figures panel, with their error", plural(e.fallidas as usize, "figure", "figures")));
     }
     if !e.datos_cambiados.is_empty() {
         let que = e.datos_cambiados.iter().map(|d| nombre_corto(d)).collect::<Vec<_>>().join(", ");
-        p.push(format!("cambió {que}, que una figura lee desde adentro de su tikzpicture: sus figuras se dieron por pendientes"));
+        p.push(format!("{que} changed, which a figure reads from inside its tikzpicture: its figures were marked pending"));
     }
     if !e.datos_nuevos.is_empty() {
         let que = e.datos_nuevos.iter().map(|d| nombre_corto(d)).collect::<Vec<_>>().join(", ");
-        p.push(format!("la app veía por primera vez {que}, que una figura lee desde adentro de su tikzpicture: por las dudas sus figuras se dieron por pendientes"));
+        p.push(format!("the app saw {que} for the first time, which a figure reads from inside its tikzpicture: to be safe its figures were marked pending"));
     }
 }
 
@@ -377,21 +385,21 @@ fn pistas_de_exportacion(e: &Entrada, p: &mut Vec<String>) {
     let n = e.partes.len();
     if n > 0 {
         let ok = e.partes.iter().filter(|x| x.ok).count();
-        p.push(format!("{ok} de {} exportadas: {} por parte", plural(n, "parte", "partes"), seg(e.ms / n as u64)));
+        p.push(format!("{ok} of {} exported: {} per part", plural(n, "part", "parts"), seg(e.ms / n as u64)));
         let lenta = e.partes.iter().max_by_key(|x| x.ms);
         if let Some(l) = lenta {
             // La más lenta se nombra si pasa del promedio por un 20 %.
             if n > 1 && l.ms * 5 >= (e.ms / n as u64) * 6 {
-                p.push(format!("la más lenta fue {}: {}", nombre_corto(&l.parte), seg(l.ms)));
+                p.push(format!("the slowest was {}: {}", nombre_corto(&l.parte), seg(l.ms)));
             }
         }
         for x in e.partes.iter().filter(|x| !x.ok) {
-            p.push(format!("{} no salió: sus errores están en los problemas del perfil export", nombre_corto(&x.parte)));
+            p.push(format!("{} failed: its errors are in the problems of the export profile", nombre_corto(&x.parte)));
         }
     }
-    p.push("cada parte es un build con otro `\\includeonly`, así que latexmk recompila siempre".to_string());
+    p.push("each part is a build with another `\\includeonly`, so latexmk always recompiles".to_string());
     if let Some(d) = &e.destino {
-        p.push(format!("los PDF quedan en {d}"));
+        p.push(format!("the PDFs are in {d}"));
     }
 }
 
@@ -461,16 +469,16 @@ mod tests {
         e.motivo = "afuera: Secciones/fig_engranaje_pinon.tex".into();
         let p = pistas(&e).join(" | ");
         for frase in [
-            "faltaba el .fdb_latexmk",
-            "faltaban los .aux",
-            "no terminó bien",
-            "el .aux quedó truncado",
-            "2 figuras cocinadas por pgf dentro de la pasada, de a una: AB-cauer-3, AB-cauer-4 (la primera pasada tardó 7,0 s)",
-            "se listaron las figuras antes de compilar: cambió el sello",
-            "había 2 procesos de TeX más corriendo",
-            "lo más lento fue pdflatex: 7,0 s de 9,5 s",
-            "biber: 2,5 s",
-            "lo disparó un archivo que cambió afuera de la aplicación: Secciones/fig_engranaje_pinon.tex",
+            "the .fdb_latexmk was missing",
+            ".aux files were missing",
+            "did not end well",
+            "the .aux was truncated",
+            "2 figures baked by pgf inside the pass, one at a time: AB-cauer-3, AB-cauer-4 (the first pass took 7.0 s)",
+            "figures listed before compiling: cambió el sello",
+            "2 more TeX processes running",
+            "the slowest was pdflatex: 7.0 s of 9.5 s",
+            "biber: 2.5 s",
+            "set off by a file changed outside the app: Secciones/fig_engranaje_pinon.tex",
         ] {
             assert!(p.contains(frase), "falta «{frase}» en: {p}");
         }
@@ -485,11 +493,11 @@ mod tests {
         e.figuras_invalidadas = 2;
         e.limpio_antes = true;
         let p = pistas(&e).join(" | ");
-        assert!(p.contains("se salteó el listado de las figuras: nada cambió desde la última cocción completa"), "{p}");
-        assert!(p.contains("cambió fig_engranaje_pinon.tex, fig_engranaje_rueda.tex, que una figura lee desde adentro de su tikzpicture: se borraron 2 .md5 y los .fdb_latexmk"), "{p}");
+        assert!(p.contains("figure listing skipped: nada cambió desde la última cocción completa"), "{p}");
+        assert!(p.contains("fig_engranaje_pinon.tex, fig_engranaje_rueda.tex changed, which a figure reads from inside its tikzpicture: 2 .md5 and the .fdb_latexmk"), "{p}");
         assert!(p.contains("cleanBefore"), "{p}");
-        assert!(pistas(&Entrada { ok: false, codigo: Some(12), ..build() }).iter().any(|x| x == "falló (código 12)"));
-        assert!(pistas(&Entrada { ok: false, cancelado: true, ..build() }).iter().any(|x| x == "se canceló"));
+        assert!(pistas(&Entrada { ok: false, codigo: Some(12), ..build() }).iter().any(|x| x == "failed (code 12)"));
+        assert!(pistas(&Entrada { ok: false, cancelado: true, ..build() }).iter().any(|x| x == "cancelled"));
     }
 
     #[test]
@@ -524,20 +532,20 @@ mod tests {
         e.datos_nuevos = vec!["Secciones/fig_engranaje_pinon.tex".into()];
         e.figuras_invalidadas = 1;
         let p = pistas(&e).join(" | ");
-        assert!(p.contains("la app veía por primera vez fig_engranaje_pinon.tex"), "{p}");
-        assert!(p.contains("sin registro previo no sabe si cambió"), "{p}");
-        assert!(!p.contains("cambió fig_engranaje_pinon.tex"), "{p}");
+        assert!(p.contains("the app saw fig_engranaje_pinon.tex for the first time"), "{p}");
+        assert!(p.contains("with no earlier record it cannot tell if it changed"), "{p}");
+        assert!(!p.contains("fig_engranaje_pinon.tex changed"), "{p}");
         // Y en la cocción también.
         let c = Entrada { tipo: "bake".into(), datos_nuevos: vec!["datos.tex".into()], ok: true, ..Default::default() };
         let p = pistas(&c).join(" | ");
-        assert!(p.contains("la app veía por primera vez datos.tex") && !p.contains("cambió datos.tex"), "{p}");
+        assert!(p.contains("the app saw datos.tex for the first time") && !p.contains("datos.tex changed"), "{p}");
     }
 
     #[test]
     fn una_coccion_de_pocas_figuras_no_dice_que_corrieron_tantas_a_la_vez_como_el_maximo() {
         let c = Entrada { tipo: "bake".into(), a_cocinar: 2, cocidas: 2, trabajos: 16, ms: 10_000, ok: true, ..Default::default() };
         let p = pistas(&c).join(" | ");
-        assert!(p.contains("cocinó 2 de 2 figuras con 2 subcompilaciones a la vez"), "{p}");
+        assert!(p.contains("baked 2 of 2 figures with 2 subcompilations at once"), "{p}");
     }
 
     #[test]
@@ -556,13 +564,13 @@ mod tests {
             ..Default::default()
         };
         let p = pistas(&c).join(" | ");
-        assert!(p.contains("el listado tardó 4,0 s"), "{p}");
-        assert!(p.contains("cocinó 46 de 46 figuras con 16 subcompilaciones a la vez: 25,0 s, 0,5 s por figura"), "{p}");
-        assert!(p.contains("se cocinó antes de compilar «parcial»"), "{p}");
+        assert!(p.contains("the listing took 4.0 s"), "{p}");
+        assert!(p.contains("baked 46 of 46 figures with 16 subcompilations at once: 25.0 s, 0.5 s per figure"), "{p}");
+        assert!(p.contains("baked before compiling \"parcial\""), "{p}");
         let sin = Entrada { tipo: "bake".into(), figuras_listadas: 158, listado_ms: 7000, ms: 7100, ok: true, ..Default::default() };
-        assert!(pistas(&sin).iter().any(|x| x.contains("no había nada para cocinar: sólo el listado (158 figuras al día)")));
+        assert!(pistas(&sin).iter().any(|x| x.contains("nothing to bake: only the listing (158 figures up to date)")));
         let ced = Entrada { tipo: "bake".into(), a_cocinar: 100, cocidas: 40, restantes: 60, cedio: true, trabajos: 8, ms: 30_000, ..Default::default() };
-        assert!(pistas(&ced).iter().any(|x| x.contains("cedió el paso a un build: quedaron 60 sin cocinar")));
+        assert!(pistas(&ced).iter().any(|x| x.contains("gave way to a build: 60 left to bake")));
         let x = Entrada {
             tipo: "export".into(),
             ms: 30_000,
@@ -575,7 +583,7 @@ mod tests {
             ..Default::default()
         };
         let p = pistas(&x).join(" | ");
-        assert!(p.contains("1 de 2 partes exportadas: 15,0 s por parte"), "{p}");
-        assert!(p.contains("la más lenta fue Roto: 18,0 s") && p.contains("Roto no salió"), "{p}");
+        assert!(p.contains("1 of 2 parts exported: 15.0 s per part"), "{p}");
+        assert!(p.contains("the slowest was Roto: 18.0 s") && p.contains("Roto failed"), "{p}");
     }
 }

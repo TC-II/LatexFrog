@@ -77,7 +77,7 @@ impl Session {
         };
         let mut errores = Vec::new();
         if !fsio::resolver(&self.root, &cfg.root, false).is_ok_and(|r| r.is_file()) {
-            errores.push(format!("la raíz {:?} no existe en el proyecto", cfg.root));
+            errores.push(format!("the root {:?} does not exist in the project", cfg.root));
         }
         let ix = ProjectIndex::build(&self.root, &cfg.root, &cfg.parts.commands);
         let ex = cfg.export_cfg();
@@ -136,15 +136,15 @@ impl Session {
         let omitido = |m: &str| Ok(ListadoProbado { parte: None, figuras: 0, ms: 0, nombres: vec![], omitido: Some(m.to_string()) });
         let f = FigureCfg::de(cfg);
         if f.modo == Modo::Off {
-            return omitido("el proyecto no usa cache de figuras: no hay nada que listar");
+            return omitido("the project does not use a figure cache: nothing to list");
         }
         if f.modo == Modo::Project && cfg.flags.figure_list.is_empty() {
-            return omitido("el modo `project` necesita `flags.figureList` (la macro que pone a pgf en «list and make»): sin ella no se pueden listar las figuras");
+            return omitido("`project` mode needs `flags.figureList` (the macro that puts pgf in \"list and make\"): without it figures cannot be listed");
         }
         let ix = ProjectIndex::build(&self.root, &cfg.root, &cfg.parts.commands);
         let partes = ix.part_names();
         let parte = match parte {
-            Some(p) if !partes.iter().any(|x| x == p) => return Err(otro(format!("{p:?} no es una parte del proyecto"))),
+            Some(p) if !partes.iter().any(|x| x == p) => return Err(otro(format!("{p:?} is not a part of the project"))),
             Some(p) => Some(p.to_string()),
             None => partes.first().cloned(),
         };
@@ -169,7 +169,7 @@ impl Session {
         aux::ensure_include_dirs(&self.root, PERFIL_COCINA, &ix.include_dirs(&cfg.parts.commands))?;
         aux::ensure_cache_dirs(&self.root, PERFIL_COCINA, &f.dir)?;
         let opciones = Opciones { root: self.root.clone(), engine: cfg.engine.clone(), dir: f.dir.clone(), jobs: f.jobs };
-        let job = Arc::new(JobSistema::new().ok_or_else(|| otro("no se pudo crear el Job Object del listado"))?);
+        let job = Arc::new(JobSistema::new().ok_or_else(|| otro("could not create the listing's Job Object"))?);
         let t0 = std::time::Instant::now();
         let nombres = self.cocinero.listar(&opciones, &job, &AtomicBool::new(false))?;
         Ok(ListadoProbado { parte, figuras: nombres.len(), ms: t0.elapsed().as_millis() as u64, nombres: nombres.iter().take(12).cloned().collect(), omitido: None })

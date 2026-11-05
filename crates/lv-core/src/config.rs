@@ -303,38 +303,38 @@ impl ProjectConfig {
     pub fn validate(&self) -> Result<()> {
         let mal = |m: String| Err(Error::Other(format!("{CONFIG_FILE}: {m}")));
         if self.root.trim().is_empty() {
-            return mal("falta `root`".into());
+            return mal("`root` is missing".into());
         }
         if !ENGINES.contains(&self.engine.as_str()) {
-            return mal(format!("`engine` {:?} no es válido (pdflatex, xelatex o lualatex)", self.engine));
+            return mal(format!("`engine` {:?} is not valid (pdflatex, xelatex or lualatex)", self.engine));
         }
         if self.profiles.is_empty() {
-            return mal("no hay ningún perfil en `profiles`".into());
+            return mal("there is no profile in `profiles`".into());
         }
         for (id, p) in &self.profiles {
             if !perfil_valido(id) {
-                return mal(format!("el perfil {id:?} no es válido (ASCII, sin espacios: es el nombre del driver)"));
+                return mal(format!("the profile {id:?} is not valid (ASCII, no spaces: it names the driver)"));
             }
             if let Some(c) = &p.color {
                 if !(c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|x| x.is_ascii_hexdigit())) {
-                    return mal(format!("el color {c:?} del perfil {id:?} no es #rrggbb"));
+                    return mal(format!("the color {c:?} of profile {id:?} is not #rrggbb"));
                 }
             }
             if let Some(o) = p.omit.iter().find(|o| crate::piezas::Pieza::de_clave(o).is_none()) {
-                return mal(format!("el perfil {id:?} saca {o:?}, que no es una pieza (toc, bibliography, index o pdf:<archivo>)"));
+                return mal(format!("the profile {id:?} omits {o:?}, which is not a piece (toc, bibliography, index or pdf:<file>)"));
             }
             if p.parts == PartsSel::List && p.part_list.is_empty() {
-                return mal(format!("el perfil {id:?} compila una lista de partes vacía"));
+                return mal(format!("the profile {id:?} compiles an empty list of parts"));
             }
         }
         for m in self.flags.partial.iter().chain(&self.flags.externalize).chain(&self.flags.figure_list).chain(self.variables.keys()) {
             if !macro_valida(m) {
-                return mal(format!("{m:?} no sirve como nombre de macro (sólo letras)"));
+                return mal(format!("{m:?} cannot be a macro name (letters only)"));
             }
         }
         for c in &self.parts.commands {
             if !c.chars().all(|c| c.is_ascii_alphabetic()) || c.is_empty() {
-                return mal(format!("el comando de parte {c:?} no es válido"));
+                return mal(format!("the part command {c:?} is not valid"));
             }
         }
         Ok(())
@@ -369,7 +369,7 @@ impl ProjectConfig {
         }
         let usa_cache = !self.flags.externalize.is_empty() || self.profiles.values().any(|p| p.externalize);
         ProfileCfg {
-            label: Some(if id == PERFIL_EXPORT { "Exportación" } else { "Fragmento" }.into()),
+            label: Some(if id == PERFIL_EXPORT { "Export" } else { "Fragment" }.into()),
             partial: !self.flags.partial.is_empty(),
             externalize: usa_cache,
             parts: PartsSel::One,
@@ -396,7 +396,7 @@ pub fn infer_config(root_file: &str, hay_partes: bool) -> ProjectConfig {
         );
         profiles.insert(
             "rapido".to_string(),
-            ProfileCfg { label: Some("Todas las partes".into()), partial: true, parts: PartsSel::All, ..Default::default() },
+            ProfileCfg { label: Some("All parts".into()), partial: true, parts: PartsSel::All, ..Default::default() },
         );
         profiles.insert(
             "completo".to_string(),
@@ -521,6 +521,8 @@ pub struct StatePatch {
     pub idle_ms: Option<u64>,
     pub outside_save: Option<OutsideSave>,
     pub draft_images: Option<bool>,
+    /// La parte que compila un perfil `parts: "current"` sin mirar el archivo abierto: el ▶ del panel Partes.
+    pub current_part: Option<String>,
 }
 
 /// Un estado ilegible no es un error: es de esta máquina y se rearma con los valores por defecto.

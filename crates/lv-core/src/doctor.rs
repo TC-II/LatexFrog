@@ -167,10 +167,10 @@ fn hallazgo_roto(id: &str, programa: &str) -> Hallazgo {
     Hallazgo::nuevo(
         id,
         Nivel::Error,
-        format!("{programa} no arranca (0xC0000135)"),
-        format!("El lanzador de {programa} sale con 0xC0000135, que es «falta una DLL»: es lo que deja una instalación de MiKTeX a medias."),
+        format!("{programa} does not start (0xC0000135)"),
+        format!("The {programa} launcher exits with 0xC0000135, which means a missing DLL: a half-finished MiKTeX installation leaves this."),
     )
-    .con_arreglo("Reparar o reinstalar MiKTeX (MiKTeX Console, «Tasks», «Check for problems»), y volver a abrir el proyecto.")
+    .con_arreglo("Repair or reinstall MiKTeX (MiKTeX Console, Tasks, Check for problems), then open the project again.")
 }
 
 /// Un programa que el proyecto necesita (o no): `hallazgo` de si está y arranca.
@@ -178,13 +178,13 @@ fn programa(id: &str, nombre: &str, args: &[&str], necesario: bool, por_que: &st
     let s = sonda(nombre, args, None);
     if !s.lanzado {
         let nivel = if necesario { Nivel::Error } else { Nivel::Info };
-        return Hallazgo::nuevo(id, nivel, format!("No se encontró {nombre}"), por_que.to_string()).con_arreglo(format!("Instalar {nombre} y dejarlo en el PATH (o reabrir la aplicación después de instalarlo)."));
+        return Hallazgo::nuevo(id, nivel, format!("{nombre} was not found"), por_que.to_string()).con_arreglo(format!("Install {nombre} and put it on the PATH (or reopen the app after installing it)."));
     }
     if roto(&s) {
         return hallazgo_roto(id, nombre);
     }
     if s.colgado {
-        return Hallazgo::nuevo(id, Nivel::Aviso, format!("{nombre} no contestó a tiempo"), format!("Pasaron {} s sin que termine: puede estar esperando algo (un instalador de paquetes, una ventana).", TIEMPO_MAXIMO.as_secs()));
+        return Hallazgo::nuevo(id, Nivel::Aviso, format!("{nombre} did not answer in time"), format!("{} s went by without it finishing: it may be waiting for something (a package installer, a window).", TIEMPO_MAXIMO.as_secs()));
     }
     Hallazgo::nuevo(id, Nivel::Ok, format!("{nombre}: {}", ok_texto(&s)), "")
 }
@@ -208,8 +208,8 @@ pub fn chequeos_de_herramientas(n: &Necesidades, sonda: &Sonda) -> (Vec<Hallazgo
     let (distro, nombre_distro) = distro_de(&v.texto);
     if !v.lanzado {
         h.push(
-            Hallazgo::nuevo("motor", Nivel::Error, format!("No se encontró {}", n.engine), "Sin el motor de TeX no se puede compilar nada.")
-                .con_arreglo("Instalar MiKTeX o TeX Live y dejar sus programas en el PATH."),
+            Hallazgo::nuevo("motor", Nivel::Error, format!("{} was not found", n.engine), "Nothing compiles without the TeX engine.")
+                .con_arreglo("Install MiKTeX or TeX Live and put its programs on the PATH."),
         );
         return (h, None);
     }
@@ -233,20 +233,20 @@ pub fn chequeos_de_herramientas(n: &Necesidades, sonda: &Sonda) -> (Vec<Hallazgo
             sc.spawn(|| sonda_del_nucleo(n, sonda, &dir_nucleo)),
             sc.spawn(|| sonda_de_max_print_line(n, sonda, distro)),
             sc.spawn(|| {
-                vec![programa("latexmk", "latexmk", &["-v"], true, "La app compila con latexmk.", sonda, |s| {
+                vec![programa("latexmk", "latexmk", &["-v"], true, "The app compiles with latexmk.", sonda, |s| {
                     let l = s.texto.lines().find(|l| l.contains("Version")).map(str::trim).unwrap_or("").to_string();
                     if l.is_empty() { primera_linea(&s.texto) } else { l }
                 })]
             }),
             sc.spawn(|| {
-                vec![programa("perl", "perl", &["-v"], true, "latexmk es un script de Perl: sin Perl no corre (en MiKTeX no viene incluido).", sonda, |s| {
+                vec![programa("perl", "perl", &["-v"], true, "latexmk is a Perl script: it does not run without Perl (MiKTeX does not include it).", sonda, |s| {
                     s.texto.lines().find(|l| l.contains("This is perl")).map(str::trim).unwrap_or("").to_string()
                 })]
             }),
             sc.spawn(|| sonda_del_path_de_latexmk(n, sonda, &dir_path)),
-            sc.spawn(|| vec![programa("biber", "biber", &["--version"], n.usa_biber, "El proyecto usa `\\addbibresource`: la bibliografía la hace biber.", sonda, |s| primera_linea(&s.texto))]),
-            sc.spawn(|| vec![programa("bibtex", "bibtex", &["--version"], n.usa_bibtex, "El proyecto usa `\\bibliography`: la bibliografía la hace bibtex.", sonda, |s| primera_linea(&s.texto))]),
-            sc.spawn(|| vec![programa("makeindex", "makeindex", &["-h"], n.usa_makeindex, "El proyecto usa un índice alfabético.", sonda, |_| "responde".into())]),
+            sc.spawn(|| vec![programa("biber", "biber", &["--version"], n.usa_biber, "The project uses `\\addbibresource`: biber makes the bibliography.", sonda, |s| primera_linea(&s.texto))]),
+            sc.spawn(|| vec![programa("bibtex", "bibtex", &["--version"], n.usa_bibtex, "The project uses `\\bibliography`: bibtex makes the bibliography.", sonda, |s| primera_linea(&s.texto))]),
+            sc.spawn(|| vec![programa("makeindex", "makeindex", &["-h"], n.usa_makeindex, "The project has an index.", sonda, |_| "answers".into())]),
             sc.spawn(|| sonda_de_synctex(sonda)),
         ];
         hilos.into_iter().map(|t| t.join().unwrap_or_default()).collect()
@@ -269,24 +269,24 @@ fn sonda_del_nucleo(n: &Necesidades, sonda: &Sonda, dir: &Path) -> Vec<Hallazgo>
                 Hallazgo::nuevo(
                     "nucleo",
                     Nivel::Error,
-                    format!("LaTeX {a}-{mes:02}-{dia:02} es más viejo que 2021-06"),
-                    "Los drivers de la app usan hooks (`\\AddToHook`) que el núcleo de LaTeX trae desde 2021-06.",
+                    format!("LaTeX {a}-{mes:02}-{dia:02} is older than 2021-06"),
+                    "The app's drivers use hooks (`\\AddToHook`) that the LaTeX kernel has had since 2021-06.",
                 )
-                .con_arreglo("Actualizar la distribución de TeX."),
+                .con_arreglo("Update the TeX distribution."),
             );
         } else {
-            h.push(Hallazgo::nuevo("nucleo", Nivel::Ok, format!("LaTeX {a}-{mes:02}-{dia:02} (hace falta 2021-06 o más)"), ""));
+            h.push(Hallazgo::nuevo("nucleo", Nivel::Ok, format!("LaTeX {a}-{mes:02}-{dia:02} (2021-06 or later is needed)"), ""));
         }
     } else {
-        h.push(Hallazgo::nuevo("nucleo", Nivel::Aviso, "No se pudo leer la versión de LaTeX", format!("Un documento mínimo no dio la fecha del núcleo: {}", primera_linea(&m.texto))));
+        h.push(Hallazgo::nuevo("nucleo", Nivel::Aviso, "Could not read the LaTeX version", format!("A minimal document did not give the kernel date: {}", primera_linea(&m.texto))));
     }
     if n.externaliza {
         if m.texto.contains("LVSE:1") {
-            h.push(Hallazgo::nuevo("shell-escape", Nivel::Ok, "-shell-escape está permitido", ""));
+            h.push(Hallazgo::nuevo("shell-escape", Nivel::Ok, "-shell-escape is allowed", ""));
         } else if m.texto.contains("LVSE:0") {
             h.push(
-                Hallazgo::nuevo("shell-escape", Nivel::Error, "-shell-escape no está permitido", "La externalización de figuras lanza pdflatex desde pdflatex y la distribución lo está bloqueando.")
-                    .con_arreglo("En MiKTeX: activar «shell escape» en la configuración (shell_escape = t). En TeX Live: shell_escape = t en texmf.cnf."),
+                Hallazgo::nuevo("shell-escape", Nivel::Error, "-shell-escape is not allowed", "Figure externalization runs pdflatex from pdflatex, and the distribution is blocking it.")
+                    .con_arreglo("In MiKTeX: turn on shell escape in the settings (shell_escape = t). In TeX Live: shell_escape = t in texmf.cnf."),
             );
         }
     }
@@ -300,8 +300,8 @@ fn sonda_de_max_print_line(n: &Necesidades, sonda: &Sonda, distro: Distro) -> Ve
         return vec![Hallazgo::nuevo(
             "max-print-line",
             if distro == Distro::TeXLive { Nivel::Info } else { Nivel::Aviso },
-            format!("{} no acepta -max-print-line", n.engine),
-            "Es lo que pasa con algunas versiones de TeX Live. La app también pone la variable de entorno max_print_line; si un error de un log sale cortado a 79 columnas, es esto.",
+            format!("{} does not accept -max-print-line", n.engine),
+            "Some TeX Live versions do this. The app also sets the max_print_line environment variable; if an error in a log is cut at 79 columns, this is why.",
         )];
     }
     vec![]
@@ -320,19 +320,19 @@ fn sonda_del_path_de_latexmk(n: &Necesidades, sonda: &Sonda, dir: &Path) -> Vec<
             return vec![Hallazgo::nuevo(
                 "path-latexmk",
                 if n.latexmkrc { Nivel::Aviso } else { Nivel::Info },
-                format!("Dentro de latexmk el PATH tiene {} entrada{}", entradas.len(), if entradas.len() == 1 { "" } else { "s" }),
+                format!("Inside latexmk the PATH has {} entr{}", entradas.len(), if entradas.len() == 1 { "y" } else { "ies" }),
                 format!(
-                    "Perl ve «{}»: sólo el bin de la distribución, sin System32 ni PowerShell. Un `latexmkrc` que lance un programa por su nombre (`powershell`, `tasklist`) falla en silencio, aunque ande en la consola. {}",
+                    "Perl sees \"{}\": only the distribution's bin, without System32 or PowerShell. A `latexmkrc` that runs a program by name (`powershell`, `tasklist`) fails silently, even if it works in the console. {}",
                     linea.chars().take(120).collect::<String>(),
-                    if n.latexmkrc { "Este proyecto tiene un `latexmkrc`." } else { "Este proyecto no tiene `latexmkrc`, así que no le afecta: la app lanza ella misma lo que no es TeX." }
+                    if n.latexmkrc { "This project has a `latexmkrc`." } else { "This project has no `latexmkrc`, so it is not affected: the app itself runs what is not TeX." }
                 ),
             )
-            .con_arreglo("En el latexmkrc, usar la ruta completa del programa (la de `$ENV{SystemRoot}`) en lugar de su nombre.")];
+            .con_arreglo("In the latexmkrc, use the program's full path (from `$ENV{SystemRoot}`) instead of its name.")];
         }
-        return vec![Hallazgo::nuevo("path-latexmk", Nivel::Ok, format!("El PATH adentro de latexmk tiene {} entradas", entradas.len()), "")];
+        return vec![Hallazgo::nuevo("path-latexmk", Nivel::Ok, format!("The PATH inside latexmk has {} entries", entradas.len()), "")];
     }
     if p.lanzado && !roto(&p) {
-        return vec![Hallazgo::nuevo("path-latexmk", Nivel::Info, "No se pudo leer el PATH que ve latexmk", format!("La prueba no imprimió el PATH: {}", primera_linea(&p.texto)))];
+        return vec![Hallazgo::nuevo("path-latexmk", Nivel::Info, "Could not read the PATH latexmk sees", format!("The test did not print the PATH: {}", primera_linea(&p.texto)))];
     }
     vec![]
 }
@@ -341,11 +341,11 @@ fn sonda_del_path_de_latexmk(n: &Necesidades, sonda: &Sonda, dir: &Path) -> Vec<
 fn sonda_de_synctex(sonda: &Sonda) -> Vec<Hallazgo> {
     let sy = sonda("synctex", &["help"], None);
     if !sy.lanzado {
-        vec![Hallazgo::nuevo("synctex", Nivel::Info, "No se encontró synctex", "No hace falta: la app lee el SyncTeX con su propio parser. El programa sólo sirve para comparar.")]
+        vec![Hallazgo::nuevo("synctex", Nivel::Info, "synctex was not found", "It is not needed: the app reads SyncTeX with its own parser. The program is only for comparison.")]
     } else if roto(&sy) {
         vec![hallazgo_roto("synctex", "synctex")]
     } else {
-        vec![Hallazgo::nuevo("synctex", Nivel::Ok, "synctex arranca", "")]
+        vec![Hallazgo::nuevo("synctex", Nivel::Ok, "synctex starts", "")]
     }
 }
 
@@ -437,8 +437,8 @@ pub fn chequeos_de_proyecto(e: &EntradaDeProyecto) -> Vec<Hallazgo> {
     // La raíz con un nombre que rompe `\input{"..."}` del driver.
     if let Some(c) = e.root_file.chars().find(|c| "#%{}\\\"~^$".contains(*c)) {
         h.push(
-            Hallazgo::nuevo("raiz-nombre", Nivel::Error, format!("El nombre de la raíz tiene un «{c}»"), "El driver la carga con `\\input{\"nombre\"}` y ese carácter lo rompe.")
-                .con_arreglo("Renombrar el archivo raíz sin # % { } \\ \" ~ ^ $.")
+            Hallazgo::nuevo("raiz-nombre", Nivel::Error, format!("The main file's name has a \"{c}\""), "The driver loads it with `\\input{\"name\"}` and that character breaks it.")
+                .con_arreglo("Rename the main file without # % { } \\ \" ~ ^ $.")
                 .en(e.root_file, 1),
         );
     }
@@ -454,17 +454,17 @@ pub fn chequeos_de_proyecto(e: &EntradaDeProyecto) -> Vec<Hallazgo> {
                     Hallazgo::nuevo(
                         "variable-def",
                         Nivel::Aviso,
-                        format!("«\\{nombre}» se define sin guardia: el menú de compilación no la puede cambiar"),
-                        format!("La variable está en latexfrog.json y la app la define antes de cargar la raíz, pero {rel}:{linea} la vuelve a definir sin condición y gana siempre."),
+                        format!("\\{nombre} is defined without a guard: a profile cannot change it"),
+                        format!("The variable is in latexfrog.json and the app defines it before loading the main file, but {rel}:{linea} defines it again unconditionally and always wins."),
                     )
-                    .con_arreglo(format!("Poner el valor por omisión con guardia: \\ifdefined\\{nombre}\\else\\def\\{nombre}{{...}}\\fi"))
+                    .con_arreglo(format!("Give the default value a guard: \\ifdefined\\{nombre}\\else\\def\\{nombre}{{...}}\\fi"))
                     .en(rel, linea),
                 );
             }
         }
     }
     if con_def == 0 && !e.config.variables.is_empty() {
-        h.push(Hallazgo::nuevo("variable-def", Nivel::Ok, "Las variables del proyecto tienen su valor por omisión con guardia", ""));
+        h.push(Hallazgo::nuevo("variable-def", Nivel::Ok, "The project's variables have guarded defaults", ""));
     }
 
     // Partes que entran por `\input`: `\includeonly` no las toma, así que un perfil de partes elegidas igual compila todo.
@@ -485,10 +485,10 @@ pub fn chequeos_de_proyecto(e: &EntradaDeProyecto) -> Vec<Hallazgo> {
                 Hallazgo::nuevo(
                     "parte-por-input",
                     Nivel::Aviso,
-                    format!("«\\{cmd}» carga cada parte con \\input y no con \\include"),
-                    format!("`\\includeonly` sólo vale para `\\include`: un perfil de partes elegidas igual compila el documento entero, y sus `.aux` se pisan entre perfiles. La definición está en {rel}:{linea}."),
+                    format!("\\{cmd} loads each part with \\input, not \\include"),
+                    format!("`\\includeonly` only works with `\\include`: a chosen-parts profile still compiles the whole document, and profiles overwrite each other's `.aux`. The definition is at {rel}:{linea}."),
                 )
-                .con_arreglo(format!("Cambiar la definición de \\{cmd} para que cargue el archivo con `\\include` (la app no toca tus archivos)."))
+                .con_arreglo(format!("Change the definition of \\{cmd} so it loads the file with `\\include` (the app does not touch your files)."))
                 .en(&rel, linea),
             );
         }
@@ -512,14 +512,14 @@ pub fn chequeos_de_proyecto(e: &EntradaDeProyecto) -> Vec<Hallazgo> {
         if leer(rel).is_some_and(|b| b.starts_with(&[0xEF, 0xBB, 0xBF])) {
             con_bom += 1;
             h.push(
-                Hallazgo::nuevo("bom-input", Nivel::Aviso, format!("{rel} tiene BOM y entra por \\input"), "El BOM se le cuela a pdflatex como un carácter suelto en el punto donde entra el archivo.")
-                    .con_arreglo("Guardar el archivo como UTF-8 sin BOM.")
+                Hallazgo::nuevo("bom-input", Nivel::Aviso, format!("{rel} has a BOM and comes in through \\input"), "The BOM reaches pdflatex as a stray character where the file comes in.")
+                    .con_arreglo("Save the file as UTF-8 without BOM.")
                     .en(rel, 1),
             );
         }
     }
     if con_bom == 0 {
-        h.push(Hallazgo::nuevo("bom-input", Nivel::Ok, "Ningún archivo que entra por \\input tiene BOM", ""));
+        h.push(Hallazgo::nuevo("bom-input", Nivel::Ok, "No file that comes in through \\input has a BOM", ""));
     }
 
     // Otras herramientas que borran los auxiliares después de cada build (LaTeX Workshop con `autoClean`).
@@ -538,10 +538,10 @@ pub fn chequeos_de_proyecto(e: &EntradaDeProyecto) -> Vec<Hallazgo> {
                 Hallazgo::nuevo(
                     "autoclean",
                     Nivel::Aviso,
-                    "LaTeX Workshop borra los auxiliares después de cada build",
-                    format!("{} tiene `latex-workshop.latex.autoClean.run: {}`. Si compilás también desde VS Code, borra auxiliares que la app necesita entre builds (la app los guarda aparte, en .latexfrog/build, pero los de la raíz se pierden).", c.display(), &m[1]),
+                    "LaTeX Workshop deletes the auxiliary files after each build",
+                    format!("{} has `latex-workshop.latex.autoClean.run: {}`. If you also compile from VS Code, it deletes auxiliary files the app needs between builds (the app keeps its own in .latexfrog/build, but the ones at the root are lost).", c.display(), &m[1]),
                 )
-                .con_arreglo("Poner `latex-workshop.latex.autoClean.run` en `never` para este proyecto."),
+                .con_arreglo("Set `latex-workshop.latex.autoClean.run` to `never` for this project."),
             );
         }
     }
@@ -561,15 +561,15 @@ pub fn chequeo_de_coccion(historial: &[Linea]) -> Option<Hallazgo> {
         Hallazgo::nuevo(
             "coccion-lenta",
             Nivel::Info,
-            format!("La cocción de figuras tarda {:.1} s por figura", por_figura as f64 / 1000.0),
+            format!("Baking takes {:.1} s per figure", por_figura as f64 / 1000.0),
             format!(
-                "La última cocción hizo {} figuras con {} subcompilaciones a la vez en {:.0} s. En una máquina de 8 núcleos suele ser menos de 1 s por figura. Si hay un antivirus, analizar cada PDF y cada auxiliar que escribe pdflatex es lo que más suele frenarla.",
+                "The last bake made {} figures with {} subcompilations at once in {:.0} s. On an 8-core machine this is usually under 1 s per figure. An antivirus scanning every PDF and auxiliary file pdflatex writes is the usual cause.",
                 l.cocidas,
                 l.trabajos,
                 ms as f64 / 1000.0
             ),
         )
-        .con_arreglo("Sólo una sugerencia, la app no toca nada: excluir `figuras-cache/` y `.latexfrog/` del análisis en tiempo real de tu antivirus (en Windows Defender: Configuración, Protección antivirus, Exclusiones)."),
+        .con_arreglo("Only a suggestion, the app touches nothing: exclude `figuras-cache/` and `.latexfrog/` from real-time scanning in your antivirus (in Windows Defender: Settings, Virus protection, Exclusions)."),
     )
 }
 
@@ -577,15 +577,15 @@ pub fn chequeo_de_procesos(huerfanos: &[ProcesoTex], bloqueado_por: Option<u32>)
     let mut h = Vec::new();
     if let Some(pid) = bloqueado_por {
         h.push(
-            Hallazgo::nuevo("candado", Nivel::Aviso, format!("El proyecto está abierto en otra instancia (PID {pid})"), "Esta instancia no compila ni cocina: dos colas sobre el mismo .latexfrog y el mismo cache se pisarían.")
-                .con_arreglo("Cerrar la otra instancia y volver a abrir el proyecto."),
+            Hallazgo::nuevo("candado", Nivel::Aviso, format!("The project is open in another instance (PID {pid})"), "This instance neither compiles nor bakes: two queues on the same .latexfrog and cache would overwrite each other.")
+                .con_arreglo("Close the other instance and open the project again."),
         );
     }
     if !huerfanos.is_empty() {
         let lista = huerfanos.iter().map(|p| format!("{} ({})", p.nombre, p.pid)).collect::<Vec<_>>().join(", ");
         h.push(
-            Hallazgo::nuevo("huerfanos", Nivel::Aviso, format!("Hay {} proceso{} de TeX de este proyecto que quedó{} de antes", huerfanos.len(), if huerfanos.len() == 1 { "" } else { "s" }, if huerfanos.len() == 1 { "" } else { "n" }), format!("{lista}. Retienen el PDF y los auxiliares y el próximo build puede fallar o colgarse."))
-                .con_arreglo("Matarlos desde el aviso que la app muestra al abrir el proyecto (o desde el Administrador de tareas)."),
+            Hallazgo::nuevo("huerfanos", Nivel::Aviso, format!("{} TeX process{} of this project left over from before", huerfanos.len(), if huerfanos.len() == 1 { "" } else { "es" }), format!("{lista}. They hold the PDF and the auxiliary files, and the next build may fail or hang."))
+                .con_arreglo("End them from the Leftover tab (or from Task Manager)."),
         );
     }
     h
@@ -642,19 +642,19 @@ mod tests {
         assert_eq!(ver(&h, "shell-escape")[0].nivel, Nivel::Ok);
         let p = &ver(&h, "path-latexmk")[0];
         assert_eq!(p.nivel, Nivel::Aviso, "una sola entrada: el bin de MiKTeX");
-        assert!(p.detalle.contains("no puede") || p.detalle.contains("falla en silencio"), "{}", p.detalle);
-        assert!(p.arreglo.as_deref().is_some_and(|a| a.contains("ruta completa")));
+        assert!(p.detalle.contains("fails silently"), "{}", p.detalle);
+        assert!(p.arreglo.as_deref().is_some_and(|a| a.contains("full path")));
         // Sin `latexmkrc` en el proyecto no le afecta a nadie: es sólo informativo.
         let (h, _) = chequeos_de_herramientas(&Necesidades { latexmkrc: false, ..NECESIDADES }, &sonda_miktex(None, None));
         let p = &ver(&h, "path-latexmk")[0];
         assert_eq!(p.nivel, Nivel::Info);
-        assert!(p.detalle.contains("no tiene `latexmkrc`"), "{}", p.detalle);
+        assert!(p.detalle.contains("has no `latexmkrc`"), "{}", p.detalle);
         // Si la prueba no imprime nada (otro latexmk) se dice, no se calla.
         let mudo = |nombre: &str, args: &[&str], _: Option<&Path>| -> Salida {
             if nombre == "latexmk" && args.contains(&"-e") { salida("Latexmk, John Collins\n") } else { sonda_miktex(None, None)(nombre, args, None) }
         };
         let (h, _) = chequeos_de_herramientas(&NECESIDADES, &mudo);
-        assert!(ver(&h, "path-latexmk")[0].titulo.contains("No se pudo leer"));
+        assert!(ver(&h, "path-latexmk")[0].titulo.contains("Could not read"));
     }
 
     #[test]
@@ -663,7 +663,7 @@ mod tests {
             let (h, _) = chequeos_de_herramientas(&NECESIDADES, &sonda_miktex(Some(programa), None));
             let roto: Vec<&Hallazgo> = h.iter().filter(|x| x.titulo.contains("0xC0000135")).collect();
             assert_eq!(roto.len(), 1, "{programa}: {h:#?}");
-            assert!(roto[0].detalle.contains("falta una DLL") && roto[0].arreglo.as_deref().is_some_and(|a| a.contains("MiKTeX")));
+            assert!(roto[0].detalle.contains("missing DLL") && roto[0].arreglo.as_deref().is_some_and(|a| a.contains("MiKTeX")));
             assert_eq!(roto[0].nivel, Nivel::Error);
         }
     }
@@ -844,7 +844,7 @@ mod tests {
         assert_eq!(h.nivel, Nivel::Info);
         assert!(h.titulo.contains("2,5") || h.titulo.contains("2.5"), "{}", h.titulo);
         let a = h.arreglo.unwrap();
-        assert!(a.contains("figuras-cache/") && a.contains(".latexfrog/") && a.contains("la app no toca nada"), "{a}");
+        assert!(a.contains("figuras-cache/") && a.contains(".latexfrog/") && a.contains("the app touches nothing"), "{a}");
         // Pocas figuras, o una cocción cancelada, no cuentan; la más nueva es la que vale.
         assert!(chequeo_de_coccion(&[Linea { cocidas: 5, ms: 400_000, ..rapida.clone() }]).is_none());
         assert!(chequeo_de_coccion(&[Linea { cancelado: true, ms: 400_000, ..rapida.clone() }]).is_none());
@@ -856,7 +856,7 @@ mod tests {
         let hu = vec![ProcesoTex { pid: 42, nombre: "pdflatex.exe".into(), cwd: "C:\\p".into(), linea: String::new() }];
         let mut h = chequeo_de_procesos(&hu, Some(7));
         assert_eq!(h.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(), ["candado", "huerfanos"]);
-        assert!(h[1].titulo.contains("1 proceso de TeX de este proyecto que quedó") && h[1].detalle.contains("pdflatex.exe (42)"));
+        assert!(h[1].titulo.contains("1 TeX process of this project left over") && h[1].detalle.contains("pdflatex.exe (42)"));
         assert!(chequeo_de_procesos(&[], None).is_empty());
         h.push(Hallazgo::nuevo("x", Nivel::Error, "e", ""));
         h.push(Hallazgo::nuevo("y", Nivel::Ok, "o", ""));

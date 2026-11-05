@@ -1,0 +1,214 @@
+<script lang="ts">
+	// The profiles: chips on top, then name, color and the document's pieces in book order, and how it compiles and where the PDF goes.
+	// Edits the copy of latexfrog.json that Project Configuration holds; only its Save writes.
+	import { Plus, X } from '@lucide/svelte';
+	import { pickFolder } from '$lib/workspace/fileSystem';
+	import { m } from '$lib/paraglide/messages';
+	import LvFrog from './LvFrog.svelte';
+	import {
+		compileWhen,
+		compileWhenChange,
+		DEFAULT_OUTPUT,
+		emptyProfile,
+		PROFILE_COLORS,
+		profileId,
+		relativeFolder,
+		removeProfile,
+		rows,
+		selectionOf,
+		setProfile,
+		shortName,
+		toParts,
+		type CompileWhen,
+		type ConfigJson,
+		type Piece,
+		type ProfileJson,
+		type ProfileOutput
+	} from './lvProfiles';
+
+	let { config, pieces, parts, root, onChange }: { config: ConfigJson; pieces: Piece[]; parts: string[]; root: string; onChange: (next: ConfigJson) => void } = $props();
+
+	const ids = $derived(Object.keys(config.profiles ?? {}));
+	let chosen = $state('');
+	let folderError = $state(false);
+	// the last output of each profile, so unticking and ticking the copy gives it back
+	const outputs: Record<string, ProfileOutput> = {};
+
+	const id = $derived(ids.includes(chosen) ? chosen : (ids[0] ?? ''));
+	const profile = $derived<ProfileJson>(config.profiles?.[id] ?? {});
+	const selection = $derived(selectionOf(profile));
+	const omit = $derived(profile.omit ?? []);
+	const output = $derived(profile.output ?? outputs[id] ?? DEFAULT_OUTPUT);
+	const variables = $derived(Object.entries(config.variables ?? {}));
+	const INPUT = 'rounded border border-surface-300-700 bg-transparent px-1 py-0.5';
+	const CARD = 'flex flex-col gap-1 rounded border border-surface-300-700 p-2';
+
+	const change = (patch: ProfileJson) => onChange(setProfile(config, id, patch));
+
+	function add() {
+		const number = ids.length + 1;
+		const label = m.lv_profiles_new({ number });
+		const next = profileId(label, ids);
+		onChange(setProfile(config, next, emptyProfile(config, pieces, number, label)));
+		chosen = next;
+	}
+
+	function setOutput(next: ProfileOutput) {
+		outputs[id] = next;
+		change({ output: next });
+	}
+
+	function perPart(on: boolean) {
+		const pattern = on && !/\{(n|cap|nombre)/.test(output.pattern) ? '{cap:02} - {nombre}.pdf' : output.pattern;
+		const next: ProfileOutput = { ...output, pattern };
+		if (on) next.perPart = true;
+		else delete next.perPart;
+		outputs[id] = next;
+		// one PDF per chapter compiles every chapter: too much to run on its own
+		change({ output: next, ...(on ? { autoCompile: false } : {}) });
+	}
+
+	function setCopy(on: boolean) {
+		if (!on && profile.output) outputs[id] = profile.output;
+		change({ output: on ? output : undefined });
+	}
+
+	async function chooseFolder() {
+		const picked = await pickFolder();
+		if (!picked) return;
+		const rel = relativeFolder(root, picked);
+		folderError = rel === null;
+		if (rel !== null) setOutput({ ...output, dir: rel });
+	}
+</script>
+
+<div class="flex flex-col gap-2" data-testid="lv-profiles">
+	<div class="flex items-center gap-2">
+		<LvFrog />
+		<span class="font-semibold">{m.lv_profiles_title()}</span>
+		<label class="ml-auto flex items-center gap-2" title={m.lv_profiles_engine_hint()}>
+			<span class="opacity-70">{m.lv_profiles_engine()}</span>
+			<select class={INPUT} value={config.engine ?? 'pdflatex'} onchange={(e) => onChange({ ...config, engine: e.currentTarget.value })}>
+				<option value="pdflatex">pdflatex</option>
+				<option value="xelatex">xelatex</option>
+				<option value="lualatex">lualatex</option>
+			</select>
+		</label>
+	</div>
+
+	<div class="flex flex-wrap items-center gap-1">
+		{#each ids as key (key)}
+			{@const p = config.profiles?.[key] ?? {}}
+			<button type="button" class="flex items-center gap-1.5 rounded border px-2 py-0.5 {key === id ? '' : 'border-surface-300-700'}" style={key === id ? `border-color: ${p.color ?? 'var(--color-primary-500)'}` : ''} data-testid="lv-profile-chip" onclick={() => (chosen = key)}>
+				<span class="size-2 rounded-full" style="background: {p.color ?? 'var(--color-surface-500)'}"></span>
+				{p.label ?? key}
+			</button>
+		{/each}
+		<button type="button" class="flex items-center gap-1 rounded border border-surface-300-700 px-2 py-0.5" data-testid="lv-profile-add" onclick={add}><Plus class="size-3" />{m.lv_profiles_add()}</button>
+	</div>
+
+	{#if id}
+		<div class="grid gap-2 md:grid-cols-2">
+			<div class={CARD}>
+				<div class="flex items-center gap-1">
+					<input class="{INPUT} min-w-0 flex-1" value={profile.label ?? id} aria-label={m.lv_profiles_name()} data-testid="lv-profile-name" oninput={(e) => change({ label: e.currentTarget.value })} />
+					{#each PROFILE_COLORS as c (c)}
+						<button type="button" class="size-4 rounded-full {profile.color === c ? 'ring-2 ring-offset-1' : ''}" style="background: {c}" aria-label={c} onclick={() => change({ color: c })}></button>
+					{/each}
+					<button type="button" class="hover:preset-tonal rounded p-0.5" disabled={ids.length <= 1} title={m.lv_profiles_remove()} aria-label={m.lv_profiles_remove()} onclick={() => onChange(removeProfile(config, id))}><X class="size-3.5" /></button>
+				</div>
+				<div class="text-xs opacity-70">{m.lv_profiles_pieces()}</div>
+				<div class="max-h-72 overflow-y-auto">
+					{#each rows(pieces, parts) as row (row.kind === 'piece' ? row.key : row.kind === 'chapter' ? row.part : row.kind)}
+						<label class="flex items-center gap-2 py-0.5 {row.kind === 'chapter' ? 'pl-4' : ''} {row.kind === 'chapter' && selection.all ? 'opacity-50' : ''}">
+							{#if row.kind === 'piece'}
+								<input type="checkbox" checked={!omit.includes(row.key)} onchange={(e) => change({ omit: e.currentTarget.checked ? omit.filter((x) => x !== row.key) : [...omit, row.key] })} />
+								{row.name}
+							{:else if row.kind === 'current'}
+								<input type="checkbox" checked={selection.current && !selection.all} disabled={selection.all} onchange={(e) => change(toParts({ ...selection, current: e.currentTarget.checked }))} />
+								<strong>{m.lv_profiles_current()}</strong>
+							{:else if row.kind === 'all'}
+								<input type="checkbox" data-testid="lv-profile-all" checked={selection.all} onchange={(e) => change(toParts({ ...selection, all: e.currentTarget.checked }))} />
+								<strong>{m.lv_profiles_all()}</strong>
+							{:else}
+								<input
+									type="checkbox"
+									checked={selection.all || selection.list.includes(row.part)}
+									disabled={selection.all}
+									onchange={(e) => change(toParts({ ...selection, list: e.currentTarget.checked ? [...selection.list, row.part] : selection.list.filter((x) => x !== row.part) }))}
+								/>
+								{shortName(row.part)}
+							{/if}
+						</label>
+					{/each}
+				</div>
+			</div>
+
+			<div class="flex flex-col gap-2">
+				<div class={CARD}>
+					<div class="text-xs opacity-70">{m.lv_profiles_how()}</div>
+					<label class="flex items-center justify-between gap-2">
+						{m.lv_profiles_figures()}
+						<select class={INPUT} value={profile.externalize ? 'cache' : 'scratch'} onchange={(e) => change(e.currentTarget.value === 'cache' ? { externalize: true, cleanBefore: false } : { externalize: false, cacheOnly: false, cleanBefore: true })}>
+							<option value="cache">{m.lv_profiles_figures_cache()}</option>
+							<option value="scratch">{m.lv_profiles_figures_scratch()}</option>
+						</select>
+					</label>
+					{#each variables as [name, v] (name)}
+						<label class="flex items-center justify-between gap-2">
+							{v.label ?? name}
+							<select class={INPUT} value={profile.vars?.[name] ?? ''} data-testid="lv-profile-var" onchange={(e) => change({ vars: { ...(profile.vars ?? {}), [name]: e.currentTarget.value } })}>
+								<option value="">{v.default ? m.lv_profiles_default_value({ value: v.default }) : m.lv_profiles_default()}</option>
+								{#each v.choices ?? [] as choice (choice)}
+									<option value={choice}>{choice}</option>
+								{/each}
+							</select>
+						</label>
+					{/each}
+					<label class="flex items-center gap-2">
+						<input type="checkbox" checked={profile.draftImages === true} onchange={(e) => change({ draftImages: e.currentTarget.checked })} />
+						{m.lv_draft_images()}
+					</label>
+					<label class="flex items-center justify-between gap-2">
+						{m.lv_profiles_when()}
+						<select class={INPUT} value={compileWhen(profile)} data-testid="lv-profile-when" onchange={(e) => change(compileWhenChange(e.currentTarget.value as CompileWhen))}>
+							<option value="save">{m.lv_profiles_when_save()}</option>
+							<option value="idle">{m.lv_profiles_when_idle()}</option>
+							<option value="manual">{m.lv_profiles_when_manual()}</option>
+						</select>
+					</label>
+				</div>
+
+				<div class={CARD}>
+					<div class="text-xs opacity-70">{m.lv_profiles_output()}</div>
+					<label class="flex items-center gap-2">
+						<input type="checkbox" checked={!!profile.output} onchange={(e) => setCopy(e.currentTarget.checked)} />
+						{m.lv_profiles_copy()}
+					</label>
+					<div class="flex flex-col gap-1 {profile.output ? '' : 'pointer-events-none opacity-50'}">
+						<label class="flex items-center justify-between gap-2">
+							{m.lv_profiles_files()}
+							<select class={INPUT} value={output.perPart ? 'part' : 'one'} onchange={(e) => perPart(e.currentTarget.value === 'part')}>
+								<option value="one">{m.lv_profiles_files_one()}</option>
+								<option value="part">{m.lv_profiles_files_part()}</option>
+							</select>
+						</label>
+						<label class="flex items-center gap-2">
+							{m.lv_profiles_folder()}
+							<input class="{INPUT} min-w-0 flex-1" value={output.dir} oninput={(e) => setOutput({ ...output, dir: e.currentTarget.value })} />
+							<button type="button" class="hover:preset-tonal rounded px-1.5 py-0.5" onclick={chooseFolder}>{m.lv_profiles_choose()}</button>
+						</label>
+						{#if folderError}
+							<p class="text-error-500">{m.lv_profiles_other_drive()}</p>
+						{/if}
+						<label class="flex items-center gap-2">
+							{m.lv_profiles_name_pattern()}
+							<input class="{INPUT} min-w-0 flex-1" value={output.pattern} oninput={(e) => setOutput({ ...output, pattern: e.currentTarget.value })} />
+						</label>
+						<p class="text-xs opacity-60">{'{n}'} {m.lv_profiles_help_n()}, {'{cap}'} {m.lv_profiles_help_cap()}, {'{nombre}'} {m.lv_profiles_help_name()}, {'{perfil}'} {m.lv_profiles_help_profile()}</p>
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
+</div>

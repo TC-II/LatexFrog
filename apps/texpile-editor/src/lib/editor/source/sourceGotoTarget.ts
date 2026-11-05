@@ -5,14 +5,16 @@ import type { EditorState } from '@codemirror/state';
 // reported line, else on the nearest line containing it. this is what survives line drift.
 export function resolveGotoTarget(
 	doc: EditorState['doc'],
-	req: { line: number; selectText?: string; column?: number }
+	req: { line: number; selectText?: string; column?: number; columnEnd?: number }
 ): { from: number; to: number } {
 	const line = Math.min(Math.max(1, Math.floor(req.line)), doc.lines);
 	// the Typst preview knows the clicked character, not just its line
 	if (req.column !== undefined) {
 		const at = doc.line(line);
 		const pos = at.from + Math.min(Math.max(0, req.column), at.length);
-		return { from: pos, to: pos };
+		// the PDF side knows the whole word
+		const end = req.columnEnd === undefined ? pos : at.from + Math.min(Math.max(req.column, req.columnEnd), at.length);
+		return { from: pos, to: end };
 	}
 	const word = req.selectText?.trim();
 	if (word && word.length >= 2) {

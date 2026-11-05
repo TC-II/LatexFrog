@@ -4,9 +4,7 @@ import { toaster } from '$lib/modals/toaster-svelte';
 import { m } from '$lib/paraglide/messages';
 import { lvProject } from './lvEngine.svelte';
 import LvConfigPanel from './LvConfigPanel.svelte';
-import LvDiagnosticsPanel from './LvDiagnosticsPanel.svelte';
 
-export type DiagnosticsTab = 'history' | 'doctor' | 'orphans';
 type Close = { onClose: () => void };
 
 let closeOpen: (() => void) | null = null;
@@ -22,7 +20,6 @@ function show<P extends Close>(panel: Component<P>, props: Omit<P, 'onClose'>) {
 }
 
 export const openConfigPanel = () => show(LvConfigPanel, {});
-export const openDiagnostics = (tab: DiagnosticsTab = 'history') => show(LvDiagnosticsPanel, { tab });
 
 /** a project just opened: say so if an earlier run left TeX working in it. Nothing is killed without the user choosing to */
 export async function offerOrphans() {
@@ -31,6 +28,6 @@ export async function offerOrphans() {
 	toaster.warning({
 		title: m.lv_orphans_toast({ count: orphans.length }),
 		duration: 15000,
-		action: { label: m.lv_orphans_action(), onClick: () => openDiagnostics('orphans') }
+		action: { label: m.lv_orphans_action(), onClick: () => lvProject.onShowDock?.('leftover') }
 	});
 }

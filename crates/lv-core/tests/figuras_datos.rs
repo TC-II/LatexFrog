@@ -123,8 +123,8 @@ fn cambiar_un_archivo_que_una_figura_lee_con_input_recocina_esa_figura_y_ninguna
     assert_eq!(e.entrada.datos_cambiados, ["datos.tex"]);
     assert_eq!((e.entrada.figuras_invalidadas, e.entrada.figuras_en_el_build.len()), (1, 1), "{:?}", e.entrada);
     assert!(e.entrada.herramientas.iter().any(|x| x.nombre == "pdflatex") && e.entrada.pasadas >= 1);
-    assert!(e.pistas.iter().any(|p| p.contains("cambió datos.tex, que una figura lee desde adentro de su tikzpicture")), "{:?}", e.pistas);
-    assert!(e.pistas.iter().any(|p| p.contains("1 figura cocinada por pgf dentro de la pasada")), "{:?}", e.pistas);
+    assert!(e.pistas.iter().any(|p| p.contains("datos.tex changed, which a figure reads from inside its tikzpicture")), "{:?}", e.pistas);
+    assert!(e.pistas.iter().any(|p| p.contains("1 figure baked by pgf inside the pass")), "{:?}", e.pistas);
     // Y a partir de ahí vuelve a estar al día.
     c.compilar("rapido");
     assert_eq!(c.invocaciones() - base, 1);

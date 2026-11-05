@@ -3,7 +3,7 @@ import { fileService } from '$lib/files/service/fileService';
 import { mark } from '$lib/debug/startupDoctor';
 import { fileMode } from './fileMode.svelte';
 import { navigate } from '$lib/router.svelte';
-import { claimWorkspace, dirname, joinPath, nativeBridge, releaseWorkspace, samePath } from './fileSystem';
+import { claimWorkspace, dirname, joinPath, nativeBridge, readTextFile, releaseWorkspace, samePath } from './fileSystem';
 import { latexParserWorker } from './latexParserWorker';
 import { landingFile } from './landingFile';
 import { openFile, activeCompare, addRecentFolder, savedLastFile, savedLastCompare, texFiles, workspaceRoot } from './workspaceStore';
@@ -17,6 +17,27 @@ export type OpenOutcome = 'opened' | 'elsewhere' | 'missing';
 /** what the main process handed this window at creation, or null for a plain start screen. */
 export function bootOpen(): BootOpen | null {
 	return nativeBridge()?.bootstrap?.open ?? null;
+}
+
+/** the main file latexfrog.json names, relative to the folder; null when it is not an engine project */
+async function engineRoot(root: string): Promise<string | null> {
+	try {
+		const config = JSON.parse(await readTextFile(joinPath(root, 'latexfrog.json'))) as { root?: unknown };
+		return typeof config.root === 'string' ? config.root : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * A project is the folder its main file is in: the engine compiles from the open folder and resolves each \input against it, so
+ * a main file in a subfolder gave an empty outline and failed on its first \input. The subfolder's own project opens instead.
+ */
+async function projectFolder(root: string): Promise<string> {
+	const main = await engineRoot(root);
+	if (!main || !/[\\/]/.test(main)) return root;
+	const folder = joinPath(root, dirname(main));
+	return (await fileService.exists(joinPath(folder, 'latexfrog.json'))) ? folder : root;
 }
 
 function show(root: string): void {
@@ -40,35 +61,46 @@ async function fill(root: string, want: string | null, compare: CompareRef | nul
 		if (compare) activeCompare.current = compare;
 		return;
 	}
-	const detected = await landingFile(root, files);
+	// a project says what its main file is: the scan's first .tex only happened to come first, and the configuration loads after this
+	const main = await engineRoot(root);
+	const configured = main ? files.find((f) => samePath(f.path, joinPath(root, main)))?.path : undefined;
+	const detected = configured ?? (await landingFile(root, files));
 	if (workspaceRoot.current !== root) return;
 	openFile(detected);
 }
 
 /** the launch path: main created this window for this folder, so it is shown without asking */
-export function adoptBootOpen(open: BootOpen): void {
-	const root = open.kind === 'file' ? dirname(open.path) : open.path;
-	fileMode.current = open.kind === 'file';
+export function adoptBootOpen(boot: BootOpen): void {
+	const root = boot.kind === 'file' ? dirname(boot.path) : boot.path;
+	fileMode.current = boot.kind === 'file';
 	// a lone file claims itself, so main routes nothing else into this window and does not remember the folder
-	if (open.kind === 'file') void claimWorkspace(open.path, 'file');
+	if (boot.kind === 'file') void claimWorkspace(boot.path, 'file');
 	mark('folder-open');
 	// a document is certain here, so warm the parser alongside the editor chunk
 	latexParserWorker();
 	show(root);
-	const restoring = open.kind === 'folder';
-	void fill(root, restoring ? savedLastFile(root) : open.path, restoring ? savedLastCompare(root) : null).catch(() => {});
+	const restoring = boot.kind === 'folder';
+	void fill(root, restoring ? savedLastFile(root) : boot.path, restoring ? savedLastCompare(root) : null).catch(() => {});
+	// the folder is on screen before this answers, as at any launch: a folder asked on the command line whose project is a
+	// subfolder would otherwise stay open with an empty outline. A lone file never moves.
+	if (restoring) {
+		void projectFolder(root)
+			.then((folder) => (folder === root ? undefined : open(folder, savedLastFile(folder), savedLastCompare(folder))))
+			.catch(() => {});
+	}
 }
 
 // Resolves once the workspace is on screen; the scan lands after it, as at launch. Waiting for the
 // scan first put three round trips between the click and anything happening.
 // `lone`: a single file, which claims itself rather than the folder
 async function open(
-	root: string,
+	asked: string,
 	want: string | null,
 	compare: CompareRef | null = null,
 	lone: string | null = null
 ): Promise<OpenOutcome> {
 	mark('folder-open');
+	const root = lone ? asked : await projectFolder(asked);
 	// together, and both before navigating: claiming does not check the folder is still there, so a
 	// recent-folders entry for a deleted one has to fail here rather than in an empty workspace
 	const [claim, found] = await Promise.all([lone ? claimWorkspace(lone, 'file') : claimWorkspace(root), fileService.stat(root)]);

@@ -277,22 +277,22 @@ fn candidatas(root: &Path, archivos: &[Archivo], condiciones: &BTreeSet<String>,
     for (i, c) in v.iter_mut().enumerate() {
         c.recomendada = Some(i) == recomendada;
         c.motivo = if unica {
-            "Es el único archivo con \\documentclass.".to_string()
+            "It is the only file with \\documentclass.".to_string()
         } else {
             match c.rol {
-                RolDeRaiz::Principal if c.recomendada => format!("Nadie la incluye, no recorta con \\includeonly ni define flags, y alcanza {} archivos: es el documento principal.", c.alcanza),
-                RolDeRaiz::Principal => format!("También es independiente, pero alcanza {} archivo{} (la recomendada, {maximo}): parece una prueba o un documento aparte.", c.alcanza, if c.alcanza == 1 { "" } else { "s" }),
+                RolDeRaiz::Principal if c.recomendada => format!("Nothing includes it, it does not trim with \\includeonly or define flags, and it reaches {} files: it is the main document.", c.alcanza),
+                RolDeRaiz::Principal => format!("It stands alone too, but reaches {} file{} (the recommended one, {maximo}): it looks like a test or a separate document.", c.alcanza, if c.alcanza == 1 { "" } else { "s" }),
                 RolDeRaiz::Auxiliar => {
                     let mut m = Vec::new();
                     if let Some(l) = &c.includeonly_propio {
-                        m.push(format!("recorta con \\includeonly{{{l}}}"));
+                        m.push(format!("trims with \\includeonly{{{l}}}"));
                     }
                     if !c.flags_previos.is_empty() {
-                        m.push(format!("define {} antes de cargar el preámbulo", c.flags_previos.iter().map(|f| format!("\\{f}")).collect::<Vec<_>>().join(", ")));
+                        m.push(format!("defines {} before loading the preamble", c.flags_previos.iter().map(|f| format!("\\{f}")).collect::<Vec<_>>().join(", ")));
                     }
-                    format!("Raíz auxiliar: {}. Sirve para compilar una versión reducida, no es el documento.", m.join(" y "))
+                    format!("Auxiliary root: {}. It compiles a reduced version, it is not the document.", m.join(" and"))
                 }
-                RolDeRaiz::Otra => format!("La incluye {}: no es una raíz.", c.incluida_por.join(", ")),
+                RolDeRaiz::Otra => format!("Included by {}: it is not a root.", c.incluida_por.join(", ")),
             }
         };
     }
@@ -453,20 +453,20 @@ fn clasificar(b: &Bloque) -> (UsoDeFlag, Vec<&'static str>, bool) {
 fn frase_de_flag(nombre: &str, uso: UsoDeFlag, envuelve: &[String], invertida: bool) -> String {
     match uso {
         UsoDeFlag::Partial => format!(
-            "\\{nombre} omite {} cuando está definida: es lo que hace «reducida» a la compilación (portada, índices y bibliografía no se arman). La definen los perfiles de escritura y de lectura.",
+            "\\{nombre} leaves out {} when defined: that is what makes the build reduced (cover, contents and bibliography are not built). The writing and reading profiles define it.",
             envuelve.join(", ")
         ),
         UsoDeFlag::Externalize => format!(
-            "\\{nombre} enciende la externalización de figuras de TikZ: cada figura se cocina una vez y queda en el cache. La definen los perfiles que usan el cache de figuras."
+            "\\{nombre} turns on TikZ figure externalization: each figure bakes once and stays in the cache. The profiles that use the figure cache define it."
         ),
         UsoDeFlag::FigureList => format!(
-            "\\{nombre} pone a pgf en «list and make»: lista las figuras sin dibujarlas. Lo usa la app para cocinarlas en paralelo (el botón Cocinar y la cocción automática)."
+            "\\{nombre} puts pgf in \"list and make\": it lists the figures without drawing them. The app uses it to bake them in parallel (the Bake button and automatic baking)."
         ),
         UsoDeFlag::Ninguno if invertida => format!(
-            "\\{nombre} AGREGA {} cuando está definida: es al revés que una compilación reducida (que omite cosas), así que no se propone. Si es lo que querés, agregala a mano en «Avanzado»."
+            "\\{nombre} ADDS {} when defined: the opposite of a reduced build (which leaves things out), so it is not proposed. If that is what you want, add it by hand in the JSON."
             , envuelve.join(", ")
         ),
-        UsoDeFlag::Ninguno => format!("\\{nombre} es una condición del proyecto que la app no necesita: no se propone como flag."),
+        UsoDeFlag::Ninguno => format!("\\{nombre} is a condition of the project the app does not need: it is not proposed as a flag."),
     }
 }
 
@@ -537,19 +537,19 @@ fn figuras_detectadas(archivos: &[Archivo], raiz: &str, auxiliares: &BTreeSet<St
     if externaliza {
         let dir = dir.filter(|d| !d.is_empty()).unwrap_or_else(|| "figures".to_string());
         if estilos.is_empty() {
-            avisos.push("No encontré qué archivo da el sello del cache (`\\pdf@filemdfivesum{...}`): sin él la app no sabe cuándo cambió el estilo y no cocina las figuras sola.".to_string());
+            avisos.push("Could not find which file stamps the cache (`\\pdf@filemdfivesum{...}`): without it the app cannot tell when the style changed and does not bake figures by itself.".to_string());
         }
         if !flags.iter().any(|f| f.uso == UsoDeFlag::FigureList) {
-            avisos.push("No encontré la macro que pone a pgf en «list and make»: el cache funciona, pero la cocción en paralelo no.".to_string());
+            avisos.push("Could not find the macro that puts pgf in \"list and make\": the cache works, but parallel baking does not.".to_string());
         }
         if !flags.iter().any(|f| f.uso == UsoDeFlag::Externalize) {
-            avisos.push("No encontré la macro que enciende la externalización: los perfiles no van a poder usar el cache.".to_string());
+            avisos.push("Could not find the macro that turns on externalization: profiles will not be able to use the cache.".to_string());
         }
         return FigurasDetectadas {
             modo: "project".into(),
             dir: dir.clone(),
             stamp_files: estilos,
-            motivo: format!("El proyecto ya externaliza sus figuras con \\tikzexternalize (en {dir}/): la app usa ese cache tal cual, sin tocar los nombres."),
+            motivo: format!("The project already externalizes its figures with \\tikzexternalize (in {dir}/): the app uses that cache as it is, names untouched."),
             avisos,
         };
     }
@@ -566,11 +566,11 @@ fn figuras_detectadas(archivos: &[Archivo], raiz: &str, auxiliares: &BTreeSet<St
             modo: "app".into(),
             dir: "figuras-cache".into(),
             stamp_files: vec![estilo],
-            motivo: "Tiene figuras de TikZ pero no las externaliza: con el modo «app» la app las cocina una vez, en paralelo, y un cambio de texto no las vuelve a dibujar.".into(),
+            motivo: "It has TikZ figures but does not externalize them: in \"app\" mode the app bakes them once, in parallel, and a text change does not redraw them.".into(),
             avisos,
         };
     }
-    FigurasDetectadas { modo: "off".into(), dir: "figuras-cache".into(), stamp_files: vec![], motivo: "No usa TikZ: no hay figuras que cocinar.".into(), avisos }
+    FigurasDetectadas { modo: "off".into(), dir: "figuras-cache".into(), stamp_files: vec![], motivo: "It does not use TikZ: there are no figures to bake.".into(), avisos }
 }
 
 // --- variables ---------------------------------------------------------------------------------------------------------------
@@ -636,10 +636,10 @@ fn variables_detectadas(archivos: &[Archivo], flags: &BTreeSet<String>) -> Vec<V
                 sin_guardia.push(UbicacionDef { archivo: a.rel.clone(), linea: l });
             }
         }
-        let mut frase = format!("\\{x} toma uno de estos valores: {} (por omisión «{valor}»). El menú de compilación lo cambia sin tocar el proyecto.", choices.join(", "));
+        let mut frase = format!("\\{x} takes one of these values: {} (default \"{valor}\"). Each profile can set it without touching the project.", choices.join(", "));
         if let Some(u) = sin_guardia.first() {
             frase.push_str(&format!(
-                " Ojo: {}:{} la define sin guardia y siempre gana, así que el menú no la puede cambiar. Ponele el valor por omisión con guardia: \\ifdefined\\{x}\\else\\def\\{x}{{{valor}}}\\fi.",
+                " Careful: {}:{} defines it without a guard and always wins, so a profile cannot change it. Give the default a guard: \\ifdefined\\{x}\\else\\def\\{x}{{{valor}}}\\fi.",
                 u.archivo, u.linea
             ));
         }
@@ -687,7 +687,7 @@ pub fn detectar(root: &Path, raiz: Option<&str>, actual: Option<&ProjectConfig>,
         .map(str::to_string)
         .or_else(|| actual.map(|c| c.root.clone()).filter(|r| existe(r)))
         .or_else(|| cands.iter().find(|c| c.recomendada).map(|c| c.archivo.clone()))
-        .ok_or_else(|| Error::Other("no encontré ningún archivo .tex con \\documentclass en el proyecto".into()))?;
+        .ok_or_else(|| Error::Other("no .tex file with \\documentclass in the project".into()))?;
     let auxiliares: BTreeSet<String> = cands.iter().filter(|c| c.rol == RolDeRaiz::Auxiliar).map(|c| c.archivo.clone()).collect();
 
     let ix = ProjectIndex::build(root, &raiz, &parts_commands);
@@ -764,7 +764,7 @@ pub fn detectar(root: &Path, raiz: Option<&str>, actual: Option<&ProjectConfig>,
     para_validar.validate()?;
     let mut avisos = figuras.avisos.clone();
     if cands.len() > 1 && !cands.iter().any(|c| c.rol == RolDeRaiz::Principal) {
-        avisos.push("Ninguna raíz parece el documento principal: elegí cuál compilar.".into());
+        avisos.push("No root looks like the main document: choose which one to compile.".into());
     }
     let mut texto = serde_json::to_string_pretty(&cfg).map_err(|e| Error::Other(e.to_string()))?;
     texto.push('\n');
@@ -838,7 +838,7 @@ mod tests {
         // Al revés (definirla AGREGA el índice): no es una compilación reducida y se dice por qué.
         let (uso, env, invertida) = clasificar(&bloque("\\tableofcontents", ""));
         assert_eq!((uso, env, invertida), (UsoDeFlag::Ninguno, vec!["tableofcontents"], true));
-        assert!(frase_de_flag("PortadaCompleta", uso, &["tableofcontents".to_string()], true).contains("AGREGA tableofcontents"));
+        assert!(frase_de_flag("PortadaCompleta", uso, &["tableofcontents".to_string()], true).contains("ADDS tableofcontents"));
     }
 
     #[test]
@@ -850,12 +850,12 @@ mod tests {
         assert_eq!(v[0].choices, ["completo", "autor", "ninguno"]);
         // El `\def` del valor por omisión de este texto no tiene guardia (línea 1): la frase lo explica.
         assert_eq!(v[0].def_sin_guardia.iter().map(|u| (u.archivo.as_str(), u.linea)).collect::<Vec<_>>(), [("x.tex", 1)]);
-        assert!(v[0].frase.contains("sin guardia") && v[0].frase.contains("\\ifdefined\\OpcionPie\\else"), "{}", v[0].frase);
+        assert!(v[0].frase.contains("without a guard") && v[0].frase.contains("\\ifdefined\\OpcionPie\\else"), "{}", v[0].frase);
         assert_eq!(humanizar("OpcionPieDePagina"), "Pie de pagina");
         // Con la guardia, no hay nada que avisar.
         let a = ns("\\ifdefined\\OpcionPie\\else\\def\\OpcionPie{completo}\\fi\n\\def\\PieOpcionAutor{autor}\n\\ifx\\OpcionPie\\PieOpcionAutor x\\fi\n");
         let v = variables_detectadas(&[a], &BTreeSet::new());
-        assert!(v[0].def_sin_guardia.is_empty() && !v[0].frase.contains("Ojo"), "{:?}", v[0]);
+        assert!(v[0].def_sin_guardia.is_empty() && !v[0].frase.contains("Careful"), "{:?}", v[0]);
     }
 
     #[test]

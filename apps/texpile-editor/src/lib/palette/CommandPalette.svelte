@@ -18,7 +18,7 @@
 	import { buildCommands, type PaletteItem } from './paletteCommands';
 	import { goToFileItems, MAX_FILE_RESULTS } from './paletteGoItems';
 	import { branchItems } from './paletteBranchItems';
-	import { fuzzyScore, highlightRuns } from './paletteFilter';
+	import { fileTier, fuzzyScore, highlightRuns } from './paletteFilter';
 	import { m } from '$lib/paraglide/messages';
 
 	let query = $state('');
@@ -33,7 +33,7 @@
 		// VS Code's chord, for the muscle memory it comes with
 		if (e.shiftKey && e.key.toLowerCase() === 'p') return 'all';
 		// the file picker, on the key that opens a tab everywhere else
-		if (!e.shiftKey && e.key.toLowerCase() === 't') return 'files';
+		if (!e.shiftKey && (e.key.toLowerCase() === 't' || e.key.toLowerCase() === 'p')) return 'files';
 		return null;
 	}
 
@@ -102,11 +102,16 @@
 		hits: number[];
 	};
 
-	function rank(items: PaletteItem[], q: string, limit: number): Scored[] {
+	const noTier = () => 0;
+
+	function rank(items: PaletteItem[], q: string, limit: number, tier: (name: string) => number = noTier): Scored[] {
 		// searchOnly items (diagnostics) exist to be typed for, never browsed to
 		if (!q)
 			return items
 				.filter((i) => !i.searchOnly)
+				.map((item, order) => ({ item, order }))
+				.sort((x, y) => tier(x.item.label) - tier(y.item.label) || x.order - y.order)
+				.map(({ item }) => item)
 				.slice(0, limit)
 				.map((item) => ({ item, hits: [] }));
 		const out: { item: PaletteItem; hits: number[]; score: number }[] = [];
@@ -123,7 +128,7 @@
 				score: useLabel ? onLabel.score : (onKeywords?.score ?? 0) - 6
 			});
 		}
-		out.sort((x, y) => y.score - x.score);
+		out.sort((x, y) => tier(x.item.label) - tier(y.item.label) || y.score - x.score);
 		return out.slice(0, limit).map(({ item, hits }) => ({ item, hits }));
 	}
 
@@ -133,11 +138,11 @@
 	const results = $derived.by<Scored[]>(() => {
 		const q = query.trim();
 		// the picker is the one screen where "everything in the project" IS the point
-		if (commandPalette.mode === 'files') return rank(files, q, MAX_FILE_RESULTS);
+		if (commandPalette.mode === 'files') return rank(files, q, MAX_FILE_RESULTS, fileTier);
 		if (commandPalette.mode === 'branches') return rank(branches, q, 200);
 		const cmds = rank(commands, q, 50);
 		if (!q) return cmds;
-		return [...cmds, ...rank(files, q, MAX_FILE_RESULTS)];
+		return [...cmds, ...rank(files, q, MAX_FILE_RESULTS, fileTier)];
 	});
 
 	const collection = $derived(

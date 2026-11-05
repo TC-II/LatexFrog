@@ -78,7 +78,7 @@ pub struct ReplaceReport {
 
 fn compilar(o: &SearchOptions) -> Result<Regex> {
     if o.query.is_empty() {
-        return Err(Error::Other("la búsqueda está vacía".into()));
+        return Err(Error::Other("the search is empty".into()));
     }
     let base = if o.regex { o.query.clone() } else { regex::escape(&o.query) };
     let patron = if o.whole_word { format!(r"\b(?:{base})\b") } else { base };
@@ -86,7 +86,7 @@ fn compilar(o: &SearchOptions) -> Result<Regex> {
         .case_insensitive(!o.case_sensitive)
         .size_limit(10 * 1024 * 1024)
         .build()
-        .map_err(|e| Error::Other(format!("expresión regular inválida: {}", e.to_string().lines().last().unwrap_or(""))))
+        .map_err(|e| Error::Other(format!("invalid regular expression: {}", e.to_string().lines().last().unwrap_or(""))))
 }
 
 /// Los archivos donde se busca, relativos a la raíz y con `/`.
@@ -219,7 +219,7 @@ pub fn replace(root: &Path, ix: &ProjectIndex, o: &SearchOptions, reemplazo: &st
             continue;
         }
         if r.mixed {
-            rep_out.skipped.push((rel, "mezcla tipos de salto de línea: se abre en sólo lectura y no se reescribe".into()));
+            rep_out.skipped.push((rel, "mixes line endings: it opens read-only and is not rewritten".into()));
             continue;
         }
         let nuevo = r.text.split('\n').map(|l| re.replace_all(l, rep.as_str()).into_owned()).collect::<Vec<_>>().join("\n");
@@ -228,7 +228,7 @@ pub fn replace(root: &Path, ix: &ProjectIndex, o: &SearchOptions, reemplazo: &st
                 rep_out.total += n;
                 rep_out.changed.push((rel, n));
             }
-            Err(Error::Conflict { .. }) => rep_out.skipped.push((rel, "cambió en disco mientras se reemplazaba".into())),
+            Err(Error::Conflict { .. }) => rep_out.skipped.push((rel, "changed on disk during the replace".into())),
             Err(e) => rep_out.skipped.push((rel, e.to_string())),
         }
     }
@@ -313,7 +313,7 @@ mod tests {
         let r = buscar(&d, &o);
         assert!(r.total >= 2);
         let e = search(d.path(), &ProjectIndex::build(d.path(), "main.tex", &[]), &SearchOptions { regex: true, ..opts("a(b") }, None).unwrap_err();
-        assert!(e.to_string().contains("expresión regular inválida"), "{e}");
+        assert!(e.to_string().contains("invalid regular expression"), "{e}");
         assert!(search(d.path(), &ProjectIndex::build(d.path(), "main.tex", &[]), &opts(""), None).is_err());
     }
 
@@ -388,7 +388,7 @@ mod tests {
         let r = reemplazar(&d, &opts("dos"), "X", Some(&["a.tex".to_string(), "b.tex".to_string()]));
         assert_eq!(r.changed, [("a.tex".to_string(), 1)]);
         assert_eq!(r.skipped.len(), 1);
-        assert!(r.skipped[0].0 == "b.tex" && r.skipped[0].1.contains("mezcla"));
+        assert!(r.skipped[0].0 == "b.tex" && r.skipped[0].1.contains("mixes"));
         assert_eq!(std::fs::read(d.path().join("main.tex")).unwrap(), b"dos\n\\input{a}\n\\input{b}\n", "main.tex no estaba en la lista");
         assert_eq!(std::fs::read(d.path().join("b.tex")).unwrap(), b"dos\r\ndos\ndos\r\n", "el mezclado queda como estaba, byte a byte");
     }

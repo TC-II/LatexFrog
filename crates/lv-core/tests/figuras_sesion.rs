@@ -340,13 +340,13 @@ fn el_historial_tiene_una_linea_por_trabajo_de_la_cola_con_su_motivo_y_sus_pista
     );
     let antes = &h[2].entrada;
     assert_eq!((antes.fase.as_deref(), antes.a_cocinar, antes.cocidas, antes.trabajos), (Some("perfil parcial"), 2, 2, 2));
-    assert!(h[2].pistas.iter().any(|p| p.contains("se cocinó antes de compilar «parcial»")), "{:?}", h[2].pistas);
+    assert!(h[2].pistas.iter().any(|p| p.contains("baked before compiling \"parcial\"")), "{:?}", h[2].pistas);
     let build = &h[1].entrada;
     assert_eq!((build.perfil.as_deref(), build.ok, build.pasadas), (Some("parcial"), true, 1));
     assert_eq!(build.herramientas.iter().map(|x| x.nombre.as_str()).collect::<Vec<_>>(), ["pdflatex"], "la herramienta sale de `Run number 1 of rule 'pdflatex'`");
     assert!(build.aux_faltantes.contains(&"fdb_latexmk".to_string()), "el primer build del perfil no tenía .fdb_latexmk");
-    assert!(h[1].pistas.iter().any(|p| p.contains("faltaba el .fdb_latexmk")) && h[1].pistas.iter().any(|p| p.contains("lo disparó guardar Secciones/Uno.tex")), "{:?}", h[1].pistas);
-    assert!(h[0].pistas.iter().any(|p| p.contains("es el resto de las figuras")), "{:?}", h[0].pistas);
+    assert!(h[1].pistas.iter().any(|p| p.contains("the .fdb_latexmk was missing")) && h[1].pistas.iter().any(|p| p.contains("set off by saving Secciones/Uno.tex")), "{:?}", h[1].pistas);
+    assert!(h[0].pistas.iter().any(|p| p.contains("the rest of the figures")), "{:?}", h[0].pistas);
     // Y un pedido sin motivo es manual.
     c.s.request_build(Some("parcial")).unwrap();
     c.esperar("otro build", 60, |c| c.ocioso() && c.s.history(20).len() == 5);
@@ -364,10 +364,10 @@ fn un_perfil_que_consume_el_cache_deja_en_el_historial_si_se_salteo_el_listado_y
     let h = c.s.history(10);
     let builds: Vec<&lv_core::historial::Entrada> = h.iter().filter(|e| e.entrada.tipo == "build").map(|e| &e.entrada).collect();
     let l1 = builds[1].listado.as_ref().expect("el primero decidió sobre el listado");
-    assert!(!l1.salteado && l1.motivo.contains("todavía no había una lista"), "{l1:?}");
+    assert!(!l1.salteado && l1.motivo.contains("there was no figure list yet"), "{l1:?}");
     let l2 = builds[0].listado.as_ref().expect("el segundo también");
-    assert!(l2.salteado && l2.motivo.contains("nada cambió"), "{l2:?}");
-    assert!(h[0].pistas.iter().any(|p| p.contains("se salteó el listado de las figuras")), "{:?}", h[0].pistas);
+    assert!(l2.salteado && l2.motivo.contains("nothing changed"), "{l2:?}");
+    assert!(h[0].pistas.iter().any(|p| p.contains("figure listing skipped")), "{:?}", h[0].pistas);
     // El de un perfil que no consume el cache no decide nada.
     c.s.request_build(Some("parcial")).unwrap();
     c.esperar("el parcial", 60, |c| c.ocioso() && c.s.history(10).iter().filter(|e| e.entrada.tipo == "build").count() == 3);
@@ -386,7 +386,7 @@ fn un_perfil_que_consume_el_cache_no_publica() {
     )
     .unwrap();
     let e = s.publish("revision").unwrap_err().to_string();
-    assert!(e.contains("no publica"), "{e}");
+    assert!(e.contains("does not publish"), "{e}");
 }
 
 #[test]
@@ -468,7 +468,7 @@ fn a_un_parcial_al_que_le_faltan_pdfs_de_sus_partes_se_los_cocina_antes_en_paral
     // El historial dice por qué se cocinó antes de compilar.
     let h = c.s.history(20);
     let build = h.iter().find(|e| e.entrada.tipo == "build").unwrap();
-    assert!(build.entrada.listado.as_ref().is_some_and(|l| !l.salteado && l.motivo.contains("faltan 2 figuras de las partes del perfil")), "{:?}", build.entrada.listado);
+    assert!(build.entrada.listado.as_ref().is_some_and(|l| !l.salteado && l.motivo.contains("2 figures of the profile's parts are missing")), "{:?}", build.entrada.listado);
 }
 
 #[test]
@@ -491,7 +491,7 @@ fn sin_una_lista_que_valga_el_primer_build_la_establece_y_los_siguientes_no() {
     c.esperar("el ciclo", 90, |c| c.ocioso() && c.secuencia().len() >= 11);
     assert_eq!(c.secuencia()[3..5], ["listando(perfil parcial)", "cocinar(0)"], "sin lista no se sabe qué necesita el perfil: se lista (no hay nada que cocinar)");
     let build = c.s.history(20).into_iter().find(|e| e.entrada.tipo == "build").unwrap();
-    assert!(build.entrada.listado.as_ref().is_some_and(|l| l.motivo.contains("todavía no se sabe")), "{:?}", build.entrada.listado);
+    assert!(build.entrada.listado.as_ref().is_some_and(|l| l.motivo.contains("is not known yet")), "{:?}", build.entrada.listado);
     // El resto completó la lista: el build que sigue ya no cocina nada antes.
     let n = c.secuencia().len();
     c.s.request_build(Some("parcial")).unwrap();
@@ -510,7 +510,7 @@ fn una_lista_de_otra_raiz_o_sin_raiz_no_vale_ni_para_limpiar() {
     v["raiz"] = "cap_actual.tex".into();
     escribir_figlist_json(&c, &v);
     let e = c.s.figures_clean_preview().unwrap_err().to_string();
-    assert!(e.contains("otra raíz"), "{e}");
+    assert!(e.contains("another root"), "{e}");
     assert!(c.s.figures_status().unwrap().figlist.is_some_and(|f| f.completa && !f.vale));
     // Una lista de antes de F8b (sin raíz ni partes) tampoco vale.
     let mut v = figlist_json(&c);
@@ -523,7 +523,7 @@ fn una_lista_de_otra_raiz_o_sin_raiz_no_vale_ni_para_limpiar() {
     v["raiz"] = "main.tex".into();
     v["partes"] = serde_json::json!(["Secciones/Uno"]);
     escribir_figlist_json(&c, &v);
-    assert!(c.s.figures_clean_preview().unwrap_err().to_string().contains("otras partes"));
+    assert!(c.s.figures_clean_preview().unwrap_err().to_string().contains("other parts"));
 }
 
 #[test]
@@ -660,7 +660,7 @@ fn con_el_cache_apagado_no_hay_coccion() {
     let latexmk = Builder::con_programa("powershell", args_de(&script(OK)));
     let s = Session::open_with_cocinero(c.d.path(), r.sink.clone(), latexmk, Cocinero::new()).unwrap();
     let e = s.request_bake().unwrap_err().to_string();
-    assert!(e.contains("apagado"), "{e}");
+    assert!(e.contains("is off"), "{e}");
 }
 
 #[test]

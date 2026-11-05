@@ -341,7 +341,7 @@ impl Session {
     }
 
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Datos>> {
-        self.datos.lock().map_err(|_| otro("estado de la sesión envenenado"))
+        self.datos.lock().map_err(|_| otro("session state poisoned"))
     }
 
     /// Rearma el índice y lo que depende de él (configuración inferida, perfil activo, selección).
@@ -365,7 +365,7 @@ impl Session {
             }
             Some(_) => {}
         }
-        let cfg = d.config.as_ref().expect("recién asegurada");
+        let cfg = d.config.as_ref().expect("just ensured");
         if !d.state.active_profile.as_ref().is_some_and(|p| cfg.profiles.contains_key(p)) {
             d.state.active_profile = Some(perfil_por_defecto(cfg));
         }
@@ -483,23 +483,23 @@ impl Session {
 
     pub fn set_state(&self, patch: StatePatch) -> Result<State> {
         let mut d = self.lock()?;
-        let cfg = d.config.clone().ok_or_else(|| otro("elegí primero la raíz del documento"))?;
+        let cfg = d.config.clone().ok_or_else(|| otro("choose the document root first"))?;
         let nombres = d.index.as_ref().map(|i| i.part_names()).unwrap_or_default();
         if let Some(p) = &patch.active_profile {
             if !cfg.profiles.contains_key(p) {
-                return Err(otro(format!("no existe el perfil {p:?}")));
+                return Err(otro(format!("no profile {p:?}")));
             }
         }
         if let Some(sel) = &patch.selection {
             if let Some(mala) = sel.iter().find(|s| !nombres.contains(s)) {
-                return Err(otro(format!("{mala:?} no es una parte del proyecto")));
+                return Err(otro(format!("{mala:?} is not a part of the project")));
             }
         }
         if let Some(vars) = &patch.variables {
             for (k, v) in vars {
-                let Some(def) = cfg.variables.get(k) else { return Err(otro(format!("no existe la variable {k:?}"))) };
+                let Some(def) = cfg.variables.get(k) else { return Err(otro(format!("no variable {k:?}"))) };
                 if !def.choices.is_empty() && !def.choices.contains(v) {
-                    return Err(otro(format!("{v:?} no es una opción de {k}")));
+                    return Err(otro(format!("{v:?} is not a choice of {k}")));
                 }
             }
         }
@@ -509,6 +509,9 @@ impl Session {
         }
         if let Some(sel) = patch.selection {
             s.selection = sel;
+        }
+        if let Some(part) = patch.current_part {
+            s.current_part = Some(part);
         }
         if let Some(v) = patch.variables {
             s.variables.extend(v);
@@ -535,8 +538,8 @@ impl Session {
     /// proyecto y va a git.
     pub fn save_config(&self) -> Result<ProjectView> {
         let mut d = self.lock()?;
-        let rf = d.root_file.clone().ok_or_else(|| otro("elegí primero la raíz del documento"))?;
-        let mut cfg = d.config.clone().ok_or_else(|| otro("no hay configuración"))?;
+        let rf = d.root_file.clone().ok_or_else(|| otro("choose the document root first"))?;
+        let mut cfg = d.config.clone().ok_or_else(|| otro("no configuration"))?;
         cfg.root = rf;
         config::save_config(&self.root, &cfg)?;
         d.config = Some(cfg);
@@ -548,12 +551,12 @@ impl Session {
     /// Qué pasa con `rel` respecto del perfil activo. Vuelve a indexar: se llama justo después de guardar.
     pub fn file_info(&self, rel: &str) -> Result<FileInfo> {
         let mut d = self.lock()?;
-        let rf = d.root_file.clone().ok_or_else(|| otro("elegí primero la raíz del documento"))?;
+        let rf = d.root_file.clone().ok_or_else(|| otro("choose the document root first"))?;
         let comandos = d.config.as_ref().map(|c| c.parts.commands.clone()).unwrap_or_else(comandos_por_defecto);
         let ix = ProjectIndex::build(&self.root, &rf, &comandos);
         let parts_changed = self.partes_vistas.lock().is_ok_and(|v| *v != ix.part_names());
         let (part, affects, profile_auto) = {
-            let cfg = d.config.as_ref().ok_or_else(|| otro("no hay configuración"))?;
+            let cfg = d.config.as_ref().ok_or_else(|| otro("no configuration"))?;
             let perfil = d.state.active_profile.as_ref().and_then(|p| cfg.profiles.get(p));
             let seleccion = match perfil.map(|p| p.parts) {
                 Some(PartsSel::Selection) => Some(d.state.selection.clone()),
@@ -589,19 +592,19 @@ impl Session {
 
     fn plan_con(&self, perfil: &str, retry: bool, extra: &PlanExtra) -> Result<Plan> {
         let mut d = self.lock()?;
-        let rf = d.root_file.clone().ok_or_else(|| otro("elegí primero la raíz del documento"))?;
-        let cfg = d.config.clone().ok_or_else(|| otro("no hay configuración"))?;
+        let rf = d.root_file.clone().ok_or_else(|| otro("choose the document root first"))?;
+        let cfg = d.config.clone().ok_or_else(|| otro("no configuration"))?;
         let pc = if es_de_servicio(perfil) {
             cfg.perfil_de_servicio(perfil)
         } else {
-            cfg.profiles.get(perfil).ok_or_else(|| otro(format!("no existe el perfil {perfil:?}")))?.clone()
+            cfg.profiles.get(perfil).ok_or_else(|| otro(format!("no profile {perfil:?}")))?.clone()
         };
         // El índice se rehace acá: acaban de guardar y el pedido tiene que ver lo que hay en disco.
         let ix = ProjectIndex::build(&self.root, &rf, &cfg.parts.commands);
         let nombres = ix.part_names();
         let includeonly = if let Some(partes) = &extra.partes {
             if let Some(mala) = partes.iter().find(|p| !nombres.contains(p)) {
-                return Err(otro(format!("{mala:?} no es una parte del proyecto")));
+                return Err(otro(format!("{mala:?} is not a part of the project")));
             }
             Some(partes.clone())
         } else {
@@ -686,8 +689,8 @@ impl Session {
     /// La lista de partes que compila un perfil, en el orden del documento (lo mismo que su `\includeonly`; todas si no recorta).
     pub(crate) fn partes_del_perfil(&self, perfil: &str) -> Result<Vec<String>> {
         let d = self.lock()?;
-        let cfg = d.config.as_ref().ok_or_else(|| otro("no hay configuración"))?;
-        let pc = cfg.profiles.get(perfil).ok_or_else(|| otro(format!("no existe el perfil {perfil:?}")))?;
+        let cfg = d.config.as_ref().ok_or_else(|| otro("no configuration"))?;
+        let pc = cfg.profiles.get(perfil).ok_or_else(|| otro(format!("no profile {perfil:?}")))?;
         let nombres = d.index.as_ref().map(|i| i.part_names()).unwrap_or_default();
         Ok(Self::includeonly_de(&d, perfil, pc, &nombres)?.unwrap_or(nombres))
     }
@@ -725,7 +728,7 @@ impl Session {
         self.guardia()?;
         let perfil = match perfil {
             Some(p) => p.to_string(),
-            None => self.lock()?.state.active_profile.clone().ok_or_else(|| otro("no hay perfil activo"))?,
+            None => self.lock()?.state.active_profile.clone().ok_or_else(|| otro("no active profile"))?,
         };
         if let Ok(mut m) = self.motivo.lock() {
             *m = Some(motivo.chars().take(300).collect());
@@ -897,7 +900,7 @@ impl Session {
         let origen = self.root.join(crate::build::pdf_rel(perfil));
         let bytes = std::fs::read(&origen).map_err(|e| Error::Io(format!("{}: {e}", origen.display())))?;
         let destino = dir.join(&nombre);
-        fsio::escribir_atomico(&destino, &bytes).map_err(|e| Error::Io(format!("no se pudo copiar el PDF a {}: {e}", destino.display())))
+        fsio::escribir_atomico(&destino, &bytes).map_err(|e| Error::Io(format!("could not copy the PDF to {}: {e}", destino.display())))
     }
 
     /// Lo que hay que hacer con las figuras después de cualquier build (7 del plan, "Figuras que fallan o se cortan"): se verifican
@@ -938,7 +941,7 @@ impl Session {
         if !ok && truncated_aux && !cancelled && !retry && !es_de_servicio(perfil) {
             (self.sink)(BuildEvent::Log {
                 id,
-                text: format!("\n== .aux truncado en el perfil «{perfil}»: borro sus auxiliares y reintento una vez\n"),
+                text: format!("\n== truncated .aux in profile \"{perfil}\": deleting its auxiliary files and retrying once\n"),
             });
             let n = aux::clean_profile(&self.root, perfil, cache_dir);
             (self.sink)(BuildEvent::Log { id, text: format!("== {n} auxiliares borrados\n") });
@@ -947,7 +950,7 @@ impl Session {
             }
             match self.lanzar(perfil, true, Some(ctx.clone())) {
                 Ok(_) => return, // el `Finished` de este intento no se informa ni se anota: el del reintento lo reemplaza
-                Err(e) => (self.sink)(BuildEvent::Error { message: format!("no se pudo reintentar: {e}") }),
+                Err(e) => (self.sink)(BuildEvent::Error { message: format!("could not retry: {e}") }),
             }
         }
         self.cerrar_problemas(&mut ev, perfil, rotas);
@@ -975,12 +978,12 @@ impl Session {
                 Ok(_) => return,
                 Err(e) => {
                     let cual = match &trabajo {
-                        Job::Build { perfil } => format!("el build pendiente ({perfil})"),
-                        Job::Bake(_) => "la cocción de figuras pendiente".to_string(),
-                        Job::Export(_) => "la exportación pendiente".to_string(),
-                        Job::Fragment(_) => "la vista previa del fragmento pendiente".to_string(),
+                        Job::Build { perfil } => format!("the pending build ({perfil})"),
+                        Job::Bake(_) => "the pending figure bake".to_string(),
+                        Job::Export(_) => "the pending export".to_string(),
+                        Job::Fragment(_) => "the pending fragment preview".to_string(),
                     };
-                    (self.sink)(BuildEvent::Error { message: format!("no se pudo lanzar {cual}: {e}") });
+                    (self.sink)(BuildEvent::Error { message: format!("could not start {cual}: {e}") });
                     actual = self.cola.liberar();
                 }
             }
@@ -1030,7 +1033,7 @@ impl Session {
     /// El índice del proyecto se rehace desde el disco cada vez: el grafo y los símbolos juntos cuestan ~25 ms con el libro.
     fn indice_fresco(&self) -> Result<(ProjectIndex, String)> {
         let d = self.lock()?;
-        let rf = d.root_file.clone().ok_or_else(|| otro("elegí primero la raíz del documento"))?;
+        let rf = d.root_file.clone().ok_or_else(|| otro("choose the document root first"))?;
         let comandos = d.config.as_ref().map(|c| c.parts.commands.clone()).unwrap_or_else(comandos_por_defecto);
         Ok((ProjectIndex::build(&self.root, &rf, &comandos), rf))
     }
@@ -1067,7 +1070,7 @@ impl Session {
     /// más reciente entre los perfiles que la contienen. Los perfiles ocultos y el de exportación no participan.
     pub fn elegir_pdf(&self, rel: &str) -> Result<Option<String>> {
         let d = self.lock()?;
-        let cfg = d.config.as_ref().ok_or_else(|| otro("no hay configuración"))?;
+        let cfg = d.config.as_ref().ok_or_else(|| otro("no configuration"))?;
         let parte = d.index.as_ref().and_then(|ix| ix.part_of(rel).map(|k| ix.parts[k].name.clone()));
         let mut candidatos: Vec<(String, PartsSel, std::time::SystemTime)> = Vec::new();
         for (id, p) in &cfg.profiles {
@@ -1100,7 +1103,7 @@ impl Session {
         let ruta = self.synctex_gz(perfil);
         let mtime = std::fs::metadata(&ruta)
             .and_then(|m| m.modified())
-            .map_err(|_| Error::NotFound(format!("el SyncTeX del perfil {perfil:?}: compilá antes")))?;
+            .map_err(|_| Error::NotFound(format!("the SyncTeX of profile {perfil:?}: compile first")))?;
         if let Some((m, s)) = self.synctex.lock().map_err(|_| otro("cache envenenado"))?.get(perfil) {
             if *m == mtime {
                 return Ok(s.clone());
@@ -1114,7 +1117,7 @@ impl Session {
     /// Del cursor al PDF. `Ok(None)` si el archivo no figura en el SyncTeX del PDF elegido (todavía no se compiló con él).
     pub fn synctex_forward(&self, rel: &str, line: u32) -> Result<Option<SyncForward>> {
         let Some(perfil) = self.elegir_pdf(rel)? else {
-            return Err(otro("No hay ningún PDF con SyncTeX para este archivo: compilá antes."));
+            return Err(otro("No PDF with SyncTeX for this file: compile first."));
         };
         let sx = self.cargar_synctex(&perfil)?;
         let Some(tag) = sx.tag_of(&self.root, rel) else { return Ok(None) };
@@ -1130,7 +1133,7 @@ impl Session {
     /// Del PDF al código. `(page, x, y)` en bp desde arriba a la izquierda.
     pub fn synctex_inverse(&self, perfil: &str, page: u32, x: f64, y: f64) -> Result<Option<SyncInverse>> {
         if !self.lock()?.config.as_ref().is_some_and(|c| c.profiles.contains_key(perfil)) {
-            return Err(otro(format!("no existe el perfil {perfil:?}")));
+            return Err(otro(format!("no profile {perfil:?}")));
         }
         let sx = self.cargar_synctex(perfil)?;
         Ok(sx.inverse(page, x, y).map(|i| SyncInverse { file: sx.rel_of_tag(&self.root, i.tag), line: i.line, inside: i.inside }))
@@ -1142,11 +1145,11 @@ impl Session {
     /// `export.dir`), absoluta, sin `..` y creada si todavía no existe (como la opción «Abrir la carpeta PDF» de `Menu.bat` del libro).
     /// Es para mostrarla en el explorador de archivos: el que la abre es la capa de Tauri, no el core.
     pub fn carpeta_de_salida(&self, cual: &str) -> Result<PathBuf> {
-        let cfg = self.lock()?.config.clone().ok_or_else(|| otro("no hay configuración"))?;
+        let cfg = self.lock()?.config.clone().ok_or_else(|| otro("no configuration"))?;
         let rel = match cual {
-            "publicar" => cfg.publish.as_ref().map(|p| p.dir.clone()).ok_or_else(|| otro("el proyecto no define `publish.dir` en latexfrog.json"))?,
+            "publicar" => cfg.publish.as_ref().map(|p| p.dir.clone()).ok_or_else(|| otro("the project does not set `publish.dir` in latexfrog.json"))?,
             "exportar" => cfg.export_cfg().dir,
-            otra => return Err(otro(format!("carpeta de salida desconocida: {otra:?} (es «publicar» o «exportar»)"))),
+            otra => return Err(otro(format!("unknown output folder: {otra:?} (it is \"publicar\" or \"exportar\")"))),
         };
         let dir = self.root.join(rel);
         std::fs::create_dir_all(&dir).map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
@@ -1161,33 +1164,33 @@ impl Session {
     pub fn publish(&self, perfil: &str) -> Result<Published> {
         let (cfg, rf) = {
             let d = self.lock()?;
-            (d.config.clone().ok_or_else(|| otro("no hay configuración"))?, d.root_file.clone().unwrap_or_default())
+            (d.config.clone().ok_or_else(|| otro("no configuration"))?, d.root_file.clone().unwrap_or_default())
         };
         let Some(pubcfg) = &cfg.publish else {
-            return Err(otro("el proyecto no define `publish.dir` en latexfrog.json"));
+            return Err(otro("the project does not set `publish.dir` in latexfrog.json"));
         };
         let Some(pc) = cfg.profiles.get(perfil) else {
-            return Err(otro(format!("no existe el perfil {perfil:?}")));
+            return Err(otro(format!("no profile {perfil:?}")));
         };
         // Un perfil que sólo consume el cache es para revisar: su PDF depende del estado del cache y trae las fuentes de cada
         // figura (S5). Lo que se entrega sale de un perfil sin cache.
         if pc.externalize && pc.cache_only {
-            return Err(otro(format!("el perfil {perfil:?} consume el cache de figuras y no publica: publicá el de un perfil sin cache (el de entrega)")));
+            return Err(otro(format!("the profile {perfil:?} reads the figure cache and does not publish: publish one without a cache (the delivery profile)")));
         }
         if aux::is_suspect(&self.root, perfil) {
-            return Err(otro(format!("el último build de {perfil:?} no terminó bien: el PDF puede estar desactualizado. Compilá de nuevo antes de publicar")));
+            return Err(otro(format!("the last build of {perfil:?} did not end well: the PDF may be out of date. Compile again before publishing")));
         }
         if self.esta_en_borrador(perfil) {
-            return Err(otro(format!("el último build de {perfil:?} tiene las imágenes en borrador (cajas del tamaño de cada imagen): compilá con las imágenes completas antes de publicar")));
+            return Err(otro(format!("the last build of {perfil:?} has draft images (boxes the size of each image): compile with full images before publishing")));
         }
         let origen = self.root.join(crate::build::pdf_rel(perfil));
         if !origen.is_file() {
-            return Err(Error::NotFound(format!("el PDF de {perfil:?}: compilá antes de publicar")));
+            return Err(Error::NotFound(format!("the PDF of {perfil:?}: compile before publishing")));
         }
         let stem = Path::new(&rf).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "documento".into());
         let nombre = pubcfg.names.get(perfil).cloned().unwrap_or_else(|| if perfil == "completo" { format!("{stem}.pdf") } else { format!("{stem} ({perfil}).pdf") });
         if nombre.contains(['/', '\\', ':']) || nombre.contains("..") || nombre.trim().is_empty() {
-            return Err(Error::InvalidPath(format!("nombre de publicación {nombre:?}: tiene que ser un nombre de archivo")));
+            return Err(Error::InvalidPath(format!("publish name {nombre:?}: it must be a file name")));
         }
         let nombre = if nombre.to_lowercase().ends_with(".pdf") { nombre } else { format!("{nombre}.pdf") };
         let dir = self.root.join(&pubcfg.dir);

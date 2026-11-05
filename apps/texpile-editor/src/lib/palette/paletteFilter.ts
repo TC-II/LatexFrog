@@ -25,6 +25,22 @@ function isWordStart(hay: string, i: number): boolean {
 	return prev === prev.toLowerCase() && hay[i] !== hay[i].toLowerCase();
 }
 
+const GENERATED = /\.(aux|auxlock|bbl|bcf|blg|fdb_latexmk|fls|idx|ilg|ind|lof|log|lot|out|run\.xml|synctex(\.gz)?|toc|xdv|md5|dpth|pdf)$|-SAVE-ERROR$/i;
+
+/** the order of a file in the finder: `.tex` first, what the compile generates last, the rest in between */
+export function fileTier(name: string): number {
+	if (/\.tex$/i.test(name)) return 0;
+	return GENERATED.test(name) ? 2 : 1;
+}
+
+/** lowercase without accents, one character for one: the hits index the original string */
+function folded(text: string): string {
+	return [...text.toLowerCase()].map((c) => {
+		const bare = c.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+		return bare.length === c.length ? bare : c;
+	}).join('');
+}
+
 /**
  * Score `needle` against `haystack`, or null when it does not match at all.
  *
@@ -35,8 +51,8 @@ function isWordStart(hay: string, i: number): boolean {
  */
 export function fuzzyScore(haystack: string, needle: string): FuzzyMatch | null {
 	if (!needle) return { score: 0, hits: [] };
-	const hay = haystack.toLowerCase();
-	const need = needle.toLowerCase();
+	const hay = folded(haystack);
+	const need = folded(needle);
 	// a jump to a nicer word start can strand the letters after it; every subsequence still matches
 	return scoreFrom(hay, need, true) ?? scoreFrom(hay, need, false);
 }

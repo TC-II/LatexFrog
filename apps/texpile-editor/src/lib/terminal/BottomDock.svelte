@@ -11,6 +11,12 @@
 	import { TerminalShells } from './terminalShells.svelte';
 	import type { DockView } from './dockView';
 	import DockTabCount from './DockTabCount.svelte';
+	import { lvProject } from '$lib/lv/lvEngine.svelte';
+	import LvDoctorPanel from '$lib/lv/LvDoctorPanel.svelte';
+	import LvFiguresPanel from '$lib/lv/LvFiguresPanel.svelte';
+	import LvFrog from '$lib/lv/LvFrog.svelte';
+	import LvHistoryPanel from '$lib/lv/LvHistoryPanel.svelte';
+	import LvLeftoverPanel from '$lib/lv/LvLeftoverPanel.svelte';
 	import AgentPanel from '$lib/ai/agentPanel/ui/AgentPanel.svelte';
 	import AgentPicker from '$lib/ai/agentPanel/ui/strip/AgentPicker.svelte';
 	import { agentSession } from '$lib/ai/agentPanel/agentSession.svelte';
@@ -79,6 +85,10 @@
 
 	// shells (roster, compile shell, run/reset plumbing) live in terminalShells.svelte.ts
 	const shells = new TerminalShells(() => onClose());
+	// a project with no engine has none of the engine's tabs
+	$effect(() => {
+		if (!lvProject.active && (view === 'history' || view === 'doctor' || view === 'leftover' || view === 'figures')) view = 'problems';
+	});
 	let menuOpen = $state(false);
 
 	// Terminal drags in @xterm/* + css, so it loads when the dock first mounts, not at boot
@@ -182,6 +192,21 @@
 				<DockTabCount count={openComments} tone="primary" />
 			{/if}
 		</button>
+		{#if lvProject.active}
+			{#each [['figures', m.lv_figures_tab()], ['history', m.lv_diag_history()], ['doctor', m.lv_diag_doctor()], ['leftover', m.lv_diag_orphans()]] as [id, label] (id)}
+				<button
+					class="rounded-base flex shrink-0 items-center gap-1 px-2 py-1 whitespace-nowrap {view === id ? 'preset-tonal' : 'hover:preset-tonal'}"
+					data-testid="lv-dock-{id}"
+					onclick={() => (view = id as DockView)}
+				>
+					<LvFrog />
+					{label}
+					{#if id === 'doctor' && lvProject.doctorWarnings > 0}
+						<DockTabCount count={lvProject.doctorWarnings} tone="warning" />
+					{/if}
+				</button>
+			{/each}
+		{/if}
 		{#if agentOn}
 			<!-- grayed where it cannot run; it still opens, to say why -->
 			<button
@@ -295,6 +320,10 @@
 	{#if view === 'problems'}
 		<div class="bg-surface-50-950 absolute inset-0 z-10 overflow-hidden">
 			<ProblemsPanel root={cwd} onJump={onProblemJump} />
+		</div>
+	{:else if view === 'history' || view === 'doctor' || view === 'leftover' || view === 'figures'}
+		<div class="bg-surface-50-950 absolute inset-0 z-10 overflow-hidden">
+			{#if view === 'history'}<LvHistoryPanel />{:else if view === 'doctor'}<LvDoctorPanel />{:else if view === 'figures'}<LvFiguresPanel />{:else}<LvLeftoverPanel />{/if}
 		</div>
 	{:else if view === 'agent'}
 		<div class="bg-surface-50-950 absolute inset-0 z-10 overflow-hidden">

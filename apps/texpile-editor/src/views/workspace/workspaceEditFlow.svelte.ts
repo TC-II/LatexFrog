@@ -2,6 +2,7 @@
 // on-disk change detection, tab activation/closing, and the load-the-active-file effect that ties
 // them together.
 import { fileService } from '$lib/files/service/fileService';
+import { lvProject } from '$lib/lv/lvEngine.svelte';
 import { addLocalHistory } from '$lib/workspace/localHistory/localHistory.svelte';
 import { untrack } from 'svelte';
 import { noParse, parseOf } from '$lib/editor/visual/parseOrigins';
@@ -129,6 +130,7 @@ export class WorkspaceEditFlow {
 			verify: (path, content) => extras.verify(path, content),
 			beforeWrite: (path, content) => extras.beforeWrite(path, content),
 			afterWrite: (path, content) => {
+				lvProject.noteWritten();
 				// every save keeps a copy in Local History, as VS Code does
 				void addLocalHistory(path, content);
 				if (open(path) && !this.saver.isDirty(path)) isDirty.current = false;

@@ -577,13 +577,13 @@ impl Symbols {
                             Some(k) => {
                                 // Los abiertos encima de este quedaron sin cerrar.
                                 let (tope, l) = pila[pila.len() - 1].clone();
-                                s.lint.push(problema(Severity::Error, "lint-env", format!("\\end{{{arg}}} cierra con \\begin{{{tope}}} (línea {l}) todavía abierto"), rel, c.linea));
+                                s.lint.push(problema(Severity::Error, "lint-env", format!("\\end{{{arg}}} closes with \\begin{{{tope}}} (line {l}) still open"), rel, c.linea));
                                 pila.truncate(k);
                             }
                             None => {
                                 let m = match pila.iter().rev().find(|(n, _)| n != "document") {
-                                    Some((tope, l)) => format!("\\end{{{arg}}} no coincide con \\begin{{{tope}}} de la línea {l}"),
-                                    None => format!("\\end{{{arg}}} sin su \\begin"),
+                                    Some((tope, l)) => format!("\\end{{{arg}}} does not match the \\begin{{{tope}}} of line {l}"),
+                                    None => format!("\\end{{{arg}}} without its \\begin"),
                                 };
                                 s.lint.push(problema(Severity::Error, "lint-env", m, rel, c.linea));
                             }
@@ -628,7 +628,7 @@ impl Symbols {
                 }
             }
             for (env, l) in pila.into_iter().filter(|(e, _)| e != "document") {
-                s.lint.push(problema(Severity::Error, "lint-env", format!("\\begin{{{env}}} sin su \\end"), rel, l));
+                s.lint.push(problema(Severity::Error, "lint-env", format!("\\begin{{{env}}} without its \\end"), rel, l));
             }
         }
 
@@ -669,7 +669,7 @@ impl Symbols {
         let mut nuevos = Vec::new();
         for l in &self.labels {
             match primera.get(l.name.as_str()) {
-                Some(p) => nuevos.push(problema(Severity::Warning, "lint-label-duplicada", format!("la etiqueta «{}» ya está en {}:{}", l.name, p.file, p.line), &l.file, l.line)),
+                Some(p) => nuevos.push(problema(Severity::Warning, "lint-label-duplicada", format!("the label \"{}\" is already at {}:{}", l.name, p.file, p.line), &l.file, l.line)),
                 None => {
                     primera.insert(l.name.as_str(), l);
                 }
@@ -677,7 +677,7 @@ impl Symbols {
         }
         for u in &self.refs {
             if !primera.contains_key(u.name.as_str()) {
-                nuevos.push(problema(Severity::Warning, "lint-ref", format!("\\{}{{{}}}: no hay ninguna etiqueta con ese nombre", u.command, u.name), &u.file, u.line));
+                nuevos.push(problema(Severity::Warning, "lint-ref", format!("\\{}{{{}}}: no label with that name", u.command, u.name), &u.file, u.line));
             }
         }
         // Las citas sólo se miran si el proyecto tiene dónde buscarlas.
@@ -685,7 +685,7 @@ impl Symbols {
             let claves: HashSet<&str> = self.bib.iter().map(|b| b.key.as_str()).chain(bibitems.iter().map(String::as_str)).collect();
             for u in &self.cites {
                 if !claves.contains(u.name.as_str()) {
-                    nuevos.push(problema(Severity::Warning, "lint-cita", format!("\\{}{{{}}}: no hay ninguna entrada con esa clave", u.command, u.name), &u.file, u.line));
+                    nuevos.push(problema(Severity::Warning, "lint-cita", format!("\\{}{{{}}}: no entry with that key", u.command, u.name), &u.file, u.line));
                 }
             }
         }

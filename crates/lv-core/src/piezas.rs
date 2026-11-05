@@ -175,13 +175,13 @@ pub fn detectar(root: &Path, ix: &ProjectIndex) -> Vec<PiezaInfo> {
                 }
             };
             if l.contains("\\tableofcontents") {
-                push(Pieza::Toc, "Índice".into());
+                push(Pieza::Toc, "Contents".into());
             }
             if l.contains("\\printbibliography") || l.contains("\\bibliography{") {
-                push(Pieza::Bibliography, "Bibliografía".into());
+                push(Pieza::Bibliography, "Bibliography".into());
             }
             if l.contains("\\printindex") {
-                push(Pieza::Index, "Índice alfabético".into());
+                push(Pieza::Index, "Index".into());
             }
             let mut resto = l;
             while let Some(i) = resto.find("\\includepdf") {

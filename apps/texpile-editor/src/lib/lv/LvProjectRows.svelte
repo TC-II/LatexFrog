@@ -1,11 +1,12 @@
 <script lang="ts">
 	// The Compile menu's way into the project dialogs. A plain folder gets the one row that turns it into an engine project.
-	import { Activity, FolderCog } from '@lucide/svelte';
+	import { FolderCog } from '@lucide/svelte';
 	import { menuItemClass, separatorClass } from '$lib/menus/menuStyles';
 	import { m } from '$lib/paraglide/messages';
 	import { workspaceRoot } from '$lib/workspace/workspaceStore';
 	import { lvProject } from './lvEngine.svelte';
-	import { openConfigPanel, openDiagnostics } from './lvPanels';
+	import LvFrog from './LvFrog.svelte';
+	import { openConfigPanel } from './lvPanels';
 
 	let { onPick }: { onPick: () => void } = $props();
 
@@ -26,12 +27,7 @@
 	<button class={ROW} data-testid="lv-config-row" onclick={() => pick(openConfigPanel)}>
 		<FolderCog class="size-4 shrink-0" />
 		<span class="cap-center">{lvProject.active ? m.lv_config_row() : m.lv_setup_row()}</span>
+		<LvFrog />
 	</button>
-	{#if lvProject.active}
-		<button class={ROW} data-testid="lv-diagnostics-row" onclick={() => pick(() => openDiagnostics())}>
-			<Activity class="size-4 shrink-0" />
-			<span class="cap-center">{m.lv_diagnostics_row()}</span>
-		</button>
-	{/if}
 	<div class={separatorClass}></div>
 {/if}

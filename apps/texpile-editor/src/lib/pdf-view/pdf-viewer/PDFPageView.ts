@@ -510,6 +510,16 @@ export class PDFPageView {
 		return { x: px / s, y: py / s };
 	}
 
+	/** A lasting mark on the page (CSS px): where the editor's cursor is, while the PDF follows it. */
+	mark(px: number, py: number, pw: number, ph: number): HTMLElement {
+		if (getComputedStyle(this.div).position === 'static') this.div.style.position = 'relative';
+		const el = document.createElement('div');
+		el.style.cssText = `position:absolute;left:${px}px;top:${py}px;width:${Math.max(3, pw)}px;height:${ph}px;background:rgba(55,138,221,0.25);border-bottom:2px solid rgba(55,138,221,0.9);pointer-events:none;z-index:6;`;
+		el.dataset.testid = 'lv-follow-mark';
+		this.div.appendChild(el);
+		return el;
+	}
+
 	/** Briefly flash a highlight rectangle on the page (CSS px). Used by SyncTeX forward search. */
 	highlight(px: number, py: number, pw: number, ph: number): void {
 		if (getComputedStyle(this.div).position === 'static') this.div.style.position = 'relative';

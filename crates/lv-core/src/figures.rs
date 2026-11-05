@@ -121,13 +121,13 @@ fn problemas_de(root: &Path, nombre: &str) -> Vec<Problem> {
     let mut v: Vec<Problem> = logparse::parse_tex_log(&desenvolver(&bytes), root)
         .into_iter()
         .filter(|p| p.severity == Severity::Error)
-        .map(|p| Problem { kind: "figure".into(), message: format!("Figura «{corto}»: {}", p.message), ..p })
+        .map(|p| Problem { kind: "figure".into(), message: format!("Figure \"{corto}\": {}", p.message), ..p })
         .collect();
     if v.is_empty() {
         v.push(Problem {
             severity: Severity::Error,
             kind: "figure".into(),
-            message: format!("La figura «{corto}» no se generó: revisá {nombre}.log"),
+            message: format!("The figure \"{corto}\" was not generated: see {nombre}.log"),
             file: Some(format!("{nombre}.log")),
             line: None,
             line_end: None,
@@ -211,7 +211,7 @@ mod tests {
         let p = &rotas[0].problemas;
         assert_eq!(p.len(), 1, "{p:#?}");
         assert_eq!(p[0].kind, "figure");
-        assert!(p[0].message.starts_with("Figura «A-uno-0»: Undefined control sequence"), "{}", p[0].message);
+        assert!(p[0].message.starts_with("Figure \"A-uno-0\": Undefined control sequence"), "{}", p[0].message);
         assert_eq!((p[0].file.as_deref(), p[0].line), (Some("main.tex"), Some(31)));
         for rel in ["figuras-cache/A-uno-0.pdf", "figuras-cache/A-uno-0.md5", ".latexfrog/build/rapido/figuras-cache/A-uno-0.md5"] {
             assert!(!r.join(rel).exists(), "{rel} se borra");
@@ -233,7 +233,7 @@ mod tests {
         let rotas = verificar(r, "rapido", &nombres, despues, false);
         assert_eq!(rotas.len(), 4);
         assert!(rotas.iter().all(|f| f.problemas.len() == 1 && f.problemas[0].kind == "figure"), "{rotas:#?}");
-        assert!(rotas[0].problemas[0].message.contains("no se generó"), "sin errores legibles, uno genérico que apunta al log");
+        assert!(rotas[0].problemas[0].message.contains("was not generated"), "sin errores legibles, uno genérico que apunta al log");
         // Con un inicio anterior, las que tienen PDF completo y log limpio pasan.
         figura(r, "figuras-cache/viejo", Some(PDF_BUENO), Some(LOG_BUENO));
         assert!(verificar(r, "rapido", &["figuras-cache/viejo".into()], antes(), false).is_empty());

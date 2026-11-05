@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { DockView } from '$lib/terminal/dockView';
+	import { lvProject } from '$lib/lv/lvEngine.svelte';
 	import VersionChangesModal from './VersionChangesModal.svelte';
 	import TwoVersionsModal from './TwoVersionsModal.svelte';
 	import RestoreDeletedDialog from './history/RestoreDeletedDialog.svelte';
@@ -183,6 +184,10 @@
 	const dockShrunk = $derived(termDock.shrink || !layout.pdfPaneOpen || layout.pdfPopout);
 	// bottom dock body: the terminal shells (always mounted) or the Problems list
 	let dockView = $state<DockView>('terminal');
+	lvProject.onShowDock = (view) => {
+		termDock.show();
+		dockView = view;
+	};
 	// the compile-side stack (compile-command state, draft controller, typst preview, compile
 	// pipeline, jump router) is built in ./workspacePipelines.svelte.ts
 	const { cc, draftCtl, typstPreview, typstStream, compiler, nav } = createWorkspacePipelines({
@@ -326,7 +331,10 @@
 		closeTab: (t) => editFlow.closeTab(t),
 		reopenTab: () => editFlow.reopenTab(),
 		isGuest: () => guest,
-		save: () => wsdoc.save(),
+		save: () => {
+			wsdoc.save();
+			lvProject.noteSaved();
+		},
 		toggleGlobalSearch: () => void toggleSearchPanel(searchDeps),
 		terminalAvailable: () => termDock.available,
 		isCompiling: () => compiler.compiling,

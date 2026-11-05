@@ -1,12 +1,14 @@
 // The window's end of the compile engine. A folder with a latexfrog.json (or a latexviewer.json still to migrate) is an
 // engine project: Compile, Stop and the Problems panel go through the sidecar, and the terminal path stays for other folders.
+import { m } from '$lib/paraglide/messages';
 import type { LogEntry } from '$lib/compileLog/compileLog';
 import type { CompileLogState } from '$lib/stores/compileLogStore';
 import { pdfStore } from '$lib/stores/pdfStore';
 import { fileUrl, joinPath, relativeTo } from '$lib/workspace/fileSystem';
 import { activeFilePath, mainFile, setMainFile } from '$lib/workspace/workspaceStore';
+import { clearFollowMark } from './lvSync';
 
-export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean };
+export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; compileOn: string | null };
 export type Variable = { name: string; label: string; choices: string[]; default: string | null };
 export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean };
 export type Typical = { ms: number; pasadas: number; n: number };
@@ -15,10 +17,13 @@ export type ProjectView = {
 	root: string;
 	rootFile: string | null;
 	config: { profiles: Profile[]; variables: Variable[] } | null;
-	state: { activeProfile: string | null; selection: string[]; variables: Record<string, string>; draftImages: boolean };
-	parts: { name: string }[];
+	state: { activeProfile: string | null; selection: string[]; variables: Record<string, string>; draftImages: boolean; currentPart?: string | null; idleMs: number; autoCompile: string };
+	parts: { name: string; file?: string | null }[];
 	lockedBy: number | null;
+	piezas: { clave: string; nombre: string; lugar?: string }[];
 };
+export type Finding = { id: string; nivel: 'ok' | 'info' | 'aviso' | 'error'; titulo: string; detalle: string; arreglo: string | null; archivo: string | null; linea: number | null };
+export type DoctorReport = { hallazgos: Finding[]; ms: number; distribucion: string | null };
 export type Problem = {
 	severity: 'error' | 'warning' | 'badbox';
 	kind: string;
@@ -30,7 +35,7 @@ export type Problem = {
 };
 export type Section = { level: number; title: string; file: string; line: number; label: string | null };
 export type Symbols = { sections: Section[] };
-type Rect = { page: number; x: number; y: number; w: number; h: number };
+export type Rect = { page: number; x: number; y: number; w: number; h: number };
 type SyncForward = { perfil: string; pdf: string; page: number; rects: Rect[]; line_used: number };
 type SyncInverse = { file: string | null; line: number; inside: boolean };
 export type Finished = { type: 'finished'; profile: string; ok: boolean; cancelled: boolean; pdf: string | null; updated: boolean };
@@ -73,10 +78,24 @@ class LvProject {
 	typical = $state<Record<string, Typical>>({});
 	/** bumped when a build ends: the project index may have moved */
 	revision = $state(0);
+	/** the doctor's last report: its tab counts the warnings before anyone opens it */
+	doctor = $state<DoctorReport | null>(null);
+	doctorWarnings = $derived((this.doctor?.hallazgos ?? []).filter((f) => f.nivel === 'aviso' || f.nivel === 'error').length);
+	/** the PDF follows the editor's cursor */
+	follow = $state(false);
 	/** settles once the current folder is known to be an engine project or not; Compile waits for it */
 	ready: Promise<void> = Promise.resolve();
 	onFinished: ((ev: Finished) => void) | null = null;
 	onError: ((message: string) => void) | null = null;
+	onCompile: (() => void) | null = null;
+	onShowDock: ((view: 'leftover' | 'figures') => void) | null = null;
+	/** opens a project-relative file at a line */
+	onOpenAt: ((file: string, line: number) => void) | null = null;
+	onFollow: (() => void) | null = null;
+	isBusy: () => boolean = () => false;
+	private pinnedPart = false;
+	private idleTimer: ReturnType<typeof setTimeout> | null = null;
+	private followTimer: ReturnType<typeof setTimeout> | null = null;
 	private listeners = new Set<(event: unknown) => void>();
 
 	/** every engine event, for panels; returns the unsubscribe */
@@ -88,6 +107,10 @@ class LvProject {
 	/** the engine holds this folder; true also while setting up a plain folder, when `view` is still null */
 	private sessionOpen = false;
 	private folder: { root: string | null; exists: (path: string) => Promise<boolean> } = { root: null, exists: async () => false };
+
+	get folderRoot(): string | null {
+		return this.folder.root;
+	}
 
 	get active(): boolean {
 		return this.view !== null;
@@ -117,6 +140,7 @@ class LvProject {
 		this.progress = null;
 		this.fileInfo = null;
 		this.typical = {};
+		this.doctor = null;
 		this.sessionOpen = false;
 		if (wasOpen) await this.request('close');
 		if (!root) return;
@@ -131,6 +155,11 @@ class LvProject {
 		await this.loadTypical();
 		this.sessionOpen = true;
 		void import('./lvPanels').then((p) => p.offerOrphans());
+		void this.runDoctor().catch(() => {});
+	}
+
+	async runDoctor() {
+		this.doctor = await this.request<DoctorReport>('doctor');
 	}
 
 	/**
@@ -176,8 +205,83 @@ class LvProject {
 	}
 
 	async compile() {
-		await this.noteActiveFile();
+		// a part compiled by name stays that part; otherwise the open file says which one
+		if (this.pinnedPart) this.pinnedPart = false;
+		else await this.noteActiveFile();
 		return this.request('compile');
+	}
+
+	private get activeProfile() {
+		return this.view?.config?.profiles.find((p) => p.id === this.view?.state.activeProfile) ?? null;
+	}
+
+	/**
+	 * One part, now: an accepted exception to compiling only through a profile. A profile of the current part builds it directly;
+	 * otherwise it takes a profile of chosen parts, as in the Tauri app.
+	 */
+	async compilePart(name: string | null) {
+		if (!name) return;
+		const active = this.activeProfile;
+		if (active?.parts === 'current') {
+			await this.setState({ currentPart: name });
+		} else {
+			const chosen = active?.parts === 'selection' ? active : this.view?.config?.profiles.find((p) => p.parts === 'selection' && !p.hidden);
+			if (!chosen) {
+				this.onError?.('No profile compiles chosen parts: add one in Project Configuration');
+				return;
+			}
+			await this.setState({ selection: [name], profile: chosen.id });
+		}
+		this.pinnedPart = true;
+		this.onCompile?.();
+	}
+
+	/** Ctrl+Alt+C */
+	async compileActivePart() {
+		await this.noteActiveFile();
+		if (!this.fileInfo?.part) {
+			this.onError?.(m.lv_part_none());
+			return;
+		}
+		await this.compilePart(this.fileInfo.part);
+	}
+
+	/** a build the profile asks for by itself: never over a running one, and only when the file is part of what it builds */
+	private async autoBuild() {
+		if (!this.view || this.view.state.autoCompile === 'manual' || this.isBusy()) return;
+		await this.noteActiveFile();
+		if (this.fileInfo?.profileAuto && !this.isBusy()) this.onCompile?.();
+	}
+
+	/** Ctrl+S: a profile that compiles on saving does, unless it waits for typing to stop */
+	noteSaved() {
+		if (this.view && this.activeProfile?.compileOn !== 'idle') void this.autoBuild();
+	}
+
+	/** a file reached the disk: autosave runs while typing, so only a profile that compiles on idle cares, once typing has stopped */
+	noteWritten() {
+		if (this.activeProfile?.compileOn !== 'idle') return;
+		if (this.idleTimer) clearTimeout(this.idleTimer);
+		this.idleTimer = setTimeout(() => {
+			this.idleTimer = null;
+			void this.autoBuild();
+		}, this.view?.state.idleMs ?? 1500);
+	}
+
+	/** the cursor moved; 200 ms after it rests, the PDF catches up */
+	caretMoved() {
+		if (!this.follow) return;
+		if (this.followTimer) clearTimeout(this.followTimer);
+		this.followTimer = setTimeout(() => {
+			this.followTimer = null;
+			if (this.follow) this.onFollow?.();
+		}, 200);
+	}
+
+	setFollow(on: boolean) {
+		this.follow = on;
+		if (on) this.onFollow?.();
+		else clearFollowMark();
 	}
 
 	async cancel(): Promise<boolean> {
@@ -204,7 +308,7 @@ class LvProject {
 	}
 
 	/** a source line to its place in the PDF, in the shape the viewer takes: h and v are the box's left and baseline */
-	async syncForward(path: string, line: number) {
+	async syncForward(path: string, line: number, follow = false) {
 		const v = this.view;
 		if (!v) return null;
 		const file = relativeTo(v.root, path).replace(/\\/g, '/');
@@ -215,8 +319,12 @@ class LvProject {
 		const pdf = joinPath(v.root, res.pdf);
 		const shown = pdfStore.current;
 		const target = fileUrl(pdf);
-		if (typeof shown !== 'string' || !shown.startsWith(target)) pdfStore.current = target + '&t=' + Date.now();
-		return { page: res.page, h: box.x, v: box.y + box.h, width: box.w, height: box.h };
+		if (typeof shown !== 'string' || !shown.startsWith(target)) {
+			// following never changes the PDF on its own: only a jump someone asked for does
+			if (follow) return null;
+			pdfStore.current = target + '&t=' + Date.now();
+		}
+		return { page: res.page, h: box.x, v: box.y + box.h, width: box.w, height: box.h, rects: res.rects };
 	}
 
 	/** a place in the shown PDF to its source line; null when it comes from outside the project */

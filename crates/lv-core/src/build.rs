@@ -103,7 +103,7 @@ const PROHIBIDOS_EN_LA_RAIZ: &str = "#%{}\\\"~^$";
 
 fn perfil_valido(p: &str) -> Result<()> {
     if p.is_empty() || !p.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-        return Err(Error::Other(format!("nombre de perfil inválido: {p:?} (ASCII, sin espacios)")));
+        return Err(Error::Other(format!("invalid profile name: {p:?} (ASCII, no spaces)")));
     }
     Ok(())
 }
@@ -188,10 +188,10 @@ fn render_figuras(f: &FigureInject) -> Result<Vec<String>> {
         && !f.dir.contains("..")
         && f.dir.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '/'));
     if !dir_ok {
-        return Err(Error::Other(format!("la carpeta del cache {:?} no se puede escribir en el driver (letras, números, - _ . /)", f.dir)));
+        return Err(Error::Other(format!("the cache folder {:?} cannot go in the driver (letters, digits, - _ . /)", f.dir)));
     }
     if f.sello.len() != 6 || !f.sello.chars().all(|c| c.is_ascii_digit() || ('A'..='F').contains(&c)) {
-        return Err(Error::Other(format!("el sello {:?} no son 6 dígitos hexadecimales en mayúsculas", f.sello)));
+        return Err(Error::Other(format!("the stamp {:?} is not 6 uppercase hexadecimal digits", f.sello)));
     }
     let modo = if f.lista { ",mode=list and make" } else { "" };
     let mut l: Vec<String> = vec![
@@ -230,7 +230,7 @@ fn render_figuras(f: &FigureInject) -> Result<Vec<String>> {
 /// llaves, barras o `%` rompería el driver de una forma difícil de ver.
 fn texto_seguro(t: &str, que: &str) -> Result<()> {
     if t.is_empty() || t.contains(|c: char| matches!(c, '\\' | '{' | '}' | '%' | '#' | '^' | '~' | '$' | '&' | '\n' | '\r')) {
-        return Err(Error::Other(format!("{que} {t:?} no se puede escribir en el driver (sin \\ {{ }} % # ^ ~ $ & ni saltos de línea)")));
+        return Err(Error::Other(format!("{que} {t:?} cannot go in the driver (no \\ {{ }} % # ^ ~ $ & or line breaks)")));
     }
     Ok(())
 }
@@ -242,7 +242,7 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
     let perfil = &s.perfil;
     perfil_valido(perfil)?;
     if let Some(c) = s.root_rel.chars().find(|c| PROHIBIDOS_EN_LA_RAIZ.contains(*c)) {
-        return Err(Error::InvalidPath(format!("{:?}: el carácter {c:?} rompe \\input", s.root_rel)));
+        return Err(Error::InvalidPath(format!("{:?}: the character {c:?} breaks \\input", s.root_rel)));
     }
     let mut l = vec![
         format!("% {} (generado por Latex Frog, no editar)", driver_rel(perfil)),
@@ -258,15 +258,15 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
     }
     for f in &s.flags {
         if !crate::config::macro_valida(f) {
-            return Err(Error::Other(format!("{f:?} no sirve como nombre de macro")));
+            return Err(Error::Other(format!("{f:?} cannot be a macro name")));
         }
         l.push(format!("\\def\\{f}{{}}"));
     }
     for (k, v) in &s.vars {
         if !crate::config::macro_valida(k) {
-            return Err(Error::Other(format!("{k:?} no sirve como nombre de variable")));
+            return Err(Error::Other(format!("{k:?} cannot be a variable name")));
         }
-        texto_seguro(v, &format!("el valor de {k}"))?;
+        texto_seguro(v, &format!("the value of {k}"))?;
         l.push(format!("\\def\\{k}{{{v}}}"));
     }
     if let Some(f) = &s.figuras {
@@ -281,7 +281,7 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
         l.push("\\makeatletter".into());
         for (o, c) in otras {
             if let Some(ch) = o.chars().chain(c.chars()).find(|ch| PROHIBIDOS_EN_LA_RAIZ.contains(*ch)) {
-                return Err(Error::InvalidPath(format!("{o:?}: el carácter {ch:?} no se puede sustituir")));
+                return Err(Error::InvalidPath(format!("{o:?}: the character {ch:?} cannot be substituted")));
             }
             l.push(format!("\\declare@file@substitution{{{o}}}{{{c}}}"));
         }
@@ -294,9 +294,9 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
     }
     if let Some(partes) = &s.includeonly {
         for p in partes {
-            texto_seguro(p, "la parte")?;
+            texto_seguro(p, "the part")?;
             if p.contains(',') {
-                return Err(Error::Other(format!("la parte {p:?} lleva una coma: no se puede nombrar en \\includeonly")));
+                return Err(Error::Other(format!("the part {p:?} has a comma: it cannot be named in \\includeonly")));
             }
         }
         // `\includeonly` sólo vale en el preámbulo. El hook corre al principio de `\begin{document}`, antes de que LaTeX
@@ -631,7 +631,7 @@ impl Builder {
     /// es donde se limpian y se siembran los auxiliares. Tiene que ir después de la comprobación de "ocupado", porque
     /// borrar los `.aux` de un perfil mientras otro build los está usando sería destructivo.
     pub fn start_with(&self, root: &Path, spec: &RunSpec, sink: Sink, antes: &dyn Fn() -> Result<()>) -> Result<u64> {
-        let mut guardia = self.estado.lock().map_err(|_| Error::Other("estado del build envenenado".into()))?;
+        let mut guardia = self.estado.lock().map_err(|_| Error::Other("build state poisoned".into()))?;
         if guardia.is_some() {
             return Err(Error::Busy);
         }
@@ -672,7 +672,7 @@ impl Builder {
         let inicio = Instant::now();
         let mut child = cmd.spawn().map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => {
-                Error::NoLatexmk(format!("{}: no está en el PATH (¿está instalado MiKTeX o TeX Live?)", self.programa.to_string_lossy()))
+                Error::NoLatexmk(format!("{}: not in the PATH (is MiKTeX or TeX Live installed?)", self.programa.to_string_lossy()))
             }
             _ => Error::NoLatexmk(e.to_string()),
         })?;

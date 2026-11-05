@@ -454,7 +454,7 @@ pub fn parse_biber_log(bytes: &[u8], root: &Path) -> Vec<Problem> {
 
 fn limpiar_temporal_de_biber(m: &str) -> String {
     static R: OnceLock<Regex> = OnceLock::new();
-    re(&R, r"[A-Za-z]:[^ ,]*biber_tmp_[^ ,]*\.utf8").replace_all(m, "la base de datos").into_owned()
+    re(&R, r"[A-Za-z]:[^ ,]*biber_tmp_[^ ,]*\.utf8").replace_all(m, "the database").into_owned()
 }
 
 /// `!! Input index error` y `## Warning` del `.ilg` de makeindex (el mensaje está en la línea que sigue).

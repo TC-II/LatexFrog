@@ -7,14 +7,48 @@ import { synctexForward, synctexInverse } from '$lib/workspace/synctex';
 import { collabGuest } from '$lib/collab/guestStore.svelte';
 import type { ControlPayload } from '$lib/collab/protocol';
 import { workspaceRoot, activeFilePath, activeFigure } from '$lib/workspace/workspaceStore';
-import { samePath, relativeTo, joinPath } from '$lib/workspace/fileSystem';
+import { samePath, relativeTo, joinPath, readTextFile } from '$lib/workspace/fileSystem';
 import { compileConfig } from './projectConfigSync.svelte';
 import { sourceCmView } from '$lib/stores/editorStore';
 import { toaster } from '$lib/modals/toaster-svelte';
 import { m } from '$lib/paraglide/messages';
-import { lvProject } from '$lib/lv/lvEngine.svelte';
+import { lvProject, type Rect } from '$lib/lv/lvEngine.svelte';
+import { clickedViewer, refineClick, refineNextJump, refineRange, refineWord, type SourceSpot, type WordSource } from '$lib/lv/lvSync';
 import { programNotFound } from './toolMissing';
 import { askForProgram } from '$lib/modals/window/missingProgram/missingProgram.svelte';
+
+/** a selection reaches this many source lines: a paragraph of the book is one line, so this is already ten paragraphs */
+const MAX_SELECTED_LINES = 10;
+
+/** the word under the cursor, or each selected line with its stretch; a line the cursor is not on keeps its boxes */
+async function refineAtCursor(viewer: WordSource, boxes: Rect[], line: number, path: string): Promise<Rect[]> {
+	const cm = sourceCmView.current;
+	if (!cm) return boxes;
+	const { from, to, empty, head } = cm.state.selection.main;
+	const doc = cm.state.doc;
+	const at = doc.lineAt(empty ? head : from);
+	if (at.number !== line) return boxes;
+	if (empty) return refineWord(viewer, boxes, at.text, head - at.from);
+	const rects: Rect[] = [];
+	const last = Math.min(doc.lineAt(to).number, line + MAX_SELECTED_LINES - 1);
+	for (let n = line; n <= last; n++) {
+		const l = doc.line(n);
+		const start = Math.max(from, l.from) - l.from;
+		const end = Math.min(to, l.to) - l.from;
+		if (end <= start && n !== line) continue;
+		// following: a line that lands in another PDF has nothing to show on this one
+		const own = n === line ? boxes : ((await lvProject.syncForward(path, n, true).catch(() => null))?.rects ?? null);
+		if (own) rects.push(...(await refineRange(viewer, own, l.text, start, Math.max(end, start + 1))));
+	}
+	return rects.length ? rects : boxes;
+}
+
+/** the buffer when the file is the one open, so a word typed since the last save is still there */
+async function sourceOf(file: string, loaded: string | null): Promise<string | null> {
+	const cm = sourceCmView.current;
+	if (cm?.dom.isConnected && loaded && samePath(file, loaded)) return cm.state.doc.toString();
+	return readTextFile(file).catch(() => null);
+}
 
 export type SyncTexDeps = {
 	isGuest(): boolean;
@@ -29,7 +63,7 @@ export type SyncTexDeps = {
 	scrollPdfTo(page: number, x: number, y: number, w: number, h: number): void;
 	/** draft mode highlights inside DraftView instead of the standalone pane */
 	syncDraftTo(page: number, x: number, y: number, w: number, h: number): void;
-	openFileAtLine(file: string, line: number, selectText?: string): void;
+	openFileAtLine(file: string, line: number, selectText?: string, column?: number, columnEnd?: number): void;
 };
 
 /** normalize a path out of synctex to the workspace separator so it matches the open file */
@@ -43,7 +77,7 @@ export class SyncTexNav {
 	constructor(private deps: SyncTexDeps) {}
 
 	/** forward: a source line -> the matching place in the PDF (scroll + flash a highlight) */
-	async forwardToLine(line: number): Promise<void> {
+	async forwardToLine(line: number, follow = false): Promise<void> {
 		const d = this.deps;
 		if (d.isGuest()) {
 			const path = d.getLoadedPath();
@@ -58,12 +92,16 @@ export class SyncTexNav {
 			const path = d.getLoadedPath();
 			if (!path || !d.isTex()) return;
 			try {
-				const res = await lvProject.syncForward(path, line);
-				if (!res) return void toaster.error({ title: 'SyncTeX', description: m.wsview_toast_synctex_no_match() });
-				d.setPdfPaneOpen(true);
+				const res = await lvProject.syncForward(path, line, follow);
+				if (!res) {
+					if (!follow) toaster.error({ title: 'SyncTeX', description: m.wsview_toast_synctex_no_match() });
+					return;
+				}
+				if (!follow) d.setPdfPaneOpen(true);
+				refineNextJump({ rects: (viewer) => refineAtCursor(viewer, res.rects, line, path), mark: follow, scroll: true });
 				d.scrollPdfTo(res.page, res.h, res.v, res.width, res.height);
 			} catch (e) {
-				toaster.error({ title: 'SyncTeX', description: e instanceof Error ? e.message : String(e) });
+				if (!follow) toaster.error({ title: 'SyncTeX', description: e instanceof Error ? e.message : String(e) });
 			}
 			return;
 		}
@@ -87,10 +125,11 @@ export class SyncTexNav {
 	}
 
 	/** forward from the current cursor (the header "Sync to PDF" button) */
-	async forwardFromCursor(): Promise<void> {
+	async forwardFromCursor(follow = false): Promise<void> {
 		const cm = sourceCmView.current;
 		if (!cm || !cm.dom.isConnected) return;
-		await this.forwardToLine(cm.state.doc.lineAt(cm.state.selection.main.head).number);
+		const { from, empty, head } = cm.state.selection.main;
+		await this.forwardToLine(cm.state.doc.lineAt(empty ? head : from).number, follow);
 	}
 
 	/** inverse: a double-click in the PDF opens the source at the matching line. selectText lets
@@ -104,7 +143,13 @@ export class SyncTexNav {
 		}
 		if (lvProject.active) {
 			const res = await lvProject.syncInverse(page, x, y).catch(() => null);
-			if (res) d.openFileAtLine(normSyncPath(res.file), res.line, selectText);
+			if (!res) return;
+			const file = normSyncPath(res.file);
+			const viewer = clickedViewer();
+			const source = viewer ? await sourceOf(file, d.getLoadedPath()) : null;
+			const spot: SourceSpot = viewer && source !== null ? await refineClick(viewer, { page, x, y }, res.line, source).catch(() => ({ line: res.line })) : { line: res.line };
+			if (spot.from !== undefined) d.openFileAtLine(file, spot.line, undefined, spot.from, spot.to);
+			else d.openFileAtLine(file, spot.line, selectText);
 			return;
 		}
 		const pdf = d.expectedPdfPath();

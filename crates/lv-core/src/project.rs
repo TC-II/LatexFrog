@@ -42,7 +42,7 @@ pub fn open_project(path: &Path) -> Result<Project> {
         return Err(Error::NotFound(path.display().to_string()));
     }
     if !path.is_dir() {
-        return Err(Error::InvalidPath(format!("{}: no es una carpeta", path.display())));
+        return Err(Error::InvalidPath(format!("{}: not a folder", path.display())));
     }
     let root = dunce::canonicalize(path).map_err(|e| Error::Io(format!("{}: {e}", path.display())))?;
     let name = root.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| root.display().to_string());

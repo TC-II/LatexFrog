@@ -66,7 +66,7 @@ fn el_doctor_contra_tex_de_verdad_no_da_errores_y_ve_el_path_de_latexmk() {
         assert!(i.hallazgos.iter().any(|h| h.id == id && h.nivel == Nivel::Ok), "{id}: {:#?}", i.hallazgos);
     }
     let p = i.hallazgos.iter().find(|h| h.id == "path-latexmk").unwrap_or_else(|| panic!("sin hallazgo del PATH: {:#?}", i.hallazgos));
-    assert!(!p.titulo.contains("No se pudo leer"), "{p:?}");
+    assert!(!p.titulo.contains("Could not read"), "{p:?}");
     assert!(i.distribucion.is_some());
     // El doctor no deja nada en el proyecto (ni el x.tex de la sonda, ni nada de latexmk).
     let mut nombres: Vec<String> = fs::read_dir(d.path()).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();

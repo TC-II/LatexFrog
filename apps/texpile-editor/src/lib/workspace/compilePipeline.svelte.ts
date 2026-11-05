@@ -31,6 +31,8 @@ import { reportMissingTool } from './toolMissing';
 import { m } from '$lib/paraglide/messages';
 import { lvProject, toLogState, type Finished } from '$lib/lv/lvEngine.svelte';
 
+const STOP_GRACE_MS = 1000;
+
 // what the Compile menu asked for besides a plain run: both are latexmk flags spliced into the same command
 type CompileMode = 'normal' | 'scratch' | 'clean';
 
@@ -58,12 +60,15 @@ export class CompilePipeline {
 	// bumped when a compile starts, ends, or the folder changes; pollers from a superseded run
 	// check it and stand down (their timeout may already be in flight when the timers are cleared)
 	private compileGen = 0;
+	private engineRunStarted = 0;
 	// dvipdfmx/xdvipdfmx write diagnostics to stdout, not the .log; captured per compile by the
 	// terminal's sentinel tracking and cleared at the start of each run
 	private compileStdout = '';
 
 	constructor(private deps: CompileDeps) {
 		lvProject.onFinished = (ev) => void this.finishEngineRun(ev);
+		lvProject.onCompile = () => this.runCompile();
+		lvProject.isBusy = () => this.busy;
 		lvProject.onError = (message) => {
 			this.endRun();
 			toaster.error({ title: m.terminal_error_failed_start(), description: message });
@@ -72,6 +77,7 @@ export class CompilePipeline {
 
 	// an engine project compiles through the sidecar; the guards below are about the shell command it never runs
 	private startEngineRun = async () => {
+		this.engineRunStarted = Date.now();
 		this.busy = true;
 		this.compiling = true;
 		this.deps.setPdfPaneOpen(true);
@@ -108,6 +114,9 @@ export class CompilePipeline {
 
 	stopCompile = () => {
 		if (lvProject.active) {
+			// Compile turns into Stop under the pointer: a second click cancelled the build it had just asked for, four in a row in
+			// the book's history. A fast build lasts about half a second, so a click this soon is a repeat and not a Stop.
+			if (Date.now() - this.engineRunStarted < STOP_GRACE_MS) return;
 			// the run ends at its `finished` event; with nothing running there is none to wait for
 			void lvProject.cancel().then((cancelled) => cancelled || this.endRun(), () => this.endRun());
 			return;

@@ -30,15 +30,15 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::InvalidPath(m) => write!(f, "ruta inválida: {m}"),
-            Error::NotFound(m) => write!(f, "no existe: {m}"),
-            Error::NotText(m) => write!(f, "no se puede abrir como texto: {m}"),
-            Error::InvalidText(m) => write!(f, "texto inválido: {m}"),
-            Error::Conflict { .. } => write!(f, "el archivo cambió en disco desde que se abrió"),
-            Error::Io(m) => write!(f, "error de disco: {m}"),
-            Error::Busy => write!(f, "ya hay una compilación en curso"),
-            Error::NoLatexmk(m) => write!(f, "no se pudo lanzar latexmk: {m}"),
-            Error::Locked(pid) => write!(f, "este proyecto está abierto en otra instancia de la aplicación (PID {pid}): acá no se compila ni se cocina, para que dos colas no se pisen el mismo .latexfrog y el mismo cache"),
+            Error::InvalidPath(m) => write!(f, "invalid path: {m}"),
+            Error::NotFound(m) => write!(f, "not found: {m}"),
+            Error::NotText(m) => write!(f, "cannot open as text: {m}"),
+            Error::InvalidText(m) => write!(f, "invalid text: {m}"),
+            Error::Conflict { .. } => write!(f, "the file changed on disk since it was opened"),
+            Error::Io(m) => write!(f, "disk error: {m}"),
+            Error::Busy => write!(f, "a compile is already running"),
+            Error::NoLatexmk(m) => write!(f, "could not start latexmk: {m}"),
+            Error::Locked(pid) => write!(f, "this project is open in another instance of the app (PID {pid}): nothing compiles or bakes here, so two queues do not step on the same .latexfrog and cache"),
             Error::Other(m) => write!(f, "{m}"),
         }
     }
