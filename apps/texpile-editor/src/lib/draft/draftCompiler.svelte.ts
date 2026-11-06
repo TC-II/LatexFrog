@@ -5,6 +5,7 @@ import { nativeBridge } from '$lib/workspace/fileSystem';
 import { updateEngineTruth } from './engineTruth';
 import { readBackExtensions } from '$lib/languages/latex/knowledge/registries/sidecarExtensions';
 import { m } from '$lib/paraglide/messages';
+import { livePass } from '$lib/lv/livePass.svelte';
 
 type CompilerHooks = {
 	root: () => string;
@@ -130,6 +131,8 @@ export class DraftCompiler {
 		const n = nativeBridge()!;
 		let landed = false;
 		const doc = this.hooks.root() + '|' + this.hooks.mainFile();
+		const startedAt = performance.now();
+		livePass.state = 'compiling';
 		this.lastReason = reason;
 		this.hooks.emit('compile-start', { reason });
 		this.compiling = true;
@@ -185,6 +188,8 @@ export class DraftCompiler {
 		if (myToken !== this.compileToken) return null;
 		this.compiling = false;
 		this.landedFor = doc;
+		livePass.state = landed ? 'done' : this.error || this.missingTool ? 'failed' : 'idle';
+		livePass.ms = landed ? performance.now() - startedAt : null;
 		// every pass parks a warm lualatex for the next one, and a paused preview stopped the engine on purpose
 		if (this.hooks.paused()) void n.draftStop?.();
 		this.hooks.afterCompile();

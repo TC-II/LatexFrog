@@ -15,6 +15,7 @@
 	import { AnchoredMenu } from '$lib/pdf-view/anchoredMenu.svelte';
 	import type { ComponentProps } from 'svelte';
 	import { m } from '$lib/paraglide/messages';
+	import { livePass } from '$lib/lv/livePass.svelte';
 	import { combo } from '$lib/chrome/shortcutText';
 	import type { FileKind } from '$lib/workspace/documentBuffer.svelte';
 	import EditModePicker from './EditModePicker.svelte';
@@ -170,11 +171,22 @@
 					title: m.wsview_engine_stopped_title(),
 					onclick: onResumeDraft
 				};
+			// LatexFrog: the dot says where the last pass stands, and the tooltip how long it took
+			const pass = livePass.state;
+			const passLine =
+				pass === 'compiling'
+					? m.draft_status_compiling()
+					: pass === 'failed'
+						? m.draft_preview_error_label()
+						: pass === 'done' && livePass.ms !== null
+							? m.draft_status_compiled({ secs: (livePass.ms / 1000).toFixed(1) })
+							: '';
 			return {
 				tone: 'success',
 				dot: true,
+				dotState: pass === 'compiling' || pass === 'failed' ? pass : null,
 				label: m.wsview_live_label(),
-				title: m.wsview_live_preview_running_title(),
+				title: passLine ? `${passLine} · ${m.wsview_live_preview_running_title()}` : m.wsview_live_preview_running_title(),
 				onclick: onPauseDraft
 			};
 		}

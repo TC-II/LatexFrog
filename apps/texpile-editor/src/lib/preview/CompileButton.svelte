@@ -41,12 +41,14 @@
 		icon?: Component | null;
 		/** the filled status dot the live/running states use in place of an icon */
 		dot?: boolean;
+		/** LatexFrog: the dot's state, Live's last pass: amber and pulsing while it compiles, red when it failed */
+		dotState?: 'compiling' | 'failed' | null;
 		/** greyed and inert; the title says why. Enforcement is in runCompile, not here. */
 		disabled?: boolean;
 		/** the title bar's: the icon alone, at the bar's height */
 		compact?: boolean;
 	};
-	let { tone, label, title, onclick, icon = null, dot = false, disabled = false, compact = false }: Props = $props();
+	let { tone, label, title, onclick, icon = null, dot = false, dotState = null, disabled = false, compact = false }: Props = $props();
 </script>
 
 <!-- one fixed width for every state: Compile, Preview, Live, Paused and Stop occupy the same
@@ -65,7 +67,15 @@
 		     is content-driven, and a bare 8px dot let the Live state come out ~3px shorter than the
 		     icon states - and ~1px shorter than its own chevron half, which pokes past the seam -->
 		<span class="flex size-4 items-center justify-center">
-			<span class="bg-success-500 size-2 rounded-full"></span>
+			<span
+				class="size-2 rounded-full {dotState === 'compiling'
+					? 'bg-warning-500 animate-pulse'
+					: dotState === 'failed'
+						? 'bg-error-500'
+						: 'bg-success-500'}"
+				data-testid="compile-dot"
+				data-state={dotState ?? 'ok'}
+			></span>
 		</span>
 	{:else if icon}
 		{@const Icon = icon}
