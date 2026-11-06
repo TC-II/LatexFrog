@@ -107,6 +107,8 @@ pub fn asegurar_con_nombre(root: &Path, dir: &str, pre: &str, driver: &str, huel
 pub struct Cuerpo {
     pub origen: String,
     pub texto: String,
+    /// The source file up to its `\begin{document}`, without it: Live loads it as the preamble.
+    pub antes: String,
 }
 
 /// `.latexfrog/build/<profile>/lv-<profile>-resto.tex` stands for a project file, with the same line numbers. The file it stands for
@@ -127,7 +129,7 @@ pub fn cuerpo_del_documento(root: &Path, archivos: &BTreeSet<String>, copia: imp
             if let Some(i) = sin_coment.find("\\begin{document}") {
                 let resto = &texto[pos + i + "\\begin{document}".len()..];
                 // Blank lines in front keep every line number equal to the source's: problems and SyncTeX point at real lines.
-                return resto.contains("\\end{document}").then(|| Cuerpo { origen: a.clone(), texto: "\n".repeat(n) + resto });
+                return resto.contains("\\end{document}").then(|| Cuerpo { origen: a.clone(), texto: "\n".repeat(n) + resto, antes: texto[..pos + i].to_string() });
             }
             pos += linea.len();
         }

@@ -31,6 +31,7 @@
 		const root = workspaceRoot.current;
 		if (when === 'live') {
 			projectConfigSync.setLiveMode(root, true);
+			void lvProject.prepareLive();
 			void lvProject.setCompileWhen('manual');
 			return;
 		}

@@ -687,3 +687,36 @@ fn la_carpeta_de_salida_es_absoluta_sin_prefijo_de_windows_y_se_crea_si_falta() 
     assert!(exportar.is_dir() && exportar.ends_with("export"));
     assert!(s.carpeta_de_salida("otra").is_err());
 }
+
+#[test]
+fn live_driver_opens_the_document_itself_with_the_profile_choices() {
+    let d = proyecto();
+    let (s, _r) = abrir(&d, OK);
+    s.set_state(StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
+    let rel = s.live_driver(Some("parcial")).unwrap();
+    assert_eq!(rel, ".latexfrog/drivers/lv-parcial-live.tex");
+    let t = fs::read_to_string(d.path().join(&rel)).unwrap();
+    assert!(t.contains("\\def\\CompilacionReducida{}") && t.contains("\\includeonly{Secciones/Dos}"), "{t}");
+    // Live runs without shell escape: no externalization
+    assert!(!t.contains("TikzExternalizar"), "{t}");
+    assert!(t.ends_with("\\input{.latexfrog/build/parcial/lv-parcial-live-pre}\n\\begin{document}\n\\input{.latexfrog/build/parcial/lv-parcial-live-resto}\n"), "{t}");
+    let b = d.path().join(".latexfrog/build/parcial");
+    assert_eq!(fs::read_to_string(b.join("lv-parcial-live-pre.tex")).unwrap(), "\\documentclass{book}\n");
+    let resto = fs::read_to_string(b.join("lv-parcial-live-resto.tex")).unwrap();
+    assert_eq!(resto.lines().nth(2), Some("\\include{Secciones/Uno}"), "same line numbers as main.tex: {resto:?}");
+    assert_eq!(fs::read_to_string(b.join("lv-parcial-live-resto.origen")).unwrap(), "main.tex");
+}
+
+#[test]
+fn live_driver_reads_a_body_file_from_its_copy_before_the_document() {
+    let d = proyecto();
+    fs::write(d.path().join("main.tex"), "\\documentclass{book}\n\\input{cuerpo}\n").unwrap();
+    fs::write(d.path().join("cuerpo.tex"), "\\usepackage{x}\n\\begin{document}\n\\include{Secciones/Uno}\n\\end{document}\n").unwrap();
+    let (s, _r) = abrir(&d, OK);
+    let t = fs::read_to_string(d.path().join(s.live_driver(Some("completo")).unwrap())).unwrap();
+    assert!(
+        t.ends_with("\\makeatletter\\declare@file@substitution{cuerpo.tex}{.latexfrog/build/completo/lv-completo-live-pre.tex}\\makeatother\n\\input{\"main\"}\n\\begin{document}\n\\input{.latexfrog/build/completo/lv-completo-live-resto}\n"),
+        "{t}"
+    );
+    assert_eq!(fs::read_to_string(d.path().join(".latexfrog/build/completo/lv-completo-live-pre.tex")).unwrap(), "\\usepackage{x}\n");
+}

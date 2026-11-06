@@ -8,6 +8,7 @@ import { latexLiveMode } from '$lib/workspace/projectConfigSync.svelte';
 import { compileBaseDir } from '$lib/workspace/compileCommand';
 import { relFromRoot } from '$lib/workspace/compilePipeline.svelte';
 import { nativeBridge } from '$lib/workspace/fileSystem';
+import { lvProject } from '$lib/lv/lvEngine.svelte';
 
 export type DraftControllerDeps = {
 	/** the resolved shell compile command; its `-cd` decides where the engine runs */
@@ -39,8 +40,10 @@ export class DraftController {
 	// folder, so the warm lualatex must resolve them from there too - and everything
 	// downstream (the _draft/ build dir, synctex paths, bib seeding, image resolution) keys
 	// off this same base. Without -cd this IS the workspace root, unchanged.
-	root = $derived(compileBaseDir(this.#deps.compileCommand(), workspaceRoot.current, mainFile.current) ?? '');
+	// LatexFrog: an engine project runs Live on its active profile's Live driver, from the project root
+	root = $derived(lvProject.active ? (lvProject.view?.root ?? '') : (compileBaseDir(this.#deps.compileCommand(), workspaceRoot.current, mainFile.current) ?? ''));
 	mainRel = $derived.by(() => {
+		if (lvProject.active) return lvProject.liveDriver ?? '';
 		if (!this.#deps.mainConfirmed()) return '';
 		// the MAIN file only - never the focused one: a mainless project shows the pane's
 		// pick-a-main message instead of re-targeting the warm engine at the focused file

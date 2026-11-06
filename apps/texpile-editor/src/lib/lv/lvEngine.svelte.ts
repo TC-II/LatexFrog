@@ -11,6 +11,7 @@ import { toaster } from '$lib/modals/toaster-svelte';
 import { fileService } from '$lib/files/service/fileService';
 import { fileMode } from '$lib/workspace/fileMode.svelte';
 import { collabGuest } from '$lib/collab/guestStore.svelte';
+import { latexLiveMode } from '$lib/workspace/projectConfigSync.svelte';
 
 export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; omit?: string[]; compileOn: string | null; output?: { dir: string; pattern: string; perPart?: boolean } | null };
 export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean };
@@ -103,6 +104,9 @@ class LvProject {
 	doctorWarnings = $derived((this.doctor?.hallazgos ?? []).filter((f) => f.nivel === 'aviso' || f.nivel === 'error').length);
 	/** the PDF follows the editor's cursor */
 	follow = $state(true);
+	/** what Live compiles: the active profile's Live driver, relative to the root (null until the engine wrote it) */
+	liveDriver = $state<string | null>(null);
+	private liveTimer: ReturnType<typeof setTimeout> | null = null;
 	/** settles once the current folder is known to be an engine project or not; Compile waits for it */
 	ready: Promise<void> = Promise.resolve();
 	onFinished: ((ev: Finished) => void) | null = null;
@@ -188,6 +192,7 @@ class LvProject {
 		if (lastPdf && !pdfStore.current && (await exists(lastPdf))) pdfStore.current = fileUrl(lastPdf) + '&t=' + Date.now();
 		await this.loadTypical();
 		this.sessionOpen = true;
+		if (latexLiveMode()) await this.prepareLive();
 		void import('./lvPanels').then((p) => p.offerOrphans());
 		void this.runDoctor().catch(() => {});
 		void this.landFirstTime(root);
@@ -246,6 +251,24 @@ class LvProject {
 
 	async refresh() {
 		this.view = await this.request<ProjectView>('view');
+		if (latexLiveMode()) await this.prepareLive();
+	}
+
+	/**
+	 * Live compiles the active profile: the engine writes a driver with the profile's flags, parts and pieces that opens the document
+	 * itself, so Live can keep the preamble warm. Written again when the profile, its parts or the files change.
+	 */
+	async prepareLive() {
+		if (!this.view) {
+			this.liveDriver = null;
+			return;
+		}
+		try {
+			this.liveDriver = await this.request<string>('driver-for-live');
+		} catch (e) {
+			this.liveDriver = null;
+			this.onError?.(e instanceof Error ? e.message : String(e));
+		}
 	}
 
 	async setState(fields: object) {
@@ -342,6 +365,14 @@ class LvProject {
 
 	/** a file reached the disk: autosave runs while typing, so only compiling on idle cares, once typing has stopped */
 	noteWritten() {
+		// Live reads the file that opens the document from a copy: a write may have changed it
+		if (latexLiveMode() && this.view) {
+			if (this.liveTimer) clearTimeout(this.liveTimer);
+			this.liveTimer = setTimeout(() => {
+				this.liveTimer = null;
+				void this.prepareLive();
+			}, 300);
+		}
 		if (this.compileWhen !== 'idle') return;
 		if (this.idleTimer) clearTimeout(this.idleTimer);
 		this.idleTimer = setTimeout(() => {
