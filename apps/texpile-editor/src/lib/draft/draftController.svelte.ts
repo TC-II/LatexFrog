@@ -55,6 +55,15 @@ export class DraftController {
 	readonly dispatcher: DraftDispatcher;
 
 	constructor(deps: DraftControllerDeps) {
+		// LatexFrog: a Live pass on a profile reads the copy of the body that a save rewrites; wait for it too
+		const flushSaves = deps.flushSaves;
+		deps = {
+			...deps,
+			flushSaves: async () => {
+				await flushSaves();
+				await lvProject.settleLive();
+			}
+		};
 		this.#deps = deps;
 		this.dispatcher = new DraftDispatcher({
 			getSource: () => deps.getSource(),

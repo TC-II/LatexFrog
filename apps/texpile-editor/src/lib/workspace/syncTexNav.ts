@@ -100,6 +100,8 @@ export class SyncTexNav {
 	/** forward: a source line -> the matching place in the PDF (scroll + flash a highlight) */
 	async forwardToLine(line: number, follow = false): Promise<void> {
 		const d = this.deps;
+		// LatexFrog: a jump someone asked for takes the PDF back from them
+		if (!follow) lvProject.takePdfBack();
 		if (d.isGuest()) {
 			const path = d.getLoadedPath();
 			if (!path) return;
@@ -145,6 +147,8 @@ export class SyncTexNav {
 		d.setPdfPaneOpen(true);
 		// highlight the enclosing box: origin (h, v) = line-start + baseline, size (W, H). NOT (x, y),
 		// the matched node's point: pairing that with W/H drew the box shifted and ~a line too low.
+		// LatexFrog: Follow's answer comes late; a PDF the user scrolled meanwhile stays where they put it
+		if (live && follow && lvProject.pdfHeld) return;
 		if (live) d.syncDraftTo(res.page, res.h, res.v, res.width, res.height);
 		else d.scrollPdfTo(res.page, res.h, res.v, res.width, res.height);
 	}

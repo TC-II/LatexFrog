@@ -368,6 +368,14 @@ class LvProject {
 		if (this.view && this.compileWhen === 'save') void this.autoBuild();
 	}
 
+	/** a Live pass reads the copy of the body: a save still waiting to rewrite it does so now, before the pass */
+	async settleLive() {
+		if (!this.liveTimer) return;
+		clearTimeout(this.liveTimer);
+		this.liveTimer = null;
+		await this.prepareLive();
+	}
+
 	/** a file reached the disk: autosave runs while typing, so only compiling on idle cares, once typing has stopped */
 	noteWritten() {
 		// Live reads the file that opens the document from a copy: a write may have changed it
@@ -386,8 +394,22 @@ class LvProject {
 		}, this.view?.state.idleMs ?? 1500);
 	}
 
+	// when the caret last moved and when the user last scrolled Live's PDF: a PDF scrolled since is the user's, and nothing automatic moves it
+	private caretAt = 0;
+	private pdfScrolledAt = 0;
+	get pdfHeld(): boolean {
+		return this.pdfScrolledAt > this.caretAt;
+	}
+	notePdfScrolled() {
+		this.pdfScrolledAt = performance.now();
+	}
+	takePdfBack() {
+		this.caretAt = performance.now();
+	}
+
 	/** the cursor moved; 200 ms after it rests, the PDF catches up */
 	caretMoved() {
+		this.caretAt = performance.now();
 		// Follow is the engine's: a folder that is not a project yet has no PDF of its own to follow
 		if (!this.follow || !this.active) return;
 		if (this.followTimer) clearTimeout(this.followTimer);
@@ -399,7 +421,10 @@ class LvProject {
 
 	setFollow(on: boolean) {
 		this.follow = on;
-		if (on) this.onFollow?.();
+		if (on) {
+			this.takePdfBack(); // turning it on asks for the cursor's place now
+			this.onFollow?.();
+		}
 		else clearFollowMark();
 	}
 

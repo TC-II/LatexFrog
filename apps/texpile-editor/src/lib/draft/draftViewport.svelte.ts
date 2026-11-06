@@ -4,6 +4,7 @@
 import { tick } from 'svelte';
 import type { PaperMetrics } from './locate/locate.types';
 import { keepPointUnder } from '$lib/preview/zoom/zoomAnchor';
+import { lvProject } from '$lib/lv/lvEngine.svelte';
 
 // 100% == actual physical size on a 96dpi display (matches the PDF viewer's zoom)
 export const PT2PX = 96 / 72.27;
@@ -235,7 +236,8 @@ export class DraftViewport {
 	// they're already zoomed past it, we just pan. Bounds are record-space: a point (x, y) draws
 	// at canvas (paper.mx + x, paper.my + y) * dispScale.
 	followEdit(pageNo: number, bandTop: number, bandBottom: number, colL?: number, colR?: number): void {
-		if (!this.followEdits || !this.scroller) return;
+		// LatexFrog: a PDF the user scrolled since the caret last moved stays where they put it
+		if (!this.followEdits || !this.scroller || lvProject.pdfHeld) return;
 		this.paintAround(pageNo);
 		const paper = this.hooks.paper();
 		let zoomed = false;

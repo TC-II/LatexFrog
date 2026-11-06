@@ -29,6 +29,8 @@ export class DraftCompiler {
 	// one live preview at a time: another window owns the warm engine (main's draftOwner);
 	// this preview is paused until the user explicitly takes the engine over
 	busyElsewhere = $state(false);
+	// LatexFrog: the document (root|main) of the last pass that settled; another one asked for means the pages on screen are stale
+	landedFor = $state('');
 
 	private warmed = false;
 	private compileToken = 0;
@@ -127,6 +129,7 @@ export class DraftCompiler {
 	private async runPass(reason: string, myToken: number): Promise<boolean | null> {
 		const n = nativeBridge()!;
 		let landed = false;
+		const doc = this.hooks.root() + '|' + this.hooks.mainFile();
 		this.lastReason = reason;
 		this.hooks.emit('compile-start', { reason });
 		this.compiling = true;
@@ -181,6 +184,7 @@ export class DraftCompiler {
 		// (compiling flag, queued patch) to it so we don't clear its in-flight status early
 		if (myToken !== this.compileToken) return null;
 		this.compiling = false;
+		this.landedFor = doc;
 		// every pass parks a warm lualatex for the next one, and a paused preview stopped the engine on purpose
 		if (this.hooks.paused()) void n.draftStop?.();
 		this.hooks.afterCompile();

@@ -24,6 +24,7 @@
 	import { openToolchainPrefs } from '$lib/stores/dialogStore';
 	import { askForProgram } from '$lib/modals/window/missingProgram/missingProgram.svelte';
 	import { m } from '$lib/paraglide/messages';
+	import { lvProject } from '$lib/lv/lvEngine.svelte';
 
 	type Props = {
 		root: string;
@@ -76,6 +77,8 @@
 	});
 	const vp = ctrl.vp;
 	const compiler = ctrl.compiler;
+	// LatexFrog: another document (a Live profile switch) keeps the old pages until its first pass settles; hide them meanwhile
+	const loadingOther = $derived(!!mainFile && !!compiler.landedFor && compiler.landedFor !== root + '|' + mainFile);
 
 	/** Instant path: re-typeset one edited paragraph on the warm daemon and splice it into its
 	 * page -- only when provably identical to a full recompile. Called on every edit burst. */
@@ -127,7 +130,13 @@
 			untrack(() => vp.zoomAt(vp.zoom * wheelZoomFactor(e), e.clientX, e.clientY));
 		}
 		el.addEventListener('wheel', onWheel, { passive: false });
-		return () => el.removeEventListener('wheel', onWheel);
+		// LatexFrog: the user moving the PDF (wheel, scrollbar, keys) keeps Follow from pulling it back while the caret rests
+		const held = () => lvProject.notePdfScrolled();
+		for (const ev of ['wheel', 'pointerdown', 'keydown'] as const) el.addEventListener(ev, held, { passive: true });
+		return () => {
+			el.removeEventListener('wheel', onWheel);
+			for (const ev of ['wheel', 'pointerdown', 'keydown'] as const) el.removeEventListener(ev, held);
+		};
 	});
 	// the losing side of a takeover pauses immediately rather than on the next keystroke
 	$effect(() => compiler.attachPreempt());
@@ -243,7 +252,10 @@
 			{ id: 'save', inMenu: true, render: save }
 		]}
 	/>
-	<ProgressLine active={ctrl.savingPdf && compiler.compiling} label={m.draft_status_compiling_export()} />
+	<ProgressLine
+		active={(ctrl.savingPdf && compiler.compiling) || loadingOther}
+		label={loadingOther ? m.draft_loading_other() : m.draft_status_compiling_export()}
+	/>
 	{#if compiler.busyElsewhere}
 		<div
 			class="border-surface-300-700 bg-surface-50-950 rounded-container m-3 flex shrink-0 items-center justify-between gap-3 border p-3 text-sm"
@@ -271,11 +283,15 @@
 		<pre
 			class="text-error-ink bg-surface-50-950 rounded-container m-3 max-h-40 shrink-0 [scrollbar-gutter:stable] overflow-auto p-3 text-xs whitespace-pre-wrap">{compiler.error}</pre>
 	{/if}
-	<ColorVisionFilter class="flex min-h-0 flex-1 flex-col">
+	<ColorVisionFilter class="relative flex min-h-0 flex-1 flex-col">
+		{#if loadingOther}
+			<div class="text-muted absolute inset-0 z-10 flex items-center justify-center text-sm" role="status">{m.draft_loading_other()}</div>
+		{/if}
 		<div
 			bind:this={vp.scroller}
 			bind:clientWidth={vp.containerW}
 			onscroll={() => vp.onScroll()}
+			class:invisible={loadingOther}
 			class="flex flex-1 [scrollbar-gutter:stable] flex-col items-center-safe gap-4 overflow-auto p-5"
 		>
 			{#each ctrl.pages as p (p.n)}
