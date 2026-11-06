@@ -708,12 +708,17 @@ fn live_driver_opens_the_document_itself_with_the_profile_choices() {
     assert!(!s.live_driver(Some("parcial")).unwrap().changed);
     assert!(fs::read_to_string(d.path().join(".latexfrog/build/parcial/lv-parcial-live-resto.tex")).unwrap().contains("more"));
     let t = fs::read_to_string(d.path().join(&rel)).unwrap();
-    assert!(t.contains("\\def\\CompilacionReducida{}") && t.contains("\\includeonly{Secciones/Dos}"), "{t}");
+    let (pre, body) = t.split_once("\\begin{document}\n").unwrap();
+    assert!(pre.contains("\\def\\CompilacionReducida{}") && pre.contains("\\let\\lvIncludeonly\\includeonly"), "{t}");
     // Live runs without shell escape: no externalization
     assert!(!t.contains("TikzExternalizar"), "{t}");
-    assert!(t.ends_with("\\input{.latexfrog/build/parcial/lv-parcial-live-pre}\n\\begin{document}\n\\input{.latexfrog/build/parcial/lv-parcial-live-resto}\n"), "{t}");
+    // what names the profile or its parts is in the body, outside the preamble Live keeps warm
+    assert!(!pre.contains("parcial") && !pre.contains("Secciones"), "{pre}");
+    assert_eq!(body, "\\def\\lvPerfil{parcial}\n\\lvIncludeonly{Secciones/Dos}\n\\input{.latexfrog/build/parcial/lv-parcial-live-resto}\n");
+    let copia = pre.lines().last().unwrap().strip_prefix("\\input{").unwrap().trim_end_matches('}');
+    assert!(copia.starts_with(".latexfrog/build/live/lv-live-pre-"), "{pre}");
+    assert_eq!(fs::read_to_string(d.path().join(format!("{copia}.tex"))).unwrap(), "\\documentclass{book}\n");
     let b = d.path().join(".latexfrog/build/parcial");
-    assert_eq!(fs::read_to_string(b.join("lv-parcial-live-pre.tex")).unwrap(), "\\documentclass{book}\n");
     let resto = fs::read_to_string(b.join("lv-parcial-live-resto.tex")).unwrap();
     assert_eq!(resto.lines().nth(2), Some("\\include{Secciones/Uno}"), "same line numbers as main.tex: {resto:?}");
     assert_eq!(fs::read_to_string(b.join("lv-parcial-live-resto.origen")).unwrap(), "main.tex");
@@ -726,9 +731,26 @@ fn live_driver_reads_a_body_file_from_its_copy_before_the_document() {
     fs::write(d.path().join("cuerpo.tex"), "\\usepackage{x}\n\\begin{document}\n\\include{Secciones/Uno}\n\\end{document}\n").unwrap();
     let (s, _r) = abrir(&d, OK);
     let t = fs::read_to_string(d.path().join(s.live_driver(Some("completo")).unwrap().path)).unwrap();
-    assert!(
-        t.ends_with("\\makeatletter\\declare@file@substitution{cuerpo.tex}{.latexfrog/build/completo/lv-completo-live-pre.tex}\\makeatother\n\\input{\"main\"}\n\\begin{document}\n\\input{.latexfrog/build/completo/lv-completo-live-resto}\n"),
-        "{t}"
-    );
-    assert_eq!(fs::read_to_string(d.path().join(".latexfrog/build/completo/lv-completo-live-pre.tex")).unwrap(), "\\usepackage{x}\n");
+    let (pre, body) = t.split_once("\\begin{document}\n").unwrap();
+    assert!(pre.ends_with("\\input{\"main\"}\n"), "{t}");
+    let sust = pre.lines().find(|l| l.contains("\\declare@file@substitution{cuerpo.tex}{")).unwrap();
+    let copia = sust.split("}{").nth(1).unwrap().split('}').next().unwrap();
+    assert!(copia.starts_with(".latexfrog/build/live/lv-live-pre-") && copia.ends_with(".tex"), "{sust}");
+    assert_eq!(fs::read_to_string(d.path().join(copia)).unwrap(), "\\usepackage{x}\n");
+    assert!(body.ends_with("\\input{.latexfrog/build/completo/lv-completo-live-resto}\n"), "{body}");
+}
+
+#[test]
+fn live_profiles_that_differ_only_in_parts_share_the_preamble() {
+    let d = proyecto();
+    let (s, _r) = abrir(&d, OK);
+    s.set_state(StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
+    let pre = |perfil: &str| {
+        let t = fs::read_to_string(d.path().join(s.live_driver(Some(perfil)).unwrap().path)).unwrap();
+        t.split_once("\\begin{document}\n").unwrap().0.to_string()
+    };
+    // `parcial` takes the selection, `rapido` every part: same flags, so Live keeps one warm lualatex for both
+    assert_eq!(pre("parcial"), pre("rapido"));
+    // `completo` is not partial: its flags differ, and so does its preamble
+    assert_ne!(pre("parcial"), pre("completo"));
 }
