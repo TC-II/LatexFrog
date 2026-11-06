@@ -25,6 +25,7 @@
 	import { askForProgram } from '$lib/modals/window/missingProgram/missingProgram.svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { lvProject } from '$lib/lv/lvEngine.svelte';
+	import type { LiveWordSync } from '$lib/lv/liveWords';
 
 	type Props = {
 		root: string;
@@ -90,8 +91,8 @@
 		ctrl.patcher.setFocus(req);
 	}
 	/** forward sync: scroll + flash the box synctex reported for a source line. */
-	export function syncTo(pageNo: number, hBp: number, vBp: number, wBp: number, hgtBp: number) {
-		ctrl.syncTo(pageNo, hBp, vBp, wBp, hgtBp);
+	export function syncTo(pageNo: number, hBp: number, vBp: number, wBp: number, hgtBp: number, word?: LiveWordSync) {
+		ctrl.syncTo(pageNo, hBp, vBp, wBp, hgtBp, word);
 	}
 
 	// recompile whenever `trigger` changes (and once on mount). untrack the compile call:
@@ -131,7 +132,11 @@
 		}
 		el.addEventListener('wheel', onWheel, { passive: false });
 		// LatexFrog: the user moving the PDF (wheel, scrollbar, keys) keeps Follow from pulling it back while the caret rests
-		const held = () => lvProject.notePdfScrolled();
+		const held = (e: Event) => {
+			lvProject.notePdfScrolled();
+			// a single click lets go of a double-clicked word; the double-click's own first click comes before it is selected
+			if (e.type === 'pointerdown' && (e as PointerEvent).detail < 2) ctrl.dropSelection();
+		};
 		for (const ev of ['wheel', 'pointerdown', 'keydown'] as const) el.addEventListener(ev, held, { passive: true });
 		return () => {
 			el.removeEventListener('wheel', onWheel);
@@ -298,6 +303,7 @@
 				<div class="relative rounded-[2px] shadow-(--page-shadow)">
 					<canvas
 						bind:this={ctrl.canvasEls[p.n - 1]}
+						class="cursor-text"
 						class:invert-94={pagesInverted()}
 						class:hue-rotate-180={pagesInverted()}
 						ondblclick={(e) => ctrl.onCanvasDblClick(p.n, e)}
@@ -313,6 +319,16 @@
 								4) *
 								vp.dispScale}px"
 						></div>
+					{/if}
+					{#if ctrl.wordMarks}
+						<!-- LatexFrog: SyncTeX's word, drawn as on a profile's PDF: Follow's mark stays, a jump's flash fades -->
+						{#each ctrl.wordMarks.rects.filter((r) => r.page === p.n) as r, i (ctrl.wordMarks.id + ':' + i)}
+							<div
+								class="pointer-events-none absolute z-[6] lv-word-{ctrl.wordMarks.kind}"
+								data-testid="lv-word-{ctrl.wordMarks.kind}"
+								style="left:{(ctrl.paper.mx + r.x) * vp.dispScale}px; top:{(ctrl.paper.my + r.y) * vp.dispScale}px; width:{Math.max(3, r.w * vp.dispScale)}px; height:{r.h * vp.dispScale}px"
+							></div>
+						{/each}
 					{/if}
 					{#if vp.clickMark && vp.clickMark.page === p.n}
 						<!-- where the sync double-click landed -->
@@ -330,3 +346,33 @@
 		</div>
 	</ColorVisionFilter>
 </div>
+
+<style>
+	/* LatexFrog: the PDF viewer's SyncTeX marks (PDFPageView mark and highlight) */
+	.lv-word-follow {
+		background: rgba(55, 138, 221, 0.25);
+		border-bottom: 2px solid rgba(55, 138, 221, 0.9);
+	}
+	/* a double-clicked word, in the selection's color */
+	.lv-word-select {
+		background: Highlight;
+		mix-blend-mode: multiply;
+		opacity: 0.55;
+	}
+	.lv-word-flash {
+		min-width: 8px;
+		background: rgba(255, 196, 0, 0.45);
+		outline: 1px solid rgba(220, 150, 0, 0.7);
+		border-radius: 2px;
+		animation: lv-word-fade 1.8s ease forwards;
+	}
+	@keyframes lv-word-fade {
+		0%,
+		55% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 0;
+		}
+	}
+</style>

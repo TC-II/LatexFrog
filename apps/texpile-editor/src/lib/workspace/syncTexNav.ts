@@ -15,6 +15,7 @@ import { m } from '$lib/paraglide/messages';
 import { lvProject, type Rect } from '$lib/lv/lvEngine.svelte';
 import { clickedViewer, refineClick, refineNextJump, refineRange, refineWord, type SourceSpot, type WordSource } from '$lib/lv/lvSync';
 import { programNotFound } from './toolMissing';
+import type { LiveWordSync } from '$lib/lv/liveWords';
 import { askForProgram } from '$lib/modals/window/missingProgram/missingProgram.svelte';
 
 /** a selection reaches this many source lines: a paragraph of the book is one line, so this is already ten paragraphs */
@@ -79,7 +80,7 @@ export type SyncTexDeps = {
 	/** scroll the mounted PDF pane, retrying while it is still mounting */
 	scrollPdfTo(page: number, x: number, y: number, w: number, h: number): void;
 	/** draft mode highlights inside DraftView instead of the standalone pane */
-	syncDraftTo(page: number, x: number, y: number, w: number, h: number): void;
+	syncDraftTo(page: number, x: number, y: number, w: number, h: number, word?: LiveWordSync): void;
 	openFileAtLine(file: string, line: number, selectText?: string, column?: number, columnEnd?: number): void;
 	/** LatexFrog: the caret in whichever editor is on screen, for SyncTeX to the word */
 	caret?(): CaretSpot | null;
@@ -149,8 +150,24 @@ export class SyncTexNav {
 		// the matched node's point: pairing that with W/H drew the box shifted and ~a line too low.
 		// LatexFrog: Follow's answer comes late; a PDF the user scrolled meanwhile stays where they put it
 		if (live && follow && lvProject.pdfHeld) return;
-		if (live) d.syncDraftTo(res.page, res.h, res.v, res.width, res.height);
-		else d.scrollPdfTo(res.page, res.h, res.v, res.width, res.height);
+		if (live) {
+			// LatexFrog: to the word under the cursor, marked as on a profile's PDF
+			const boxes = (res as { boxes?: LiveWordSync['boxes'] }).boxes;
+			const caret = d.caret ? d.caret() : sourceCaret();
+			const word: LiveWordSync | undefined = boxes?.length
+				? {
+						boxes,
+						follow,
+						refine: (viewer, rects) =>
+							!caret || caret.line !== line
+								? Promise.resolve(rects)
+								: caret.from === caret.to
+									? refineWord(viewer, rects, caret.text, caret.from)
+									: refineRange(viewer, rects, caret.text, caret.from, caret.to)
+					}
+				: undefined;
+			d.syncDraftTo(res.page, res.h, res.v, res.width, res.height, word);
+		} else d.scrollPdfTo(res.page, res.h, res.v, res.width, res.height);
 	}
 
 	/** forward from the current cursor (the header "Sync to PDF" button) */

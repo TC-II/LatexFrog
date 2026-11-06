@@ -126,7 +126,7 @@ export function createWorkspacePipelines(d: PipelineDeps) {
 		guest: d.guest,
 		setPdfPaneOpen: (open) => d.layout().setPdfPaneOpen(open),
 		getDraftRoot: () => draftCtl.root,
-		syncDraftTo: (page, x, y, w, h) => draftCtl.view?.syncTo(page, x, y, w, h),
+		syncDraftTo: (page, x, y, w, h, word) => draftCtl.view?.syncTo(page, x, y, w, h, word),
 		expectedPdfPath: () => compiler.expectedPdfPath(),
 		typstSyncForward: () => typstPreview.syncForward(),
 		typstSyncToLine: (line) => typstPreview.syncToLine(line),

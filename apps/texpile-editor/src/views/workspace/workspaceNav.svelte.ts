@@ -1,6 +1,7 @@
 // Every "jump somewhere" route in the workspace: SyncTeX forward/inverse, the visual-caret
 // source position, include targets, and the PDF pane scroll plumbing.
 import { lvProject } from '$lib/lv/lvEngine.svelte';
+import type { LiveWordSync } from '$lib/lv/liveWords';
 import { joinPath } from '$lib/workspace/fileSystem';
 import { editorGroups } from '$lib/workspace/groups/editorGroups.svelte';
 import { previewViewOf } from '$lib/workspace/groups/layouts';
@@ -31,7 +32,7 @@ type NavDeps = {
 	guest: () => boolean;
 	setPdfPaneOpen: (open: boolean) => void;
 	getDraftRoot: () => string;
-	syncDraftTo: (page: number, x: number, y: number, w: number, h: number) => void;
+	syncDraftTo: (page: number, x: number, y: number, w: number, h: number, word?: LiveWordSync) => void;
 	expectedPdfPath: () => string | null;
 	typstSyncForward: () => Promise<void> | void;
 	typstSyncToLine: (line: number) => void;
@@ -117,16 +118,16 @@ export class WorkspaceNav {
 			const here = doc.path && samePath(target, doc.path) ? doc.path : null;
 			// the clicked word, as the source editor does: SyncTeX's line is off wherever the text moved since
 			// the compile, and at some places (a paragraph's indent) the engine names another line entirely
-			const at =
-				column !== undefined
-					? { row: line - 1, column }
-					: here && selectText
-						? offsetToRowCol(doc.texSource, resolveGotoTarget(Text.of(doc.texSource.split('\n')), { line, selectText }).from)
-						: { row: line - 1, column: 0 };
+			const named = column === undefined && here && selectText ? resolveGotoTarget(Text.of(doc.texSource.split('\n')), { line, selectText }) : null;
+			const at = column !== undefined ? { row: line - 1, column } : named ? offsetToRowCol(doc.texSource, named.from) : { row: line - 1, column: 0 };
 			const v = editorViewStore.current;
 			markLanding();
-			// LatexFrog: the clicked word itself, selected and centred
-			if (here && v && column !== undefined && lvProject.active && selectInVisual(v, doc.texSource, doc.sourceMap, line - 1, column, columnEnd ?? column)) return;
+			// LatexFrog: the clicked word itself, selected and centred. Live's page names the word by its text, a profile's PDF by its columns
+			if (here && v && lvProject.active) {
+				const end = named ? offsetToRowCol(doc.texSource, named.to) : null;
+				const span = column !== undefined ? { row: line - 1, from: column, to: columnEnd ?? column } : end && end.row === at.row ? { row: at.row, from: at.column, to: end.column } : null;
+				if (span && selectInVisual(v, doc.texSource, doc.sourceMap, span.row, span.from, span.to)) return;
+			}
 			docPositions.set(target, { ...at, firstVisibleLine: at.row + 1 }, { jump: true });
 			if (here) {
 				if (v) restoreVisualPosition(v, here, doc.texSource, doc.sourceMap);

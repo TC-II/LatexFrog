@@ -28,6 +28,10 @@ import { basename, nativeBridge, revealItem } from '$lib/workspace/fileSystem';
 import { toaster } from '$lib/modals/toaster-svelte';
 import type { DraftPage } from '$lib/workspace/fileSystem';
 import { m } from '$lib/paraglide/messages';
+import { boxesToRecords, wordsFromRecords, type LiveWordSync } from '$lib/lv/liveWords';
+import { ownFollowMark } from '$lib/lv/lvSync';
+import { palabraEnPunto } from '$lib/lv/sync/buscar';
+import type { Rect } from '$lib/lv/sync/buscar';
 
 type SessionOpts = {
 	root: () => string;
@@ -328,6 +332,7 @@ export class DraftSession {
 		verifyPatches({ pageRecords: (n) => this.pageRecords(n), emit: (k, d) => this.ev(k, d) }, this.activePatch);
 		this.activePatch.clear(); // fresh records already carry the edits
 		this.vp.clearEditBand(); // fresh layout may have shifted the band; don't highlight a stale spot
+		this.wordMarks = null; // LatexFrog: and the SyncTeX word marks with it
 		await tick(); // let the {#each} create/resize canvases
 		this.vp.applyCssSizes(); // every page needs its CSS box (scroll geometry), painted or not
 		let changed = 0;
@@ -391,7 +396,8 @@ export class DraftSession {
 		if (!nat || !inverse) return;
 		const xPt = e.offsetX / this.vp.dispScale;
 		const yPt = e.offsetY / this.vp.dispScale;
-		this.vp.showClickMark(n, xPt, yPt);
+		// LatexFrog: the clicked word selected, as a double-click selects it on a profile's PDF; the ring where no word is
+		if (!this.selectWordAt(n, xPt - this.paper.mx, yPt - this.paper.my)) this.vp.showClickMark(n, xPt, yPt);
 		try {
 			const res: any = await nat.synctex({
 				action: 'edit',
@@ -450,8 +456,15 @@ export class DraftSession {
 	}
 
 	// forward: scroll + flash the box synctex reported for a source line (all args bp, v = baseline)
-	syncTo(pageNo: number, hBp: number, vBp: number, wBp: number, hgtBp: number): void {
+	syncTo(pageNo: number, hBp: number, vBp: number, wBp: number, hgtBp: number, word?: LiveWordSync): void {
 		if (pageNo < 1 || pageNo > this.pages.length) return;
+		// LatexFrog: the word under the cursor, marked as on a profile's PDF; the line's box when it is not found
+		if (word) {
+			void this.syncToWord(word).then((done) => {
+				if (!done) this.syncTo(pageNo, hBp, vBp, wBp, hgtBp);
+			});
+			return;
+		}
 		const colL = hBp * BP2PT - this.paper.mx;
 		const bottom = vBp * BP2PT - this.paper.my;
 		const top = bottom - Math.max(6, hgtBp * BP2PT);
@@ -462,5 +475,62 @@ export class DraftSession {
 		this.vp.followEdits = true; // an explicit sync always navigates, even with follow-edits off
 		this.vp.followEdit(pageNo, top, bottom, colL, colR);
 		this.vp.followEdits = keep;
+	}
+
+	// LatexFrog: SyncTeX to the word, as on a profile's PDF. Follow keeps its mark (blue, underlined) and leaves the page still while the
+	// word is on screen; a jump someone asked for flashes it (amber) and always brings it into view. Record space, as the edit band
+	wordMarks = $state<{ rects: Rect[]; kind: 'follow' | 'flash' | 'select'; id: number } | null>(null);
+	private markId = 0;
+
+	/** the word under a double-click (record space), selected as the PDF viewer's text layer selects it; false when no word is there */
+	private selectWordAt(page: number, x: number, y: number): boolean {
+		const words = wordsFromRecords(this.pageRecords(page), (r) => this.fonts.textMapOf(r), page);
+		const k = palabraEnPunto(words, page, x, y);
+		const w = words[k];
+		if (!w || x < w.x - 2 || x > w.x + w.w + 2 || y < w.y - 3 || y > w.y + w.h + 3) return false;
+		this.wordMarks = { rects: [{ page, x: w.x, y: w.y, w: w.w, h: w.h }], kind: 'select', id: ++this.markId };
+		return true;
+	}
+
+	/** a click on the pages lets go of a selected word, as on a PDF */
+	dropSelection(): void {
+		if (this.wordMarks?.kind === 'select') this.wordMarks = null;
+	}
+
+	private async syncToWord(word: LiveWordSync): Promise<boolean> {
+		const rects = boxesToRecords(word.boxes, this.paper);
+		if (!rects.length) return false;
+		const viewer = { pageWords: async (p: number) => wordsFromRecords(this.pageRecords(p), (r) => this.fonts.textMapOf(r), p) };
+		const found = (await word.refine(viewer, rects).catch(() => rects)).filter((r) => r.page >= 1 && r.page <= this.pages.length);
+		if (!found.length) return false;
+		const page = found.reduce((a, b) => (b.page < a.page || (b.page === a.page && b.y < a.y) ? b : a)).page;
+		const mine = found.filter((r) => r.page === page);
+		const top = Math.min(...mine.map((r) => r.y));
+		const bottom = Math.max(...mine.map((r) => r.y + r.h));
+		const id = ++this.markId;
+		this.wordMarks = { rects: mine, kind: word.follow ? 'follow' : 'flash', id };
+		if (word.follow) ownFollowMark(() => this.wordMarks?.id === id && (this.wordMarks = null));
+		else
+			setTimeout(() => {
+				if (this.wordMarks?.id === id) this.wordMarks = null;
+			}, 1800);
+		if (!word.follow || !this.onScreen(page, top, bottom)) {
+			const keep = this.vp.followEdits;
+			this.vp.followEdits = true;
+			this.vp.followEdit(page, top, bottom);
+			this.vp.followEdits = keep;
+		}
+		return true;
+	}
+
+	/** whether a stretch of a page (record space) is inside the pane */
+	private onScreen(page: number, top: number, bottom: number): boolean {
+		const cv = this.canvasEls[page - 1];
+		const s = this.vp.scroller;
+		if (!cv || !s) return false;
+		const c = cv.getBoundingClientRect();
+		const v = s.getBoundingClientRect();
+		const S = this.vp.dispScale;
+		return c.top + (this.paper.my + top) * S >= v.top && c.top + (this.paper.my + bottom) * S <= v.bottom - 20;
 	}
 }

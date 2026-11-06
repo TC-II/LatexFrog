@@ -39,8 +39,10 @@ function scroller(el: HTMLElement): HTMLElement | null {
 	return null;
 }
 
-/** scrolls so that a document position sits near the middle of the editor; the start and the end of the document stay in reach */
-export function centerVisual(v: EditorView, pos: number) {
+/** scrolls so that a document position sits near the middle of the editor; the start and the end of the document stay in reach.
+ * A large document's off-screen blocks are 60 px stand-ins until drawn (content-visibility), so one measure misses by the
+ * difference of every block the scroll draws: it measures again after each scroll, for a few frames, until the spot holds */
+export function centerVisual(v: EditorView, pos: number, tries = 8) {
 	const box = scroller(v.dom);
 	if (!box) return;
 	let coords: { top: number; bottom: number };
@@ -51,7 +53,9 @@ export function centerVisual(v: EditorView, pos: number) {
 	}
 	const frame = box.getBoundingClientRect();
 	const middle = frame.top + frame.height / 2;
+	const before = box.scrollTop;
 	box.scrollTop += (coords.top + coords.bottom) / 2 - middle;
+	if (Math.abs(box.scrollTop - before) > 4 && tries > 1) requestAnimationFrame(() => centerVisual(v, pos, tries - 1));
 }
 
 /** PDF to visual editor: selects the clicked word (row from 0, columns of that row) and centres it. False when it cannot be placed */
