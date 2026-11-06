@@ -355,7 +355,8 @@ class LvProject {
 
 	/** a build the project asks for by itself, with the chosen profile: never over a running one */
 	private async autoBuild() {
-		if (!this.view || this.compileWhen === 'manual' || this.isBusy()) return;
+		// Live compiles by itself; a profile build on each save would run beside it
+		if (!this.view || this.compileWhen === 'manual' || latexLiveMode() || this.isBusy()) return;
 		// one PDF per part compiles every part: too much to run on each save
 		if (this.activeProfile?.output?.perPart) return;
 		await this.noteActiveFile();

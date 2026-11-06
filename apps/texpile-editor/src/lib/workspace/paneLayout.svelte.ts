@@ -26,7 +26,7 @@ export class PaneLayout {
 	sidebarWidth = $state(256);
 	sidebarOpen = $state(true);
 	/** one sidebar view at a time (VS Code activity-bar style) */
-	sidebarView = $state<'explorer' | 'search' | 'scm'>('explorer');
+	sidebarView = $state<'explorer' | 'search' | 'scm' | 'outline'>('explorer');
 	/** TOC share of the sidebar's lower region (0..1) */
 	tocFraction = $state(0.5);
 	splitEl = $state<HTMLDivElement>();

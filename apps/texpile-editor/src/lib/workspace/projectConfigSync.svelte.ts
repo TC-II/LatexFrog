@@ -46,7 +46,8 @@ export type CompileConfigState = {
 
 function defaults(): CompileConfigState {
 	return {
-		latex: { command: null, outputs: {}, liveMode: false },
+		// LatexFrog: Live is the default way to compile; a project turns it off in its config
+		latex: { command: null, outputs: {}, liveMode: true },
 		typst: { command: null, outputs: {}, preview: true },
 		completionMarker: true
 	};
@@ -259,7 +260,8 @@ export class ProjectConfigSync {
 			const command = local || (kept && !isCommandTrusted(root, lane, kept) ? kept : undefined);
 			const outputs = state[lane].outputs;
 			const hasOutputs = !!(outputs.pdf || outputs.log);
-			const liveMode = lane === 'latex' && state.latex.liveMode ? { liveMode: true } : {};
+			// LatexFrog: Live is on by default, so it is the off state that the file records
+			const liveMode = lane === 'latex' && !state.latex.liveMode ? { liveMode: false } : {};
 			const preview = lane === 'typst' && !state.typst.preview ? { preview: false } : {};
 			const section = { ...(command ? { command } : {}), ...(hasOutputs ? { outputs } : {}), ...liveMode, ...preview };
 			if (Object.keys(section).length) cfg[lane] = section;

@@ -1,6 +1,9 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"lv_outline_title": "Project outline",
+	"lv_tab_files": "Files",
+	"lv_tab_project": "Project",
+	"lv_tabs_aria": "Sidebar view",
 	"lv_diag_check_again": "Check Again",
 	"lv_target_all": "All parts",
 	"lv_target_none": "No part yet: open a chapter",

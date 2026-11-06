@@ -43,7 +43,7 @@
 	import { combo } from '$lib/chrome/shortcutText';
 	import { canKeepLocalHistory } from '$lib/workspace/localHistory/localHistory.svelte';
 	import { Popover, Portal } from '@skeletonlabs/skeleton-svelte';
-	import { FilePlus, FolderPlus, RefreshCw, GitBranch, Search, MoreHorizontal, ListTree } from '@lucide/svelte';
+	import { FilePlus, FolderPlus, RefreshCw, GitBranch, Search, MoreHorizontal } from '@lucide/svelte';
 
 	type Props = {
 		width: number;
@@ -165,6 +165,27 @@
 		if (root) void refreshGitStatus(root);
 	});
 
+	// LatexFrog: a project opens on its Project outline, once per folder; the file tree is a click away
+	let outlineFor: string | null = null;
+	$effect(() => {
+		const root = lvProject.active ? (lvProject.view?.root ?? null) : null;
+		if (!root || root === outlineFor) return;
+		outlineFor = root;
+		if (untrack(() => view) === 'explorer') view = 'outline';
+	});
+
+	// LatexFrog: Files and Project are tabs, one or the other; Source Control and Find are tools that close back to the tab you were on
+	const tabbed = $derived(lvProject.active && !guest);
+	let lastTab = $state<'explorer' | 'outline'>('explorer');
+	$effect(() => {
+		if (view === 'explorer' || view === 'outline') lastTab = view;
+	});
+	const home = () => (tabbed ? lastTab : 'explorer');
+	const tabs = $derived([
+		{ key: 'explorer' as const, label: m.lv_tab_files() },
+		{ key: 'outline' as const, label: m.lv_tab_project() }
+	]);
+
 	// One list, rendered either as a header icon or as a menu row, so the two can never drift apart.
 	// `active` is the view-toggle state the icon shows as a tint.
 	// count: drawn on the icon, as VS Code badges Source Control's with its changed files
@@ -202,17 +223,6 @@
 		guest
 			? []
 			: [
-					...(lvProject.active
-						? [
-								{
-									key: 'outline',
-									icon: ListTree,
-									label: m.lv_outline_title(),
-									active: view === 'outline',
-									run: () => (view = view === 'outline' ? 'explorer' : 'outline')
-								}
-							]
-						: []),
 					{
 						key: 'scm',
 						icon: GitBranch,
@@ -220,7 +230,7 @@
 						active: view === 'scm',
 						// not build output: it starts unticked, and every compile would leave a badge that never clears
 						count: gitChanges.current.filter((c) => !isBuildArtifact(c.path)).length,
-						run: () => (view = view === 'scm' ? 'explorer' : 'scm')
+						run: () => (view = view === 'scm' ? home() : 'scm')
 					},
 					{
 						key: 'search',
@@ -228,7 +238,7 @@
 						label: m.wsview_find_in_files(),
 						title: m.wsview_find_in_files_title({ combo: combo('F', { shift: true }) }),
 						active: view === 'search',
-						run: () => (view === 'search' ? (view = 'explorer') : onOpenGlobalSearch())
+						run: () => (view === 'search' ? (view = home()) : onOpenGlobalSearch())
 					}
 				]
 	);
@@ -238,8 +248,13 @@
 	/** the name truncates down to this stub before any icon is allowed to collapse */
 	const NAME_MIN_PX = 24;
 
+	/** the Files | Project tabs, which the file actions share a row with */
+	const TABS_PX = 124;
+
 	// px-3 both sides, the gap-2 after the name, and the pinned toggles, which never yield their room
-	const collapsibleRoom = $derived(Math.max(0, width - 24 - 8 - NAME_MIN_PX - pinned.length * ACTION_PX));
+	const collapsibleRoom = $derived(
+		Math.max(0, tabbed ? width - 24 - 8 - TABS_PX : width - 24 - 8 - NAME_MIN_PX - pinned.length * ACTION_PX)
+	);
 	/** how many stay as icons; the rest collapse into "...", which costs a slot of its own */
 	const inlineCount = $derived(
 		collapsible.length * ACTION_PX <= collapsibleRoom
@@ -261,7 +276,7 @@
      commit message or the search box is not a trapdoor out of the panel you are typing into. -->
 <svelte:window
 	onkeydown={(e) => {
-		if (e.key !== 'Escape' || view === 'explorer' || e.defaultPrevented) return;
+		if (e.key !== 'Escape' || view === 'explorer' || view === 'outline' || e.defaultPrevented) return;
 		// a row's menu, a popover, a dialog or a confirmation takes this Escape to close itself; the view stays.
 		// Visible ones only: a closed popover stays in the page, hidden
 		const open = [...document.querySelectorAll('.z-dropdown, [role="dialog"], [role="alertdialog"]')].some(
@@ -272,7 +287,7 @@
 		if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el as HTMLElement | null)?.isContentEditable) return;
 		e.preventDefault();
 		if (view === 'search') onCloseGlobalSearch();
-		view = 'explorer';
+		view = home();
 	}}
 />
 
@@ -289,6 +304,49 @@
 			{workspaceRoot.current ? basename(workspaceRoot.current) : m.wsview_no_folder()}
 		</span>
 		<div class="flex shrink-0 items-center gap-1">
+			{#if !tabbed}{@render fileActions()}{/if}
+
+			<!-- after the menu, so the toggles keep the same two slots at the right edge whatever collapses -->
+			{#each pinned as action (action.key)}
+				<SidebarIconButton
+					icon={action.icon}
+					label={action.label}
+					title={action.title}
+					active={action.active}
+					count={action.count}
+					onclick={action.run}
+				/>
+			{/each}
+		</div>
+	</div>
+	{#if tabbed}
+		<!-- LatexFrog: the sidebar's two views as tabs; the row holds the actions of the tab shown -->
+		<div class="border-surface-200-800 flex h-8 shrink-0 items-stretch justify-between gap-2 border-b px-3">
+			<div class="flex items-stretch gap-3" role="tablist" aria-label={m.lv_tabs_aria()}>
+				{#each tabs as tab (tab.key)}
+					{@const on = view === tab.key}
+					<button
+						type="button"
+						role="tab"
+						aria-selected={on}
+						data-testid="sidebar-tab-{tab.key}"
+						class="-mb-px border-b-2 px-0.5 text-xs font-medium transition-colors {on
+							? 'border-primary-500 text-surface-950-50'
+							: 'text-surface-600-400 hover:text-surface-950-50 border-transparent'}"
+						onclick={() => {
+							if (view === 'search') onCloseGlobalSearch();
+							view = tab.key;
+						}}
+					>
+						{tab.label}
+					</button>
+				{/each}
+			</div>
+			<div class="flex shrink-0 items-center gap-1">{@render fileActions()}</div>
+		</div>
+	{/if}
+
+	{#snippet fileActions()}
 			{#each inlineActions as action (action.key)}
 				{@const Icon = action.icon}
 				<button
@@ -336,26 +394,16 @@
 					</Portal>
 				</Popover>
 			{/if}
-
-			<!-- after the menu, so the toggles keep the same two slots at the right edge whatever collapses -->
-			{#each pinned as action (action.key)}
-				<SidebarIconButton
-					icon={action.icon}
-					label={action.label}
-					title={action.title}
-					active={action.active}
-					count={action.count}
-					onclick={action.run}
-				/>
-			{/each}
-		</div>
-	</div>
+	{/snippet}
 	{#if view === 'search'}
 		<GlobalSearch
 			bind:this={globalSearchRef}
 			root={workspaceRoot.current ?? ''}
 			onOpen={onOpenFileAt}
-			onClose={onCloseGlobalSearch}
+			onClose={() => {
+				onCloseGlobalSearch();
+				view = home();
+			}}
 			onReplace={onReplaceInFolder}
 		/>
 	{:else if view === 'outline' && lvProject.active}
