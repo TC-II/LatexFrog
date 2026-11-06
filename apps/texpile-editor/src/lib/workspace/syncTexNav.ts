@@ -8,7 +8,7 @@ import { collabGuest } from '$lib/collab/guestStore.svelte';
 import type { ControlPayload } from '$lib/collab/protocol';
 import { workspaceRoot, activeFilePath, activeFigure } from '$lib/workspace/workspaceStore';
 import { samePath, relativeTo, joinPath, readTextFile } from '$lib/workspace/fileSystem';
-import { compileConfig } from './projectConfigSync.svelte';
+import { compileConfig, latexLiveMode } from './projectConfigSync.svelte';
 import { sourceCmView } from '$lib/stores/editorStore';
 import { toaster } from '$lib/modals/toaster-svelte';
 import { m } from '$lib/paraglide/messages';
@@ -109,7 +109,8 @@ export class SyncTexNav {
 			d.scrollPdfTo(res.page, res.x, res.y, res.w ?? 0, res.h ?? 0);
 			return;
 		}
-		if (lvProject.active) {
+		// LatexFrog: Live shows its own PDF (`_draft/draft.pdf`), not the profile's: forward sync goes there, as in Texpile
+		if (lvProject.active && !latexLiveMode()) {
 			const path = d.getLoadedPath();
 			if (!path || !d.isTex()) return;
 			try {

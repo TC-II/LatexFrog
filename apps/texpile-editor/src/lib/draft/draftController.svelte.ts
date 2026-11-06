@@ -1,6 +1,7 @@
 // Draft mode's stateful controller: root/main derivation, compile triggers, pause state,
 // the per-edit dispatcher, and the warm-engine lifecycle. The workspace constructs ONE of
 // these and the preview chain passes it down whole -- no per-field prop threading.
+import { untrack } from 'svelte';
 import type DraftView from './DraftView.svelte';
 import { DraftDispatcher } from './draftDispatcher';
 import { workspaceRoot, mainFile } from '$lib/workspace/workspaceStore';
@@ -78,6 +79,15 @@ export class DraftController {
 			if (daemonActive && (!active || root !== daemonRoot)) nativeBridge()?.draftStop?.();
 			daemonActive = active;
 			daemonRoot = root;
+		});
+
+		// LatexFrog: a new Live driver (another profile, other parts) is another document; compile it. Not on the first run: that
+		// is the driver Live is starting with, and its own first compile follows
+		let liveSeen = -1;
+		$effect(() => {
+			const rev = lvProject.liveRevision;
+			if (liveSeen >= 0 && rev !== liveSeen && untrack(() => latexLiveMode() && deps.pdfPaneOpen() && !this.paused)) untrack(() => this.trigger++);
+			liveSeen = rev;
 		});
 
 		// ONE decision point per edit; signal reads inside run() are tracked through this

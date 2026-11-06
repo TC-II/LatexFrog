@@ -106,6 +106,8 @@ class LvProject {
 	follow = $state(true);
 	/** what Live compiles: the active profile's Live driver, relative to the root (null until the engine wrote it) */
 	liveDriver = $state<string | null>(null);
+	/** bumped when the engine wrote a new Live driver (another profile, other parts, an edited preamble): Live recompiles */
+	liveRevision = $state(0);
 	private liveTimer: ReturnType<typeof setTimeout> | null = null;
 	/** settles once the current folder is known to be an engine project or not; Compile waits for it */
 	ready: Promise<void> = Promise.resolve();
@@ -264,7 +266,10 @@ class LvProject {
 			return;
 		}
 		try {
-			this.liveDriver = await this.request<string>('driver-for-live');
+			const d = await this.request<{ path: string; changed: boolean }>('driver-for-live');
+			const moved = d.path !== this.liveDriver;
+			this.liveDriver = d.path;
+			if (d.changed || moved) this.liveRevision++;
 		} catch (e) {
 			this.liveDriver = null;
 			this.onError?.(e instanceof Error ? e.message : String(e));

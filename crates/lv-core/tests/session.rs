@@ -693,8 +693,20 @@ fn live_driver_opens_the_document_itself_with_the_profile_choices() {
     let d = proyecto();
     let (s, _r) = abrir(&d, OK);
     s.set_state(StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
-    let rel = s.live_driver(Some("parcial")).unwrap();
+    let d1 = s.live_driver(Some("parcial")).unwrap();
+    assert!(d1.changed, "the first call writes it");
+    let rel = d1.path;
     assert_eq!(rel, ".latexfrog/drivers/lv-parcial-live.tex");
+    assert!(!s.live_driver(Some("parcial")).unwrap().changed, "nothing new, nothing for Live to recompile");
+    // another selection is another driver: Live has to recompile
+    s.set_state(StatePatch { selection: Some(vec!["Secciones/Uno".into()]), ..Default::default() }).unwrap();
+    assert!(s.live_driver(Some("parcial")).unwrap().changed);
+    s.set_state(StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
+    assert!(s.live_driver(Some("parcial")).unwrap().changed);
+    // an edit to the body is Live's own business: the copy follows it, without a recompile
+    fs::write(d.path().join("main.tex"), "\\documentclass{book}\n\\begin{document}\n\\include{Secciones/Uno}\n\\include{Secciones/Dos}\nmore\n\\end{document}\n").unwrap();
+    assert!(!s.live_driver(Some("parcial")).unwrap().changed);
+    assert!(fs::read_to_string(d.path().join(".latexfrog/build/parcial/lv-parcial-live-resto.tex")).unwrap().contains("more"));
     let t = fs::read_to_string(d.path().join(&rel)).unwrap();
     assert!(t.contains("\\def\\CompilacionReducida{}") && t.contains("\\includeonly{Secciones/Dos}"), "{t}");
     // Live runs without shell escape: no externalization
@@ -713,7 +725,7 @@ fn live_driver_reads_a_body_file_from_its_copy_before_the_document() {
     fs::write(d.path().join("main.tex"), "\\documentclass{book}\n\\input{cuerpo}\n").unwrap();
     fs::write(d.path().join("cuerpo.tex"), "\\usepackage{x}\n\\begin{document}\n\\include{Secciones/Uno}\n\\end{document}\n").unwrap();
     let (s, _r) = abrir(&d, OK);
-    let t = fs::read_to_string(d.path().join(s.live_driver(Some("completo")).unwrap())).unwrap();
+    let t = fs::read_to_string(d.path().join(s.live_driver(Some("completo")).unwrap().path)).unwrap();
     assert!(
         t.ends_with("\\makeatletter\\declare@file@substitution{cuerpo.tex}{.latexfrog/build/completo/lv-completo-live-pre.tex}\\makeatother\n\\input{\"main\"}\n\\begin{document}\n\\input{.latexfrog/build/completo/lv-completo-live-resto}\n"),
         "{t}"

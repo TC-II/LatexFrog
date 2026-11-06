@@ -45,7 +45,7 @@ Every command except `open` needs an open project.
 | `synctex-files` | `profile` | the project files that profile's PDF read (from its SyncTeX), or `null` before its first build; a file a TeX conditional skips is missing |
 | `synctex-inverse` | `profile`, `page`, `x`, `y` | `SyncInverse` or `null` |
 | `pdf-for` | `file` | PDF path or `null`, the newest PDF that contains the file |
-| `driver-for-live` | `profile?` (default: the active one) | Path of `.latexfrog/drivers/lv-<profile>-live.tex`: the profile's driver (flags, parts, pieces, watermark; no figure externalization) with `\begin{document}` in the file itself, for Live's warm lualatex. Written again on each call |
+| `driver-for-live` | `profile?` (default: the active one) | `{path, changed}`: `changed` when the driver or the preamble's copy is new (another profile, other parts, an edited preamble), and Live recompiles; the body's copy is rewritten without counting. `path` is `.latexfrog/drivers/lv-<profile>-live.tex`, the profile's driver (flags, parts, pieces, watermark; no figure externalization) with `\begin{document}` in the file itself, for Live's warm lualatex. Written again on each call |
 | `figures-status` *async* | | `FiguresStatus`: every figure in the code with where it is (`codigo`, `linea`, `dondeLinea`, `caption`) and its `estado`; `revisado` says the last check is of the code as it is now; `imagenes` lists the `\includegraphics` outside TikZ (`imagen`, `codigo`, `linea`, `archivo`, `dondeLinea`, `caption`) |
 | `figures-check` | | `BuildAck`; lists the figures without baking any. `bake-finished.remaining` is how many changed or were never compiled |
 | `figures-bake` | | `BuildAck` |

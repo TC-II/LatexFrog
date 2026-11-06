@@ -44,6 +44,14 @@ pub use bake::{Cocinando, ErrorFigura, FiglistView, FiguraView, FiguresStatus};
 
 // --- lo que ve la interfaz ----------------------------------------------------------------------------------------------
 
+/// What `driver-for-live` answers: the profile's Live driver and whether this call wrote anything new.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveDriver {
+    pub path: String,
+    pub changed: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PartView {
@@ -749,8 +757,10 @@ impl Session {
     /// preamble warm. The file that opens the document is split in two copies under `.latexfrog/build/<profile>/`: what comes before
     /// `\begin{document}` (`lv-<profile>-live-pre.tex`, read in its place) and what follows (`lv-<profile>-live-resto.tex`, with its
     /// line numbers and an `.origen`). Parts reached by `\include` are read from the project, so editing them needs nothing more;
-    /// an edit to the file that opens the document needs this again. Returns the driver, relative to the root.
-    pub fn live_driver(&self, perfil: Option<&str>) -> Result<String> {
+    /// an edit to the file that opens the document needs this again. Returns the driver, relative to the root, and whether the
+    /// driver or the preamble's copy changed: Live recompiles then (another profile, other parts, an edited preamble). The body's
+    /// copy is rewritten too, but an edit there is Live's to handle like any other.
+    pub fn live_driver(&self, perfil: Option<&str>) -> Result<LiveDriver> {
         self.guardia()?;
         let perfil = match perfil {
             Some(p) => p.to_string(),
@@ -773,9 +783,10 @@ impl Session {
         let dir = format!(".latexfrog/build/{perfil}");
         let rel_pre = format!("{dir}/lv-{perfil}-live-pre.tex");
         let rel_resto = format!("{dir}/lv-{perfil}-live-resto.tex");
-        crate::build::write_if_changed(&self.root.join(&rel_pre), &cuerpo.antes)?;
+        // The body's copy is not a change for Live: it changes with each save of that file, and Live handles edits on its own
+        let mut changed = crate::build::write_if_changed(&self.root.join(&rel_pre), &cuerpo.antes)?;
         crate::build::write_if_changed(&self.root.join(&rel_resto), &cuerpo.texto)?;
-        crate::build::write_if_changed(&self.root.join(format!("{dir}/lv-{perfil}-live-resto.origen")), &cuerpo.origen)?;
+        changed |= crate::build::write_if_changed(&self.root.join(format!("{dir}/lv-{perfil}-live-resto.origen")), &cuerpo.origen)?;
         // The driver ends loading the root; the file that opens the document is read from the copy that stops before it.
         let carga = lineas.pop().unwrap_or_default();
         if !carga.starts_with("\\input{") {
@@ -795,8 +806,8 @@ impl Session {
         lineas.push("\\begin{document}".into());
         lineas.push(format!("\\input{{{}}}", rel_resto.trim_end_matches(".tex")));
         let rel = format!(".latexfrog/drivers/lv-{perfil}-live.tex");
-        crate::build::write_if_changed(&self.root.join(&rel), &(lineas.join("\n") + "\n"))?;
-        Ok(rel)
+        changed |= crate::build::write_if_changed(&self.root.join(&rel), &(lineas.join("\n") + "\n"))?;
+        Ok(LiveDriver { path: rel, changed })
     }
 
     /// Con pdflatex, el preámbulo del perfil precompilado (`formato.rs`): el formato es el driver del perfil hasta `\begin{document}`, y lo
