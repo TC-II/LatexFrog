@@ -44,11 +44,13 @@ export function aliasLiveCopies(root: string, outAbs: string, srcFiles: string[]
 		let txt = zlib.gunzipSync(fs.readFileSync(p)).toString('latin1');
 		let changed = false;
 		for (const c of copies) {
-			// SyncTeX writes the root, then ./ and the path as TeX opened it
-			const named = `/./${c.copy}`;
-			if (!txt.includes(named)) continue;
-			txt = txt.split(named).join(`/${c.original}`);
-			changed = true;
+			// SyncTeX writes the root, then ./ and the path as TeX opened it; on Windows the root ends in a backslash
+			for (const sep of ['/', '\\']) {
+				const named = `${sep}./${c.copy}`;
+				if (!txt.includes(named)) continue;
+				txt = txt.split(named).join(`${sep}${c.original}`);
+				changed = true;
+			}
 		}
 		if (changed) fs.writeFileSync(p, zlib.gzipSync(Buffer.from(txt, 'latin1')));
 	} catch {
