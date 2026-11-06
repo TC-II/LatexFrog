@@ -12,8 +12,9 @@ const spawned = vi.hoisted(
 );
 // a program that is not on PATH: Node hands back the child, then emits ENOENT and never 'exit'
 const engine = vi.hoisted(() => ({ missing: false }));
-vi.mock('node:child_process', () => ({
-	spawn: (cmd: string) => {
+// the draft code starts its TeX through lv-sidecar; the adapter stands in for spawn and execFile
+vi.mock('../../../../../electron/src/lv/lvLive', () => ({
+	liveSpawn: (cmd: string) => {
 		const child = Object.assign(new EventEmitter(), {
 			stdout: new PassThrough(),
 			stderr: new PassThrough(),
@@ -25,7 +26,7 @@ vi.mock('node:child_process', () => ({
 		if (engine.missing) process.nextTick(() => child.emit('error', Object.assign(new Error(`spawn ${cmd} ENOENT`), { code: 'ENOENT' })));
 		return child;
 	},
-	execFile: vi.fn()
+	liveExecFile: vi.fn()
 }));
 vi.mock('../../../../../electron/src/shell/shellEnv', () => ({ shellEnvReady: async () => {} }));
 

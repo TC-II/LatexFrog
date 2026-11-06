@@ -6,13 +6,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const spawned = vi.hoisted(() => [] as Array<{ kill: ReturnType<typeof vi.fn> }>);
-vi.mock('node:child_process', () => ({
-	spawn: () => {
+// the draft code starts its TeX through lv-sidecar; the adapter stands in for spawn and execFile
+vi.mock('../../../../../electron/src/lv/lvLive', () => ({
+	liveSpawn: () => {
 		const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), kill: vi.fn(), pid: 4243 });
 		spawned.push(child);
 		return child;
 	},
-	execFile: vi.fn()
+	liveExecFile: vi.fn()
 }));
 vi.mock('../../../../../electron/src/shell/shellEnv', () => ({ shellEnvReady: async () => {} }));
 

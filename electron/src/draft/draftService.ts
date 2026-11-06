@@ -23,6 +23,7 @@ import {
 	type ReadBackFiles
 } from './draftWarmCompile';
 import { shellEnvReady } from '../shell/shellEnv';
+import { aliasLiveCopies } from '../lv/lvLiveCopy';
 import { findProgram } from '../shell/findProgram';
 
 // ht = the shipout box HEIGHT = distance from box top to the box baseline, which is the
@@ -323,6 +324,8 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 		manifest.bodyLine = split.beginLine;
 		aliasSynctex(outAbs, mainRel);
 	}
+	// LatexFrog: a profile's Live driver reads the opening file's body from a copy; name the original
+	aliasLiveCopies(root, outAbs, (manifest as { srcFiles?: string[] }).srcFiles, counters);
 
 	// seam sidecar: per-break pruned runs; absent (older engine, luatexbase missing) means
 	// the chain planner falls back to its guessed junction gap and stays provisional
