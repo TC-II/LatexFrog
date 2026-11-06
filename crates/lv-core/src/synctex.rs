@@ -139,8 +139,9 @@ fn rec(b: &[u8], mut p: usize, size: u8) -> Registro {
     Registro { tag: tag as u16, line: line as u32, x, y, w, h, d }
 }
 
+// TeX Live writes the project's inputs as `<root>/./main.tex`.
 fn norm(s: &str) -> String {
-    s.replace('\\', "/").trim_start_matches("//?/").to_lowercase()
+    s.replace('\\', "/").replace("/./", "/").trim_start_matches("//?/").to_lowercase()
 }
 
 impl Synctex {
@@ -303,7 +304,7 @@ impl Synctex {
     /// La ruta de un archivo de entrada, relativa a la raíz y con `/`. `None` si es del driver (`.latexfrog/`), del sistema o de
     /// fuera del proyecto.
     pub fn rel_of_tag(&self, root: &Path, tag: u16) -> Option<String> {
-        let ruta = self.inputs.iter().find(|(t, _)| *t == tag)?.1.replace('\\', "/");
+        let ruta = self.inputs.iter().find(|(t, _)| *t == tag)?.1.replace('\\', "/").replace("/./", "/");
         let ruta = ruta.trim_start_matches("//?/");
         let raiz = root.display().to_string().replace('\\', "/");
         let raiz = raiz.trim_start_matches("//?/");

@@ -42,9 +42,7 @@ asarUnpack:
 afterPack: scripts/after-pack.cjs
 
 extraResources:
-  # the compile engine; built by `cargo build --release -p lv-sidecar` before packaging
-  - from: target/release/lv-sidecar.exe
-    to: lv-sidecar.exe
+  # the compile engine (lv-sidecar) is added per platform in win/linux below, since its name differs
   - from: apps/texpile-editor/dist
     to: app-dist
     filter:
@@ -76,6 +74,10 @@ linux:
   target:
     - AppImage
     - deb
+  # the compile engine; built by `cargo build --release -p lv-sidecar` before packaging
+  extraResources:
+    - from: target/release/lv-sidecar
+      to: lv-sidecar
   # the desktop entry only advertises these; xdg-mime sets defaults separately, so listing more
   # costs nobody anything
   fileAssociations:
@@ -175,6 +177,10 @@ mac:
 win:
   target:
     - nsis
+  # the compile engine; built by `cargo build --release -p lv-sidecar` before packaging
+  extraResources:
+    - from: target/release/lv-sidecar.exe
+      to: lv-sidecar.exe
   # the portable zip is a separate build (pnpm dist:portable): the same folder, zipped, with
   # extraMetadata.portable stamped into its package.json so main knows without guessing. nsis
   # names its own artifact below; this names the zip

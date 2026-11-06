@@ -326,6 +326,9 @@ fn texto_seguro(t: &str, que: &str) -> Result<()> {
 /// Driver ASCII del perfil: define `\lvPerfil` y `\lvParcial`, los flags y las variables, inyecta `\includeonly` por hook
 /// y carga la raíz real del proyecto (4.2 del plan). El nombre del driver es el `\jobname`, así que va sin espacios ni
 /// tildes aunque la raíz los tenga (S4). El orden es el de `spikes/s4-driver/gen-driver.mjs`, el que se midió.
+/// The driver line that removes `TEXMF_OUTPUT_DIRECTORY` from pgf's figure runs (outside Windows).
+const SALIDA_DE_PGF: &str = "\\AddToHook{begindocument/before}{\\ifdefined\\tikzexternalize\\tikzset{external/system call/.add={env -u TEXMF_OUTPUT_DIRECTORY }{}}\\fi}";
+
 pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
     let perfil = &s.perfil;
     perfil_valido(perfil)?;
@@ -355,6 +358,11 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
     }
     if let Some(f) = &s.figuras {
         l.extend(render_figuras(f)?);
+    }
+    // TeX Live hands the build's `-output-directory` to the pdflatex runs pgf starts, through `TEXMF_OUTPUT_DIRECTORY`: the figure
+    // would be written to `.latexfrog/build/<profile>/<cache>` instead of the cache at the root.
+    if !cfg!(windows) {
+        l.push(SALIDA_DE_PGF.into());
     }
     l.extend(crate::piezas::lineas_del_driver(&s.omitir));
     // Los archivos con piezas sacadas se leen desde su copia (`\declare@file@substitution`, núcleo de LaTeX 2020-10): el proyecto no se
@@ -445,6 +453,9 @@ pub fn render_latexmkrc() -> String {
         // bibtex runs inside the build folder: `\bibliography{refs}` and a project `.bst` are found from the project's top
         "$ENV{BIBINPUTS} = getcwd() . $sep . ($ENV{BIBINPUTS} // '');",
         "$ENV{BSTINPUTS} = getcwd() . $sep . ($ENV{BSTINPUTS} // '');",
+        // MiKTeX creates the folders of `\\include{Cap/x}` aux files in the output directory; TeX Live does not and the build stops with
+        // "I can't write on file": the project's folders (hidden ones left out) are repeated inside the output directory.
+        "if ($^O ne 'MSWin32') { require File::Find; require File::Path; File::Find::find({ no_chdir => 1, wanted => sub { if (-d $_ && $_ ne '.') { if (m{/\\.}) { $File::Find::prune = 1; return; } File::Path::make_path(\"$out_dir/\" . substr($_, 2)); } } }, '.'); }",
         "",
     ]
     .join("\n")
@@ -752,8 +763,18 @@ impl Builder {
             let archivo = args.pop().unwrap_or_default();
             args.extend(["-e".to_string(), "$max_repeat=1; $bibtex_use=0;".to_string(), archivo]);
         }
+        // TeX Live builds the `.fls` name from the `-fmt=` path and puts the output directory in front: the file cannot be created and
+        // pdflatex exits without a log. There the format goes by name and its folder through `TEXFORMATS`; MiKTeX keeps the path.
+        let mut carpeta_del_formato = None;
         if let Some(f) = &spec.formato {
             let archivo = args.pop().unwrap_or_default();
+            let f = match (cfg!(windows), f.rsplit_once('/')) {
+                (false, Some((dir, nombre))) => {
+                    carpeta_del_formato = Some(dir.to_string());
+                    nombre.to_string()
+                }
+                _ => f.clone(),
+            };
             args.extend([format!("-latexoption=-fmt={f}"), archivo]);
         }
         antes()?;
@@ -771,6 +792,10 @@ impl Builder {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        if let Some(dir) = carpeta_del_formato {
+            let resto = std::env::var("TEXFORMATS").unwrap_or_default();
+            cmd.env("TEXFORMATS", format!("{dir}:{resto}"));
+        }
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -968,7 +993,7 @@ mod tests {
 
     #[test]
     fn el_driver_define_el_perfil_y_carga_la_raiz_con_tildes_y_espacios() {
-        let d = render_driver("completo", "Funciones de Aproximación.tex").unwrap();
+        let d = render_driver("completo", "Funciones de Aproximación.tex").unwrap().replace(&format!("{SALIDA_DE_PGF}\n"), "");
         assert_eq!(
             d,
             "% .latexfrog/drivers/lv-completo.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{completo}\n\\def\\lvParcial{0}\n\\input{\"Funciones de Aproximación\"}\n"
@@ -1083,7 +1108,8 @@ mod tests {
             omitir: vec![],
             sustituciones: vec![],
         })
-        .unwrap();
+        .unwrap()
+        .replace(&format!("{SALIDA_DE_PGF}\n"), "");
         assert_eq!(
             d,
             "% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\PassOptionsToPackage{draft}{graphicx}\n\\PassOptionsToPackage{draft}{graphics}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Desnormalización,Secciones/Uno}}\n\\input{\"Funciones de Aproximación\"}\n"

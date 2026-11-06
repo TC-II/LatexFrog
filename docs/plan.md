@@ -63,6 +63,8 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 - [x] The configured figure cache folder, not the literal `figuras-cache`, is what search, the outline, root detection and project detection skip.
 - [x] circuitikz figures are externalized (circuitikz's `\let\circuitikz\tikzpicture` predates `\tikzexternalize`), and a figure's own job disables the shipout background hooks (a title page's `\AddToShipoutPictureBG*` landed on the figure).
 
+- [x] Live preview through the sidecar: Texpile's draft mode (warm LuaLaTeX, one paragraph per keystroke) starts its processes with `live-*` requests, so there is still one build path. Live is a choice beside Compile, next to On save, When idle and Manual.
+
 ### M4. Release
 - [ ] Installer that bundles the sidecar (`extraResources`).
 - [ ] Performance run on the primary book, the secondary book and `01-Overleaf`, against Tauri LatexFrog.
@@ -78,6 +80,8 @@ Goal: one standalone, fast program for large LaTeX projects. Windows first, Linu
 Book copy through `lv-sidecar`, part selection, 2026-11-04: first build 9.1 s, one-pass rebuild 2.0 s after a chapter edit, outline 50 ms for 199 sections. Compiling during the background figure listing waited about 4 s more; the listing now stops within 10 ms and runs again after the build: 2.1 to 2.6 s for three such rebuilds.
 
 Macro loaders, 2026-11-05, release, copies: E3 exercise collection graph 1.3 ms → 11–15 ms (8 → 59 `.tex` read, two walks), outline 0 → 61 entries (27 exercise titles). Book: the definitions pass adds 4–7 ms to a 14–23 ms graph build; no second walk, outline unchanged.
+
+Live preview, 2026-11-06, Linux, TeX Live, `tests/live/sidecar-bench.mjs`. `fixtures/libro-include`: paragraph typeset 2.7 ms median (3.5 ms max) through the sidecar and 2.7 ms (3.0 ms) spawning directly as before; daemon warm-up 260 ms both; draft pass 1.1 s cold, 318 ms warm, both ways. `tests/live/fixtures/bookdoc`: 3.0 ms per paragraph, 220 ms warm pass. Still to measure on the book: its preamble's warm-up, a full draft pass, and how LuaLaTeX's pages differ from pdflatex's.
 
 ## Known issue accepted
 

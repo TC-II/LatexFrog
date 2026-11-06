@@ -2,6 +2,7 @@
 
 use lv_core::build::Sink;
 use lv_core::config::StatePatch;
+use lv_core::live::{Live, StartSpec};
 use lv_core::session::Session;
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
@@ -138,7 +139,29 @@ fn run(p: &Value, cmd: &str, s: &Arc<Session>) -> Result<Value, String> {
     }
 }
 
-fn handle(p: Value, session: &mut Option<Arc<Session>>, out: &Out) {
+/// The live preview's processes (`live-*`): they need no open project.
+fn live_cmd(p: &Value, cmd: &str, live: &Arc<Live>) -> Result<Value, String> {
+    let proc = || p.get("proc").and_then(Value::as_u64).ok_or_else(|| "missing `proc`".to_string());
+    match cmd {
+        "live-start" => {
+            let spec = StartSpec {
+                tool: text(p, "tool")?,
+                args: field(p, "args")?.unwrap_or_default(),
+                cwd: Path::new(text(p, "cwd")?),
+                env: field::<std::collections::BTreeMap<String, String>>(p, "env")?.unwrap_or_default().into_iter().collect(),
+                stdin: p.get("stdin").and_then(Value::as_bool).unwrap_or(false),
+            };
+            Ok(json!({ "proc": live.start(spec)? }))
+        }
+        "live-write" => live.write(proc()?, text(p, "data")?).map(|_| Value::Null),
+        "live-close-stdin" => Ok(json!(live.close_stdin(proc()?))),
+        "live-kill" => Ok(json!({ "killed": live.kill(proc()?) })),
+        "live-status" => Ok(json!({ "running": live.running() })),
+        other => Err(format!("unknown command: {other}")),
+    }
+}
+
+fn handle(p: Value, session: &mut Option<Arc<Session>>, live: &Arc<Live>, out: &Out) {
     let id = p.get("id").cloned().unwrap_or(Value::Null);
     let cmd = match text(&p, "cmd") {
         Ok(c) => c.to_string(),
@@ -146,6 +169,14 @@ fn handle(p: Value, session: &mut Option<Arc<Session>>, out: &Out) {
     };
     match cmd.as_str() {
         "open" => respond(out, id, open(&p, session, out)),
+        c if c.starts_with("live-") => {
+            // live-write answers nothing: one stdin frame per keystroke, and the result comes back as output anyway
+            let quiet = c == "live-write" && p.get("quiet").and_then(Value::as_bool).unwrap_or(false);
+            let r = live_cmd(&p, c, live);
+            if !(quiet && r.is_ok()) {
+                respond(out, id, r)
+            }
+        }
         "close" => {
             if let Some(s) = session.take() {
                 s.cancel();
@@ -168,19 +199,25 @@ fn main() {
     let out: Out = Arc::new(Mutex::new(std::io::stdout()));
     emit(&out, &json!({ "type": "hello", "protocol": PROTOCOL, "version": env!("CARGO_PKG_VERSION") }));
     let mut session: Option<Arc<Session>> = None;
+    let events = out.clone();
+    let live = Live::new(Arc::new(move |ev| match serde_json::to_value(&ev) {
+        Ok(event) => emit(&events, &json!({ "type": "live", "event": event })),
+        Err(e) => eprintln!("live event not serialized: {e}"),
+    }));
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
         if line.trim().is_empty() {
             continue;
         }
         match serde_json::from_str::<Value>(&line) {
-            Ok(p) => handle(p, &mut session, &out),
+            Ok(p) => handle(p, &mut session, &live, &out),
             Err(e) => respond(&out, Value::Null, Err(format!("invalid JSON: {e}"))),
         }
     }
     if let Some(s) = session {
         s.cancel();
     }
+    live.kill_all();
     // Exit rather than wait for threads: when the process dies the Job Objects close and KILL_ON_JOB_CLOSE takes the tree.
     std::process::exit(0);
 }

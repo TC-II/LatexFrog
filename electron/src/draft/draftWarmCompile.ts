@@ -14,7 +14,7 @@
 // the app reads -- the Problems panel's draft.log, the aux the rerun logic hashes -- and a
 // mismatch-kill has nothing to restore. Anything off -- preamble changed, process died,
 // another engine -- and the caller compiles cold; this is an accelerator, never a dependency.
-import { spawn, type ChildProcess } from 'node:child_process';
+import { liveSpawn as spawn, type LiveProcess as ChildProcess } from '../lv/lvLive';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
@@ -219,7 +219,7 @@ async function spawnWarm(root: string, engineDir: string, preamble: string, read
 	const child = spawn(
 		'lualatex',
 		['-no-shell-escape', '-interaction=nonstopmode', '-synctex=1', `-output-directory=${OUT}`, `-jobname=${JOB}`, wrapperRel],
-		{ cwd: root, windowsHide: true }
+		{ cwd: root }
 	);
 	const state: Warm = { child, key: keyOf(root), hash: hashOf(preamble), ready: false, dead: false, seedOnly: new Set(readBack.byTools) };
 	warm = state;

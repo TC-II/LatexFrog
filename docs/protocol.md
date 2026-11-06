@@ -93,6 +93,20 @@ The project lock has no command of its own: `ProjectView.lockedBy` and `status.l
 
 After `finished`, ask `problems` with its `profile`.
 
+## Live preview processes
+
+The live preview (Texpile's draft mode) keeps a warm LuaLaTeX with the preamble loaded and sends it one paragraph per keystroke; draft passes reconcile it on a pause. The app's draft code speaks that engine's own stdin protocol; the sidecar starts and owns the processes, so every TeX run still goes through it. These commands need no open project. The app uses one sidecar for them in the main process (`electron/src/lv/lvLive.ts`), apart from the windows' build sidecars.
+
+| Command | Fields | Answer |
+|---|---|---|
+| `live-start` | `tool` (`lualatex`, `biber` or `bibtex`), `args`, `cwd`, `env` (only `PATH`, `BIBINPUTS`, `BSTINPUTS`, `TEXINPUTS`), `stdin` | `{proc}` |
+| `live-write` | `proc`, `data`; `quiet: true` sends no answer on success | `null` |
+| `live-close-stdin` | `proc` | |
+| `live-kill` | `proc` | `{killed}` |
+| `live-status` | | `{running}` |
+
+Output and the end of a process come as `{"type":"live","event":...}`, not as session events: `{kind:"out",proc,stream:"out"|"err",data}` in chunks as they arrive (a UTF-8 sequence is never split), then `{kind:"exit",proc,code}`, with `code` null when killed. Closing the sidecar's stdin kills what it runs.
+
 ## Types
 
 The Rust structs in `crates/lv-core/src` are the reference; fields are camelCase unless a struct says otherwise. The ones the UI needs first:
