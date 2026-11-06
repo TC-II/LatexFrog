@@ -2454,3 +2454,35 @@ math-field[data-macro-selected] {
 .floating-bar-room .source-editor > .cm-editor > .cm-scroller > .cm-content {
 	padding-top: 2.875rem !important;
 }
+
+/* LatexFrog: the visual editor's page in light colors, white like the PDF, whatever the theme (lib/lv/lightPage). color-scheme
+   flips every light-dark() value inside the page only; the source editor, the tabs and the toolbars keep the theme. */
+html.lf-light-page .lf-page {
+	color-scheme: light;
+	background-color: #fff;
+	color: var(--color-surface-950-50);
+}
+/* the table card flips to dark colors under [data-mode=dark] (TableWrapperComponent): on the light page, its light ones */
+html.lf-light-page .lf-page .table-wrapper {
+	background: var(--color-surface-50);
+	border-color: var(--color-surface-300);
+}
+html.lf-light-page .lf-page :is(.table-caption, .table-number) {
+	color: var(--color-surface-900);
+}
+html.lf-light-page .lf-page .table-notes {
+	color: var(--muted-text);
+}
+html.lf-light-page .lf-page .table-wrapper-content table th {
+	background: var(--color-surface-100);
+}
+html.lf-light-page .lf-page .table-settings-btn button:hover {
+	background: var(--color-surface-200);
+}
+html.lf-light-page .lf-page .table-header {
+	border-bottom-color: var(--color-surface-200);
+}
+html.lf-light-page .lf-page .table-caption-warning {
+	background: var(--color-warning-100);
+	border-color: var(--color-warning-400);
+}

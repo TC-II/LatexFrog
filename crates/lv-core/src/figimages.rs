@@ -65,7 +65,7 @@ fn caption_de(figura: &str) -> Option<String> {
 
 fn re_figura() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"\\(begin|end)\s*\{(figure\*?|tikzpicture)\}|\\input\s*\{([^{}\\%]+)\}").expect("patrón válido"))
+    R.get_or_init(|| Regex::new(r"\\(begin|end)\s*\{(figure\*?|tikzpicture|circuitikz)\}|\\input\s*\{([^{}\\%]+)\}").expect("patrón válido"))
 }
 
 /// El archivo que carga `\input{x}`: con `.tex` si no tiene extensión, relativo a la raíz y sin salir de ella.
@@ -112,13 +112,14 @@ impl Cuenta<'_> {
             for c in re_figura().captures_iter(codigo) {
                 let m = c.get(0).expect("coincidencia");
                 match (c.get(1).map(|x| x.as_str()), c.get(2).map(|x| x.as_str())) {
-                    (Some("begin"), Some("tikzpicture")) => {
+                    // `circuitikz` opens a `tikzpicture` inside: pgf externalizes and counts it like one
+                    (Some("begin"), Some("tikzpicture" | "circuitikz")) => {
                         if tikz == 0 {
                             abierto = Some((base + m.start(), num as u32 + 1));
                         }
                         tikz += 1;
                     }
-                    (Some("end"), Some("tikzpicture")) if tikz > 0 => {
+                    (Some("end"), Some("tikzpicture" | "circuitikz")) if tikz > 0 => {
                         tikz -= 1;
                         if tikz > 0 {
                             continue;
@@ -214,7 +215,7 @@ fn figuras_con_caption(texto: &str) -> Vec<(u32, u32, Option<String>)> {
     for (n, l) in texto.split_inclusive('\n').enumerate() {
         for c in re_figura().captures_iter(sin_comentario(l)) {
             let Some(env) = c.get(2).map(|e| e.as_str()) else { continue };
-            if env == "tikzpicture" {
+            if env == "tikzpicture" || env == "circuitikz" {
                 continue;
             }
             let m = c.get(0).expect("coincidencia");
@@ -247,8 +248,9 @@ pub fn imagenes_del_proyecto(root: &Path, ix: &crate::graph::ProjectIndex) -> Ve
             continue;
         }
         let figuras = std::fs::read_to_string(root.join(rel)).map(|t| figuras_con_caption(&t)).unwrap_or_default();
-        // the first structural edge that brings this file in
-        let traido = ix.files.iter().find_map(|(padre, es)| {
+        // the first structural edge that brings this file in, when it is inside the same part: a part of its own (an exercise a
+        // macro loads, a chapter) is where its images are, not the line of the main file that loads it
+        let traido = ix.files.iter().filter(|(padre, _)| ix.part_of(padre) == ix.part_of(rel)).find_map(|(padre, es)| {
             es.iter()
                 .find(|e| matches!(e.kind, EdgeKind::Input | EdgeKind::Include | EdgeKind::Subfile | EdgeKind::Import | EdgeKind::Part) && e.target.as_deref() == Some(rel.as_str()))
                 .map(|e| (padre.clone(), e.line))
@@ -265,6 +267,16 @@ pub fn imagenes_del_proyecto(root: &Path, ix: &crate::graph::ProjectIndex) -> Ve
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_circuitikz_environment_is_a_figure_counted_like_a_tikzpicture() {
+        let d = tempfile::tempdir().unwrap();
+        let texto = "\\begin{figure}\n\\begin{circuitikz}\\draw (0,0) to[R] (2,0);\\end{circuitikz}\n\\caption{A resistor}\n\\end{figure}\n\\begin{figure}\n\\begin{tikzpicture}\\end{tikzpicture}\n\\caption{Plain}\n\\end{figure}\n";
+        let v = figuras_del_archivo(d.path(), "c.tex", texto, "cache", "ABC", "c", true, &BTreeMap::new());
+        let got: Vec<_> = v.iter().map(|f| (f.nombre.as_str(), f.caption.as_deref(), f.linea)).collect();
+        assert_eq!(got, [("ABC-c-0", Some("A resistor"), 2), ("ABC-c-1", Some("Plain"), 6)]);
+        assert!(v[0].propio.starts_with("\\begin{circuitikz}") && v[0].propio.ends_with("\\end{circuitikz}"));
+    }
 
     #[test]
     fn cuenta_como_pgf_las_figuras_dentro_de_figure_y_las_de_un_input() {

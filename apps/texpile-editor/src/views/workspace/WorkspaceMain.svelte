@@ -179,6 +179,8 @@
 		onCleanAux={compiler.runCleanAux}
 		latexmkActionsAvailable={compiler.latexmkActionsAvailable}
 		onShowOutput={() => void compiler.revealOutput()}
+		onExportCurrent={() => void compiler.exportShownPdf()}
+		onShowExports={() => void compiler.revealExports()}
 		outputAvailable={compiler.hasOutput}
 		onShowProblems={actions.showProblems}
 		commentCount={panes.comments.filter((t: Any) => !t.resolved && !panes.commentGhosts.has(t.id)).length}

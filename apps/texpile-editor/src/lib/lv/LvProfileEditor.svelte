@@ -106,14 +106,6 @@
 	<div class="flex items-center gap-2">
 		<LvFrog />
 		<span class="font-semibold">{m.lv_profiles_title()}</span>
-		<label class="ml-auto flex items-center gap-2" title={m.lv_profiles_engine_hint()}>
-			<span class="opacity-70">{m.lv_profiles_engine()}</span>
-			<select class={INPUT} value={config.engine ?? 'pdflatex'} onchange={(e) => onChange({ ...config, engine: e.currentTarget.value })}>
-				<option value="pdflatex">pdflatex</option>
-				<option value="xelatex">xelatex</option>
-				<option value="lualatex">lualatex</option>
-			</select>
-		</label>
 	</div>
 
 	<div class="flex flex-wrap items-center gap-1">
@@ -138,7 +130,9 @@
 					<button type="button" class="hover:preset-tonal rounded p-0.5" disabled={ids.length <= 1} title={m.lv_profiles_remove()} aria-label={m.lv_profiles_remove()} onclick={() => onChange(removeProfile(config, id))}><X class="size-3.5" /></button>
 				</div>
 				<div class="text-xs opacity-70">{m.lv_profiles_pieces()}</div>
-				<div class="max-h-72 overflow-y-auto">
+				<!-- fills the card as tall as the settings beside it (basis 0: the list itself never makes the row taller) -->
+				<div class="min-h-72 flex-1 basis-0 overflow-y-auto pb-1">
+
 					{#each rows(pieces, parts) as row (row.kind === 'piece' ? row.key : row.kind === 'chapter' ? row.part : row.kind)}
 						<label class="flex items-center gap-2 py-0.5 {row.kind === 'chapter' ? 'pl-4' : ''} {row.kind === 'chapter' && selection.all ? 'opacity-50' : ''}">
 							{#if row.kind === 'piece'}

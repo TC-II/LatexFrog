@@ -78,6 +78,16 @@ export function registerFsIpc(): void {
 		return { ok: true };
 	});
 
+	// Open a folder itself in the file manager (showItemInFolder only selects it in its parent). A directory, checked here,
+	// opens in the file manager whatever is registered: openPath never runs a file through this handler.
+	ipcMain.handle('shell:showFolder', async (_e, p: string) => {
+		if (typeof p !== 'string' || !p) return { ok: false };
+		const s = await fsService.statFile(p).catch(() => null);
+		if (!s?.isDirectory) return { ok: false };
+		const err = await shell.openPath(p);
+		return { ok: !err };
+	});
+
 	// The undoable delete. Copy the entry somewhere recoverable when it is small enough, then send the
 	// original to the OS recycle bin rather than unlinking it - so even a delete too large to undo in
 	// the editor is still recoverable by the user from their file manager. A null `backup` is how the

@@ -17,7 +17,7 @@ use std::time::Instant;
 
 pub const MAX_COINCIDENCIAS: usize = 5000;
 const MAX_BYTES: u64 = 2 * 1024 * 1024;
-const OCULTAS: [&str; 6] = [".latexfrog", ".lv", ".git", "node_modules", "figuras-cache", "target"];
+const OCULTAS: [&str; 5] = [".latexfrog", ".lv", ".git", "node_modules", "target"];
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -95,6 +95,7 @@ pub fn archivos(root: &Path, ix: &ProjectIndex, todos: bool) -> Vec<String> {
     if todos {
         fn rec(root: &Path, rel: &str, nivel: u32, out: &mut Vec<String>) {
             let Ok(rd) = std::fs::read_dir(root.join(rel)) else { return };
+            let cache = rel.is_empty().then(|| crate::config::figure_cache_folder(root));
             let mut hijos: Vec<_> = rd.flatten().collect();
             hijos.sort_by_key(|e| e.file_name().to_string_lossy().to_lowercase());
             for e in hijos {
@@ -102,7 +103,7 @@ pub fn archivos(root: &Path, ix: &ProjectIndex, todos: bool) -> Vec<String> {
                 let r = if rel.is_empty() { nombre.clone() } else { format!("{rel}/{nombre}") };
                 let Ok(t) = e.file_type() else { continue };
                 if t.is_dir() {
-                    if !OCULTAS.contains(&nombre.as_str()) && !nombre.starts_with(".lvtmp-") && nivel < 10 {
+                    if !OCULTAS.contains(&nombre.as_str()) && cache.as_deref() != Some(nombre.as_str()) && !nombre.starts_with(".lvtmp-") && nivel < 10 {
                         rec(root, &r, nivel + 1, out);
                     }
                 } else if e.metadata().is_ok_and(|m| m.len() <= MAX_BYTES) {

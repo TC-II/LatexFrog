@@ -12,7 +12,7 @@ import { fileService } from '$lib/files/service/fileService';
 import { fileMode } from '$lib/workspace/fileMode.svelte';
 import { collabGuest } from '$lib/collab/guestStore.svelte';
 
-export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; compileOn: string | null; output?: { dir: string; pattern: string; perPart?: boolean } | null };
+export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; omit?: string[]; compileOn: string | null; output?: { dir: string; pattern: string; perPart?: boolean } | null };
 export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean };
 export type OutlineTab = 'contents' | 'figures';
 export type Typical = { ms: number; pasadas: number; n: number };
@@ -38,7 +38,12 @@ export type Problem = {
 	context: string;
 };
 export type Section = { level: number; title: string; file: string; line: number; label: string | null };
-export type Symbols = { sections: Section[] };
+/** what the document is made of, in document order: the same blocks a profile chooses from */
+export type CompositionItem =
+	| { kind: 'section'; index: number; part: string | null; piece?: string | null }
+	| { kind: 'part'; name: string; file: string; line: number }
+	| { kind: 'piece'; key: string; name: string; file: string; line: number };
+export type Symbols = { sections: Section[]; composition?: CompositionItem[] };
 export type Rect = { page: number; x: number; y: number; w: number; h: number };
 type SyncForward = { perfil: string; pdf: string; page: number; rects: Rect[]; line_used: number };
 type SyncInverse = { file: string | null; line: number; inside: boolean };
@@ -246,6 +251,18 @@ class LvProject {
 	async setState(fields: object) {
 		await this.request('set-state', fields);
 		await this.refresh();
+		if ('profile' in fields) await this.showProfilePdf();
+	}
+
+	/** the active profile's last PDF, from its own build folder: switching profiles shows it at once, without compiling */
+	private async showProfilePdf() {
+		const root = this.view?.root;
+		const profile = this.view?.state.activeProfile;
+		if (!root || !profile) return;
+		const pdf = joinPath(root, `.latexfrog/build/${profile}/lv-${profile}.pdf`);
+		const shown = pdfStore.current;
+		if (typeof shown === 'string' && shown.startsWith(fileUrl(pdf))) return;
+		if (await this.folder.exists(pdf)) pdfStore.current = fileUrl(pdf) + '&t=' + Date.now();
 	}
 
 	async loadTypical() {
@@ -268,6 +285,30 @@ class LvProject {
 	async compile() {
 		await this.noteActiveFile();
 		return this.request('compile');
+	}
+
+	/** where the active profile saves its copy, relative to the project (`PDF` when it sets none) */
+	get exportDir(): string {
+		return this.activeProfile?.output?.dir?.trim() || 'PDF';
+	}
+
+	get shownProfileLabel(): string {
+		return this.activeProfile?.label ?? '';
+	}
+
+	/** whether the active profile leaves this block of the document out: a piece it omits, or a part it does not choose */
+	leftOut(item: CompositionItem): boolean {
+		const p = this.activeProfile;
+		if (!p) return false;
+		if (item.kind === 'piece') return (p.omit ?? []).includes(item.key);
+		if (item.kind === 'section' && item.piece && (p.omit ?? []).includes(item.piece)) return true;
+		const part = item.kind === 'part' ? item.name : item.part;
+		if (part === null) return false;
+		const st = this.view?.state;
+		if (p.parts === 'all') return false;
+		if (p.parts === 'selection') return !(st?.selection ?? []).includes(part);
+		if (p.parts === 'current') return !p.partList.includes(part) && st?.currentPart !== part;
+		return !p.partList.includes(part);
 	}
 
 	private get activeProfile() {
@@ -342,6 +383,14 @@ class LvProject {
 
 	symbols = () => this.request<Symbols>('symbols');
 
+	/** the project files the PDF on show was built from (null before it has SyncTeX): what code-to-PDF sync can reach */
+	pdfFiles = async (): Promise<Set<string> | null> => {
+		const profile = this.shownProfile();
+		if (!profile) return null;
+		const files = await this.request<string[] | null>('synctex-files', { profile }).catch(() => null);
+		return files ? new Set(files.map((f) => f.toLowerCase())) : null;
+	};
+
 	/** the profile whose PDF the viewer shows: a click there must resolve against that build, not the active profile's */
 	private shownProfile(): string | null {
 		const url = pdfStore.current;
@@ -410,8 +459,6 @@ class LvProject {
 			this.onFinished?.({ type: 'finished', profile, ok: ev.ok, cancelled: ev.cancelled, pdf: null, updated: false });
 		} else if (ev.type === 'bake-finished') {
 			this.figureRevision++;
-		} else if (ev.type === 'saved') {
-			this.announceSaved(m.lv_saved_one(), ev.file);
 		} else if (ev.type === 'error') this.onError?.(ev.message);
 		else if (ev.type === 'finished' && !SERVICE_PROFILES.has(ev.profile)) {
 			this.progress = null;

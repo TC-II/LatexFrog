@@ -402,9 +402,7 @@ impl ProjectConfig {
             if let Some(w) = &p.watermark {
                 w.validate().map_err(|e| Error::Other(format!("the watermark of profile {id:?}: {e}")))?;
             }
-            if p.parts == PartsSel::List && p.part_list.is_empty() {
-                return mal(format!("the profile {id:?} compiles an empty list of parts"));
-            }
+            // An empty list of parts is valid: the profile compiles only the frame and the pieces it keeps (the title page alone).
         }
         for m in self.flags.partial.iter().chain(&self.flags.externalize).chain(&self.flags.figure_list) {
             if !macro_valida(m) {
@@ -503,6 +501,13 @@ pub fn infer_config(root_file: &str, hay_partes: bool) -> ProjectConfig {
 }
 
 /// `None` si no existe. Un JSON roto o inválido es un error con el nombre del archivo: no se pisa en silencio.
+/// The top folder of the project's figure cache as configured (`figuras-cache` when there is no configuration): searches and
+/// file listings skip it.
+pub fn figure_cache_folder(root: &Path) -> String {
+    let dir = read_config(root).ok().flatten().map_or_else(|| "figuras-cache".to_string(), |c| c.figure_dir());
+    dir.split('/').next().unwrap_or(&dir).to_string()
+}
+
 pub fn read_config(root: &Path) -> Result<Option<ProjectConfig>> {
     let path = config_file(root);
     let bytes = match std::fs::read(&path) {

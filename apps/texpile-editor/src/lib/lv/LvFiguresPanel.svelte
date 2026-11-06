@@ -122,11 +122,13 @@
 		if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
 		const here = (e.target as HTMLElement).closest<HTMLElement>('[data-testid=lv-figure-row]');
 		if (!here) return;
-		// the rows that can be seen: a closed group hides its rows
-		const rows = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-testid=lv-figure-row]:not(:disabled)')].filter((r) => r.offsetParent !== null);
+		// the keys stay in the tree, also at its ends: they must not reach the editor
+		e.preventDefault();
+		// every row in tree order, closed groups too: the next figure in a closed group opens it
+		const rows = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-testid=lv-figure-row]:not(:disabled)')];
 		const next = rows[rows.indexOf(here) + (e.key === 'ArrowDown' ? 1 : -1)];
 		if (!next) return;
-		e.preventDefault();
+		for (let d = next.parentElement?.closest('details'); d; d = d.parentElement?.closest('details')) d.open = true;
 		next.scrollIntoView({ block: 'nearest' });
 		next.click();
 	}
@@ -174,7 +176,8 @@
 	<details class="group" open={isOpen(n.key, depth > 0)} ontoggle={(e) => (opened[n.key] = e.currentTarget.open)} data-testid="lv-figure-group">
 		<summary class="flex cursor-pointer items-center gap-1.5 rounded py-0.5 pr-1 {n.heading.level <= 1 ? 'font-semibold' : ''}" title="{n.heading.file}:{n.heading.line}">
 			<span class="shrink-0 text-xs opacity-60 transition-transform group-open:rotate-90" aria-hidden="true">▸</span>
-			<span class="min-w-0 flex-1 truncate">{n.heading.title}</span>
+			<!-- `\section{}` has no title of its own: the same label Contents gives it -->
+			<span class="min-w-0 flex-1 truncate {n.heading.title ? '' : 'italic opacity-70'}">{n.heading.title || m.lv_outline_untitled()}</span>
 			{@render counts(n.total, n.changed, n.failed)}
 		</summary>
 		<div class="pl-3">

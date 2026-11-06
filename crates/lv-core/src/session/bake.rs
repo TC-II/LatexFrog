@@ -327,6 +327,7 @@ impl Session {
             flags,
             marca: None,
             includeonly,
+            cargadores: ix.loader_gates(),
             draft_images: false,
             figuras,
             solo_cache: false,
@@ -795,10 +796,11 @@ impl Session {
         let mut vale = false;
         let mut revisado = false;
         let mut imagenes = Vec::new();
+        let mut indice: Option<ProjectIndex> = None;
         let slugs = match &rf {
             Some(rf) => {
-                let ix = ProjectIndex::build(&self.root, rf, &cfg.parts.commands);
-                imagenes = crate::figimages::imagenes_del_proyecto(&self.root, &ix);
+                let ix = indice.insert(ProjectIndex::build(&self.root, rf, &cfg.parts.commands));
+                imagenes = crate::figimages::imagenes_del_proyecto(&self.root, ix);
                 vale = lista.as_ref().zip(hoy.as_deref()).is_some_and(|(l, h)| l.completa && l.vale_para(h, rf, &self.partes_con_figuras(&fcfg, &ix)));
                 revisado = vale && lista.as_ref().and_then(|l| l.huella_listado.as_ref()).is_some_and(|h| Some(h) == self.huella_actual(&ix, &fcfg).as_ref());
                 if fcfg.modo == Modo::App {
@@ -846,9 +848,11 @@ impl Session {
                         archivo: Some(archivo.clone()),
                         estado: estado.into(),
                         bytes: en_cache.map_or(0, |c| c.bytes),
-                        codigo: Some(f.archivo),
+                        codigo: Some(f.archivo.clone()),
                         linea: Some(f.linea),
-                        donde_linea: Some(f.donde_linea),
+                        // the line that brings the code in, only for a file that is not a part of its own (a figure kept in its own
+                        // file): a figure in an exercise or chapter opens there, not on the line of the main file that loads it
+                        donde_linea: indice.as_ref().is_none_or(|ix| ix.part_of(&f.archivo) == ix.part_of(archivo)).then_some(f.donde_linea),
                         caption: f.caption,
                     });
                 }

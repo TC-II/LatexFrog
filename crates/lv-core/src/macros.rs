@@ -35,6 +35,9 @@ pub struct PathTemplate {
 pub struct Heading {
     pub arg: usize,
     pub level: u8,
+    /// The title is drawn by hand (`\LARGE\textbf{#2}`), not by a sectioning command: it has no level of its own, and the
+    /// outline puts it above the document's real sections.
+    pub drawn: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -246,6 +249,20 @@ impl Macros {
         Some(def.optional[..p - 1].iter().filter(|o| !**o).count())
     }
 
+    /// `name` only sets things (every command its definition calls is in `setters`, and it calls at least one):
+    /// `\configurarFooter{...}` is `\pgfkeys{...}`, `\soloEjercicio` two `\def`. A call to it prints nothing.
+    pub fn only_sets(&self, name: &str, setters: &[&str]) -> bool {
+        let Some(d) = self.defs.get(name) else { return false };
+        let cs = calls(&d.body);
+        !cs.is_empty() && cs.iter().all(|(c, _)| setters.contains(c) || c.ends_with("true") || c.ends_with("false"))
+    }
+
+    /// How many parameters `name` takes, when none of them is optional: the driver can then wrap the macro with the same signature.
+    pub fn mandatory_arity(&self, name: &str) -> Option<usize> {
+        let d = self.defs.get(name)?;
+        (!d.optional.iter().any(|o| *o)).then_some(d.optional.len())
+    }
+
     /// Every loader, by name, with the paths it builds.
     pub fn loaders(&self) -> BTreeMap<String, Vec<PathTemplate>> {
         let mut memo: HashMap<String, Vec<PathTemplate>> = HashMap::new();
@@ -312,17 +329,17 @@ impl Macros {
             let wrapped = calls(&def.body).into_iter().find_map(|(callee, args)| {
                 let level = SECTIONING.iter().position(|s| *s == callee)? as u8;
                 let (p, rest) = one_parameter(args.first()?)?;
-                (rest == "{}").then_some((p, level))
+                (rest == "{}").then_some((p, level, false))
             });
             let found = wrapped.or_else(|| {
                 // only a macro that draws a heading by hand, not one that only sets text bold inline
                 let large = ["\\LARGE", "\\Large", "\\huge", "\\Huge"].iter().any(|s| def.body.contains(s));
                 let p = big.captures(&def.body)?.get(1)?.as_str().parse().ok()?;
-                large.then_some((p, 2))
+                large.then_some((p, 2, true))
             });
-            if let Some((p, level)) = found {
+            if let Some((p, level, drawn)) = found {
                 if let Some(arg) = Self::mandatory_index(def, p) {
-                    out.insert(name.clone(), Heading { arg, level });
+                    out.insert(name.clone(), Heading { arg, level, drawn });
                 }
             }
         }
@@ -434,8 +451,8 @@ mod tests {
             "\\newcommand{\\resaltar}[1]{\\textbf{#1}}\n",
         ));
         let h = m.headings();
-        assert_eq!(h["metaEjercicio"], Heading { arg: 0, level: 2 });
-        assert_eq!(h["Tema"], Heading { arg: 0, level: 2 });
+        assert_eq!(h["metaEjercicio"], Heading { arg: 0, level: 2, drawn: true });
+        assert_eq!(h["Tema"], Heading { arg: 0, level: 2, drawn: false });
         assert!(!h.contains_key("resaltar"), "inline bold is not a heading");
     }
 }

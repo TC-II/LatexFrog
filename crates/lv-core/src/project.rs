@@ -104,7 +104,7 @@ pub fn find_root_candidates(root: &Path) -> Vec<String> {
             let path = e.path();
             let rel_hijo = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
             if path.is_dir() {
-                if nivel < 2 && name != "figuras-cache" {
+                if nivel < 2 && !(rel.is_empty() && name == crate::config::figure_cache_folder(dir)) {
                     rec(&path, &rel_hijo, nivel + 1, out);
                 }
             } else if name.to_lowercase().ends_with(".tex") {

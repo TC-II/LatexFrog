@@ -379,6 +379,7 @@ fn lo_que_toca_una_figura(t: &str) -> Vec<&str> {
     let mut v = Vec::new();
     trozos(t, "\\begin{figure", "\\end{figure", &mut v);
     trozos(t, "\\begin{tikzpicture}", "\\end{tikzpicture}", &mut v);
+    trozos(t, "\\begin{circuitikz}", "\\end{circuitikz}", &mut v);
     v.extend(re.find_iter(t).map(|m| m.as_str()));
     v
 }

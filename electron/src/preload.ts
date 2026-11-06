@@ -198,6 +198,7 @@ contextBridge.exposeInMainWorld('texpileNative', {
 	fsPurgeUndo: (root: string) => invokeFs('fs:purgeUndo', root),
 	/** select a file in the OS file manager (Explorer, Finder, ...) -> { ok }. */
 	revealItem: (path: string) => ipcRenderer.invoke('shell:revealItem', path),
+	showFolder: (path: string) => ipcRenderer.invoke('shell:showFolder', path),
 	/** find-in-files -> { results, truncated, total? }. */
 	fsSearch: (root: string, q: string, regex: boolean, caseSensitive: boolean) => invokeFs('fs:search', root, q, regex, caseSensitive),
 	/** { exists, mtimeMs, size }, used to poll for a freshly-written compile output. */

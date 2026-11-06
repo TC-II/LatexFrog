@@ -80,7 +80,7 @@ export type OutputsEdit = { publish: string; exportDir: string; pattern: string 
 export type ConfigSection = 'root' | 'parts' | 'flags' | 'figures' | 'outputs';
 
 export const PROFILE_COLORS = ['#378ADD', '#1D9E75', '#D85A30', '#7F77DD', '#D4537E', '#BA7517'];
-export const DEFAULT_OUTPUT: ProfileOutput = { dir: '../PDF', pattern: '{profile}.pdf' };
+export const DEFAULT_OUTPUT: ProfileOutput = { dir: 'PDF', pattern: '{profile}.pdf' };
 /** one PDF per part: its number and its name */
 export const PER_PART_PATTERN = '{num:02} - {name}.pdf';
 

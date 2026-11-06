@@ -90,5 +90,5 @@ async function draw(path: string): Promise<{ url: string; width: number } | null
 
 /** a block the visual editor may show as its baked picture: a figure environment that draws with TikZ or loads a file */
 export function mayHoldBakedFigure(text: string): boolean {
-	return lvProject.active && /\\begin\s*\{figure\*?\}/.test(text) && /\\begin\s*\{tikzpicture\}|\\input\s*\{/.test(text);
+	return lvProject.active && /\\begin\s*\{figure\*?\}/.test(text) && /\\begin\s*\{(?:tikzpicture|circuitikz)\}|\\input\s*\{/.test(text);
 }

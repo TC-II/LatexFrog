@@ -188,11 +188,43 @@
 
 	const rows = $derived(validation?.normalizado ? compactDiff(lineDiff(onDisk, validation.normalizado)) : []);
 	const changed = $derived(rows.some((r) => r.kind === 'add' || r.kind === 'remove'));
+	// Escape closes like Close does; a folder that is not a project yet has no Close, so Escape does nothing there
+	function onWindowKey(e: KeyboardEvent) {
+		if (e.key !== 'Escape' || e.defaultPrevented || required || busy) return;
+		e.preventDefault();
+		close();
+	}
 </script>
+
+<svelte:window onkeydown={onWindowKey} />
 
 <div class="fixed inset-0 z-1400 flex items-center justify-center bg-black/40 p-4" role="presentation">
 	<div class="flex max-h-[85vh] w-full max-w-5xl flex-col gap-3 overflow-y-auto rounded-lg bg-surface-50-950 p-4 text-sm shadow-xl" role="dialog" aria-modal="true" aria-label={m.lv_config_title()} data-testid="lv-config" aria-busy={busy}>
-		<h2 class="flex items-center gap-2 text-base font-semibold"><LvFrog size={14} />{m.lv_config_title()}</h2>
+		<!-- the actions sit at the top right and stay there while the panel scrolls -->
+		<div class="sticky -top-4 z-10 -mx-4 -mt-4 flex items-center gap-2 bg-surface-50-950 px-4 pt-4 pb-2">
+			<h2 class="flex items-center gap-2 text-base font-semibold"><LvFrog size={14} />{m.lv_config_title()}</h2>
+			{#if config}
+				<!-- the engine is the project's, not a profile's: beside the title -->
+				<label class="ml-2 flex items-center gap-2" title={m.lv_profiles_engine_hint()}>
+					<span class="opacity-70">{m.lv_profiles_engine()}</span>
+					<select class="rounded border border-surface-300-700 bg-transparent px-1 py-0.5" data-testid="lv-config-engine" value={config.engine ?? 'pdflatex'} onchange={(e) => change({ ...config, engine: e.currentTarget.value })}>
+						<option value="pdflatex">pdflatex</option>
+						<option value="xelatex">xelatex</option>
+						<option value="lualatex">lualatex</option>
+					</select>
+				</label>
+			{/if}
+			<div class="ml-auto flex items-center gap-2">
+				{#if required}
+					<p class="self-center text-xs opacity-70" data-testid="lv-config-required">{m.lv_config_required()}</p>
+					<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-other-folder" onclick={openAnother}>{m.lv_config_other_folder()}</button>
+				{:else}
+					<button class="rounded px-2 py-1 hover:bg-surface-200-800" onclick={close}>{m.lv_close()}</button>
+				{/if}
+				<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-run" title={m.lv_config_run_title()} disabled={busy || !validation?.ok || !editing || !!subfolder} onclick={() => save(true)}>{m.lv_config_run()}</button>
+				<button class="rounded bg-primary-500 px-3 py-1 text-white" data-testid="lv-config-save" disabled={busy || !validation?.ok || !!subfolder} onclick={() => save()}>{m.lv_config_save()}</button>
+			</div>
+		</div>
 		{#if config}
 			<LvProfileEditor {config} {pieces} {parts} bind:selected={editing} root={lvProject.view?.root ?? lvProject.folderRoot ?? ''} onChange={change} />
 		{/if}
@@ -315,15 +347,5 @@
 				<button class="rounded border border-surface-300-700 px-2 py-0.5" onclick={openSubfolder}>{m.lv_config_subfolder_open({ folder: subfolder })}</button>
 			</p>
 		{/if}
-		<div class="flex justify-end gap-2">
-			{#if required}
-				<p class="mr-auto self-center text-xs opacity-70" data-testid="lv-config-required">{m.lv_config_required()}</p>
-				<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-other-folder" onclick={openAnother}>{m.lv_config_other_folder()}</button>
-			{:else}
-				<button class="rounded px-2 py-1 hover:bg-surface-200-800" onclick={close}>{m.lv_close()}</button>
-			{/if}
-			<button class="rounded px-2 py-1 hover:bg-surface-200-800" data-testid="lv-config-run" title={m.lv_config_run_title()} disabled={busy || !validation?.ok || !editing || !!subfolder} onclick={() => save(true)}>{m.lv_config_run()}</button>
-			<button class="rounded bg-primary-500 px-3 py-1 text-white" data-testid="lv-config-save" disabled={busy || !validation?.ok || !!subfolder} onclick={() => save()}>{m.lv_config_save()}</button>
-		</div>
 	</div>
 </div>

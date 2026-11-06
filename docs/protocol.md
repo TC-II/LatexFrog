@@ -42,6 +42,7 @@ Every command except `open` needs an open project.
 | `problems` | `profile` | `Problem[]` |
 | `symbols` *async* | | `Symbols`; `sections` is the project-wide outline |
 | `synctex-forward` | `file`, `line`, optional `profile` | `SyncForward` or `null`; `profile`, the PDF on screen, is used first when it holds the file |
+| `synctex-files` | `profile` | the project files that profile's PDF read (from its SyncTeX), or `null` before its first build; a file a TeX conditional skips is missing |
 | `synctex-inverse` | `profile`, `page`, `x`, `y` | `SyncInverse` or `null` |
 | `pdf-for` | `file` | PDF path or `null`, the newest PDF that contains the file |
 | `figures-status` *async* | | `FiguresStatus`: every figure in the code with where it is (`codigo`, `linea`, `dondeLinea`, `caption`) and its `estado`; `revisado` says the last check is of the code as it is now; `imagenes` lists the `\includegraphics` outside TikZ (`imagen`, `codigo`, `linea`, `archivo`, `dondeLinea`, `caption`) |

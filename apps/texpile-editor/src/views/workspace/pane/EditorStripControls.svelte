@@ -1,7 +1,8 @@
 <script lang="ts">
 	// one editor's own controls, at the end of its tab strip: Open Changes while its file has some, and its
 	// visual/source toggle. On an editor without focus they stay a click away, with the current mode in gray
-	import { ChevronDown, Code, Eye, GitCompare } from '@lucide/svelte';
+	import { ChevronDown, Code, Eye, GitCompare, Sun } from '@lucide/svelte';
+	import { lightPage } from '$lib/lv/lightPage.svelte';
 	import { tip } from '$lib/components/tooltip.svelte';
 	import MenuDropdown from '$lib/menus/MenuDropdown.svelte';
 	import { scmHandlers } from '$lib/workspace/scm/actions/scmHandlers.svelte';
@@ -87,6 +88,18 @@
 			aria-label={m.wsview_compare_last()}
 		>
 			<span class="flex h-[1lh] items-center"><GitCompare class="size-3.5" /></span>
+		</button>
+	{/if}
+	{#if toggles && shown === 'visual'}
+		<!-- LatexFrog: the page in light colors, white like the PDF, without touching the theme -->
+		<button
+			class="title-bar-button {lightPage.on ? 'text-primary-ink' : 'opacity-70'}"
+			onclick={() => lightPage.toggle()}
+			aria-label={m.lv_light_page()}
+			aria-pressed={lightPage.on}
+			use:tip={lightPage.on ? m.lv_light_page_off() : m.lv_light_page()}
+		>
+			<Sun class="size-3.5" />
 		</button>
 	{/if}
 	{#if toggles && props.compact}

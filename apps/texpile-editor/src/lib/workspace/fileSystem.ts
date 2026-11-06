@@ -184,6 +184,7 @@ type TexpileNative = {
 	fsTrash: (body: { path: string; root: string; keep?: boolean }) => Promise<{ backup: string | null; recycled: boolean; kept?: boolean }>;
 	fsPurgeUndo: (root: string) => Promise<{ ok: boolean }>;
 	revealItem?: (path: string) => Promise<{ ok: boolean }>;
+	showFolder?: (path: string) => Promise<{ ok: boolean }>;
 	fsSearch: (
 		root: string,
 		q: string,
@@ -368,6 +369,12 @@ export async function purgeUndoBackups(root: string): Promise<void> {
 /** select the file in the OS file manager. A no-op outside the desktop shell. */
 export async function revealItem(path: string): Promise<void> {
 	await nativeBridge()?.revealItem?.(path);
+}
+
+/** a folder opened in the file manager, inside it; falls back to selecting it in its parent */
+export async function showFolder(path: string): Promise<void> {
+	const r = await nativeBridge()?.showFolder?.(path);
+	if (!r?.ok) await revealItem(path);
 }
 
 /**

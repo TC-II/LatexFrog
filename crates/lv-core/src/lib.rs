@@ -8,6 +8,7 @@ pub mod candado;
 pub mod cocinero;
 pub mod doctor;
 pub mod cola;
+pub mod composicion;
 pub mod config;
 pub mod detectar;
 pub mod error;

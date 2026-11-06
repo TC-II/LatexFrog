@@ -624,6 +624,7 @@ impl Session {
             flags,
             marca: pc.watermark.clone().filter(|w| w.on).map(|w| (w, pc.label.clone().unwrap_or_else(|| perfil.to_string()))),
             includeonly,
+            cargadores: ix.loader_gates(),
             // (la exportación nunca va en borrador, ni aunque su perfil lo diga: es lo que se entrega)
             draft_images: perfil != config::PERFIL_EXPORT && (pc.draft_images || Self::borrador_para(&d.state, &cfg, perfil)),
             figuras,
@@ -1016,7 +1017,9 @@ impl Session {
     /// Etiquetas, citas, secciones, definiciones y archivos del proyecto, con el lint (sin compilar).
     pub fn symbols(&self) -> Result<Symbols> {
         let (ix, _) = self.indice_fresco()?;
-        Ok(Symbols::build(&self.root, &ix))
+        let mut s = Symbols::build(&self.root, &ix);
+        s.composition = crate::composicion::build(&ix, &s.sections, &crate::piezas::detectar(&self.root, &ix));
+        Ok(s)
     }
 
     pub fn search(&self, o: &SearchOptions, reemplazo: Option<&str>) -> Result<SearchResult> {
@@ -1119,6 +1122,16 @@ impl Session {
             line_used: f.line_used,
             perfil,
         }))
+    }
+
+    /// The project files in the PDF of `perfil` (the one on show), from its SyncTeX: what the outline can jump to in that PDF.
+    /// `Ok(None)` while that profile has no SyncTeX yet.
+    pub fn synctex_files(&self, perfil: &str) -> Result<Option<Vec<String>>> {
+        match self.cargar_synctex(perfil) {
+            Ok(sx) => Ok(Some(sx.files(&self.root))),
+            Err(Error::NotFound(_)) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     /// Del PDF al código. `(page, x, y)` en bp desde arriba a la izquierda.

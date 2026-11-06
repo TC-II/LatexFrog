@@ -25,7 +25,7 @@ import { CompileWatchers } from './compileWatchers';
 export { relFromRoot, resolveCompileCommand, resolveFormatCommand } from './compileResolve';
 export type { CompileDeps } from './compileDeps';
 import { drivesTypst, isTypstCommand } from './typstCommand';
-import { basename, dirname, joinPath, revealItem, samePath } from './fileSystem';
+import { basename, createEntry, dirname, joinPath, pathFromFileUrl, revealItem, samePath, showFolder, statFile, writeBinaryFile } from './fileSystem';
 import { toaster } from '$lib/modals/toaster-svelte';
 import { reportMissingTool } from './toolMissing';
 import { m } from '$lib/paraglide/messages';
@@ -92,11 +92,19 @@ export class CompilePipeline {
 
 	private finishEngineRun = async (ev: Finished) => {
 		try {
-			compileLog.current = toLogState(await lvProject.problems(ev.profile), ev.profile);
-			this.deps.shareCompileState();
+			// the PDF first: a log that cannot be read must not keep the previous PDF on screen
 			const root = workspaceRoot.current;
-			// up to date is still a result: with nothing on show, the existing PDF is what the user asked to see
-			if (root && ev.pdf && (ev.updated || !pdfStore.current)) this.showCompiledPdf(joinPath(root, ev.pdf), Date.now());
+			// up to date is still a result: with nothing on show, or another profile's PDF on show, this one is what the user asked to see
+			const pdf = root && ev.pdf ? joinPath(root, ev.pdf) : null;
+			const shown = pdfStore.current;
+			const other = typeof shown !== 'string' || !decodeURIComponent(shown).replace(/\\/g, '/').toLowerCase().includes(`/build/${ev.profile.toLowerCase()}/`);
+			if (pdf && (ev.updated || other)) this.showCompiledPdf(pdf, Date.now());
+			try {
+				compileLog.current = toLogState(await lvProject.problems(ev.profile), ev.profile);
+				this.deps.shareCompileState();
+			} catch (e) {
+				console.warn('[compile] problems of', ev.profile, e);
+			}
 		} finally {
 			this.endRun();
 			this.deps.refreshTree();
@@ -173,8 +181,47 @@ export class CompilePipeline {
 		return pdfStore.current !== null;
 	}
 	// the compiled PDF in the OS file manager, or its folder while there is none
+	/** the file of the PDF on show (an engine project's lives in its build folder, not where latexmk would put it) */
+	shownPdfPath = $state<string | null>(null);
+	/** the PDF on screen: the one this session compiled, else the one restored when the project opened */
+	private onScreenPdf(): string | null {
+		const url = pdfStore.current;
+		return (typeof url === 'string' ? pathFromFileUrl(url) : null) ?? this.shownPdfPath;
+	}
+
+	/** the PDF on show, copied to `PDF/<main file>.pdf` inside the project (replacing an earlier copy), then shown in its folder */
+	exportShownPdf = async () => {
+		const root = lvProject.view?.root;
+		const from = this.onScreenPdf();
+		if (!root || !from) return;
+		const main = lvProject.view?.rootFile ?? basename(from);
+		const name = `${basename(main).replace(/\.tex$/i, '')}.pdf`;
+		const dir = joinPath(root, 'PDF');
+		const to = joinPath(dir, name);
+		try {
+			if (!(await statFile(dir)).isDirectory) await createEntry(dir, 'dir');
+			const bytes = await (await fetch(this.deps.fileUrl(from) + '&t=' + Date.now())).blob();
+			await writeBinaryFile(to, bytes);
+			toaster.success({ title: m.lv_export_current_done({ file: `PDF/${name}` }) });
+			await revealItem(to);
+		} catch (e) {
+			toaster.error({ title: m.lv_export_current_failed(), description: e instanceof Error ? e.message : String(e) });
+		}
+	};
+
+	/** the project's `PDF` folder, where Export current as PDF writes (made if it is not there yet) */
+	revealExports = async () => {
+		// the project folder even before the engine has opened it (right after start)
+		const root = lvProject.view?.root ?? workspaceRoot.current;
+		if (!root) return;
+		// the folder the active profile saves its copy in (`PDF` by default)
+		const dir = joinPath(root, lvProject.exportDir);
+		if (!(await statFile(dir)).isDirectory) await createEntry(dir, 'dir');
+		await showFolder(dir);
+	};
+
 	revealOutput = async () => {
-		const pdfPath = this.expectedPdfPath();
+		const pdfPath = (lvProject.active && this.onScreenPdf()) || this.expectedPdfPath();
 		if (!pdfPath) return;
 		const s = await this.deps.stat(pdfPath);
 		await revealItem(s.exists ? pdfPath : dirname(pdfPath));
@@ -478,6 +525,7 @@ export class CompilePipeline {
 	private showCompiledPdf(pdfPath: string, mtimeMs: number) {
 		void this.deps.getSession().pushPdf(pdfPath); // shared session: guests get the fresh bytes
 		const url = this.deps.fileUrl(pdfPath) + '&t=' + Math.round(mtimeMs); // cache-bust so it reloads
+		this.shownPdfPath = pdfPath;
 		if (pdfStore.current === url) return;
 		this.pdfFilename = basename(pdfPath);
 		pdfStore.current = url;

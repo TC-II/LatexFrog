@@ -47,6 +47,13 @@ fn check(dir: &Path) -> Vec<String> {
     if got != strings(&exp["headings"]) {
         bad.push(format!("headings {got:?}, expected {:?}", strings(&exp["headings"])));
     }
+    if let Some(levels) = exp.get("headingLevels").and_then(|v| v.as_array()) {
+        let got: Vec<u64> = sym.sections.iter().map(|s| s.level as u64).collect();
+        let want: Vec<u64> = levels.iter().filter_map(|v| v.as_u64()).collect();
+        if got != want {
+            bad.push(format!("heading levels {got:?}, expected {want:?}"));
+        }
+    }
     if exp.get("imageCaptions").is_some() {
         // the `\includegraphics` images, by file
         let captions: Vec<String> = imagenes_del_proyecto(&root, &ix).into_iter().map(|i| i.caption.unwrap_or_default()).collect();

@@ -3148,5 +3148,14 @@
 	"lv_watermark_opacity": "Strength",
 	"lv_watermark_size": "Size (pt)",
 	"lv_watermark_angle": "Angle (°)",
-	"lv_watermark_preview": "Preview of the watermark on a page"
+	"lv_watermark_preview": "Preview of the watermark on a page",
+	"lv_export_current": "Export current as PDF",
+	"lv_export_current_done": "Saved {file}",
+	"lv_export_current_failed": "Could not export the PDF",
+	"lv_output_current_view": "Current view",
+	"lv_output_exports": "Exports",
+	"lv_outline_not_in_pdf": "Not in the PDF on show: the document leaves this file out (an \\if switch), so the PDF cannot follow it",
+	"lv_outline_left_out": "Left out by the active profile ({profile})",
+	"lv_light_page": "Light page: the visual editor's page in white, like the PDF",
+	"lv_light_page_off": "Back to the theme's colors for the page"
 }

@@ -107,7 +107,7 @@
      No bottom padding: the editor itself runs to the foot of the pane (app.css), so a drop or a
      click below the last block lands in it -->
 <div
-	class="flex min-h-full flex-col pt-8 pr-7.5 pl-12 group-data-[gutter-stacked]/pane:pr-1 group-data-[gutter-stacked]/pane:pl-7.5"
+	class="lf-page flex min-h-full flex-col pt-8 pr-7.5 pl-12 group-data-[gutter-stacked]/pane:pr-1 group-data-[gutter-stacked]/pane:pl-7.5"
 	onmousedown={(event) => live && caretFromMargin(event, editorViewStore.current)}
 	role="presentation"
 >

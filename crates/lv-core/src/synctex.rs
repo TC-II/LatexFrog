@@ -269,6 +269,15 @@ impl Synctex {
         Synctex { inputs, scale: unit * (mag / 1000.0) / 65781.76, off_x, off_y, nodes, pages, fwd, by_page }
     }
 
+    /// The project files TeX read for this PDF, relative to the root with `/` (the driver and the system's files left out).
+    /// A file the index reaches but a TeX conditional skips (`\ifmostrarSoluciones`) is not here.
+    pub fn files(&self, root: &Path) -> Vec<String> {
+        let mut v: Vec<String> = self.inputs.iter().filter_map(|(t, _)| self.rel_of_tag(root, *t)).collect();
+        v.sort();
+        v.dedup();
+        v
+    }
+
     pub fn pages(&self) -> usize {
         self.pages
     }
@@ -530,6 +539,9 @@ mod tests {
         assert_eq!(s.tag_of(raiz(), "Secciones/Aproximación.tex"), Some(3));
         assert_eq!(s.tag_of(raiz(), "secciones\\aproximación.TEX"), Some(3), "sin distinguir barras ni mayúsculas");
         assert_eq!(s.tag_of(raiz(), "no-esta.tex"), None);
+        let files = s.files(raiz());
+        assert!(files.contains(&"main.tex".to_string()) && files.contains(&"Secciones/Aproximación.tex".to_string()), "{files:?}");
+        assert!(!files.iter().any(|f| f == "no-esta.tex"));
     }
 
     #[test]

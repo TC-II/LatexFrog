@@ -162,7 +162,7 @@ fn listar_archivos(root: &Path) -> Vec<Archivo> {
                 return;
             }
             let name = e.file_name().to_string_lossy().to_string();
-            if name.starts_with('.') || matches!(name.as_str(), "figuras-cache" | "node_modules" | "PDF" | "export") {
+            if name.starts_with('.') || matches!(name.as_str(), "node_modules" | "PDF" | "export") || (rel.is_empty() && name == crate::config::figure_cache_folder(dir)) {
                 continue;
             }
             let path = e.path();
@@ -542,7 +542,7 @@ fn figuras_detectadas(archivos: &[Archivo], raiz: &str, auxiliares: &BTreeSet<St
             avisos,
         };
     }
-    let usa_tikz = propios.iter().any(|a| a.texto.contains("{tikzpicture}") || a.texto.contains("\\usepackage{tikz}") || a.texto.contains("\\usetikzlibrary"));
+    let usa_tikz = propios.iter().any(|a| a.texto.contains("{tikzpicture}") || a.texto.contains("{circuitikz}") || a.texto.contains("\\usepackage{tikz}") || a.texto.contains("\\usetikzlibrary"));
     if usa_tikz {
         // El archivo que define el estilo de las figuras da el sello: el que tiene `\tikzset`, y si no, la raíz.
         let estilo = propios

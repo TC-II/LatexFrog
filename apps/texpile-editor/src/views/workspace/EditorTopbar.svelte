@@ -57,6 +57,8 @@
 		/** latexmk only, and only while Compile runs the shell command (CompilePipeline decides) */
 		latexmkActionsAvailable?: boolean;
 		onShowOutput: () => void;
+		onExportCurrent?: () => void;
+		onShowExports?: () => void;
 		outputAvailable?: boolean;
 		onShowProblems: () => void;
 		/** open review threads in the project; 0 hides the badge, like a clean compile hides Problems */
@@ -97,6 +99,8 @@
 		onCleanAux,
 		latexmkActionsAvailable = false,
 		onShowOutput,
+		onExportCurrent,
+		onShowExports,
 		outputAvailable = false,
 		onShowProblems,
 		commentCount = 0,
@@ -220,6 +224,8 @@
 					{onCleanAux}
 					latexmkActions={latexmkActionsAvailable}
 					{onShowOutput}
+					{onExportCurrent}
+					{onShowExports}
 					{outputAvailable}
 				/>
 			</div>

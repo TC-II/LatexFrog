@@ -143,6 +143,8 @@ pub struct DriverSpec {
     pub marca: Option<(crate::config::WatermarkCfg, String)>,
     /// Partes que entran, por `\includeonly`. `None` = no se toca.
     pub includeonly: Option<Vec<String>>,
+    /// Loader macros whose calls are parts (`ProjectIndex::loader_gates`): with `includeonly`, a call not on the list loads nothing.
+    pub cargadores: Vec<(String, crate::graph::Gate)>,
     pub draft_images: bool,
     /// La externalización de figuras que la app agrega en el modo `app` (7 del plan). `None` en el modo `project`: el libro la
     /// trae en su `structure.tex`.
@@ -204,11 +206,18 @@ fn render_figuras(f: &FigureInject) -> Result<Vec<String>> {
         "\\def\\lvAplicar{\\ifdefined\\tikzsetfigurename\\ifx\\lvNombreActual\\empty\\else\\expandafter\\tikzsetfigurename\\expandafter{\\lvNombreActual}\\fi\\fi}".into(),
         "\\def\\lvEntrar{\\global\\advance\\lvProfundidad by 1 \\expandafter\\xdef\\csname lvPila@\\the\\lvProfundidad\\endcsname{\\lvNombreActual}\\edef\\lvClave{\\ifx\\CurrentFilePath\\empty\\else\\CurrentFilePath/\\fi\\CurrentFile}\\ifcsname lvslug@\\lvClave\\endcsname\\xdef\\lvNombreActual{\\lvSello-\\csname lvslug@\\lvClave\\endcsname-}\\lvAplicar\\fi}".into(),
         "\\def\\lvSalir{\\xdef\\lvNombreActual{\\csname lvPila@\\the\\lvProfundidad\\endcsname}\\global\\advance\\lvProfundidad by -1 \\lvAplicar}".into(),
+        // A figure's own job (pgf defines `\tikzexternalrealjob` for it) ships out no pages but the figure, so a one-shot page
+        // background (eso-pic's `\AddToShipoutPictureBG*` on a title page) would land on the figure, outside the group that set it up.
+        "\\ifdefined\\tikzexternalrealjob\\AtBeginDocument{\\DisableGenericHook{shipout/background}\\DisableGenericHook{shipout/foreground}}\\fi".into(),
         "\\AddToHook{file/before}{\\lvEntrar}".into(),
         "\\AddToHook{file/after}{\\lvSalir}".into(),
     ];
     let desactivar = if f.solo_en_figure { "\\tikzexternaldisable" } else { "" };
     l.push(format!("\\AddToHook{{package/tikz/after}}{{\\usetikzlibrary{{external}}\\tikzexternalize[prefix={}/{modo}]{desactivar}\\lvAplicar}}", f.dir));
+    // circuitikz does `\let\circuitikz\tikzpicture` when it loads, while externalization is off, so its pictures were never
+    // externalized. Going through `\tikzpicture` each time, and telling pgf the environment ends with `\end{circuitikz}`, makes
+    // them figures like any other. The two definitions are local to the environment's group.
+    l.push("\\AddToHook{package/circuitikz/after}{\\def\\circuitikz{\\expandafter\\def\\csname tikzexternal@laTeX@collect@until@end@tikzpicturetikzpicturestring\\endcsname{circuitikz}\\expandafter\\def\\csname tikzexternal@TEXDIALECT@endpicture\\endcsname{\\end{circuitikz}}\\tikzpicture}\\def\\endcircuitikz{\\endtikzpicture}}".into());
     if f.solo_en_figure {
         for e in ["figure", "figure*"] {
             l.push(format!("\\AddToHook{{env/{e}/begin}}{{\\tikzexternalenable}}"));
@@ -377,6 +386,25 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
         // `\includeonly` sólo vale en el preámbulo. El hook corre al principio de `\begin{document}`, antes de que LaTeX
         // lo prohíba, y así no hay que editar la raíz del usuario (S4: el PDF sale idéntico píxel a píxel).
         l.push(format!("\\AddToHook{{begindocument/before}}{{\\includeonly{{{}}}}}", partes.join(",")));
+        // A part a loader `\input`s is out of `\includeonly`'s reach: the macro is wrapped, once the preamble has defined it, so
+        // a call whose name is not chosen loads nothing. It still runs, into a box that is thrown away and with `\input` off, so
+        // its counters step and a chosen exercise keeps the number it has in the whole document (as `\include` keeps a chapter's).
+        if !s.cargadores.is_empty() {
+            for p in partes {
+                l.push(format!("\\expandafter\\def\\csname lvParte@{p}\\endcsname{{}}"));
+            }
+        }
+        for (cmd, g) in &s.cargadores {
+            if !cmd.bytes().all(|c| c.is_ascii_alphabetic()) || g.arg >= g.arity || g.arity > 9 {
+                continue;
+            }
+            let args: String = (1..=g.arity).map(|i| format!("{{#{i}}}")).collect();
+            l.push(format!(
+                "\\AddToHook{{begindocument/before}}{{\\ifdefined\\lvCarga{cmd}\\else\\NewCommandCopy\\lvCarga{cmd}\\{cmd}\\renewcommand\\{cmd}[{n}]{{\\ifcsname lvParte@#{k}\\endcsname\\lvCarga{cmd}{args}\\else\\begingroup\\setbox0\\vbox{{\\def\\input##1{{}}\\lvCarga{cmd}{args}}}\\endgroup\\fi}}\\fi}}",
+                n = g.arity,
+                k = g.arg + 1
+            ));
+        }
     }
     if s.fragmento {
         // `begindocument/end` corre al terminar `\begin{document}`: el fragmento es lo primero del cuerpo. Con `\includeonly{}` ninguna
@@ -888,6 +916,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_loader_part_left_out_is_skipped_by_wrapping_its_macro() {
+        let s = DriverSpec {
+            perfil: "p".into(),
+            root_rel: "main.tex".into(),
+            includeonly: Some(vec!["fd-par".into()]),
+            cargadores: vec![("Ejercicio".into(), crate::graph::Gate { arity: 1, arg: 0 })],
+            ..Default::default()
+        };
+        let d = render_driver_spec(&s).unwrap();
+        assert!(d.contains("\\expandafter\\def\\csname lvParte@fd-par\\endcsname{}"), "{d}");
+        assert!(
+            d.contains("\\AddToHook{begindocument/before}{\\ifdefined\\lvCargaEjercicio\\else\\NewCommandCopy\\lvCargaEjercicio\\Ejercicio\\renewcommand\\Ejercicio[1]{\\ifcsname lvParte@#1\\endcsname\\lvCargaEjercicio{#1}\\else\\begingroup\\setbox0\\vbox{\\def\\input##1{}\\lvCargaEjercicio{#1}}\\endgroup\\fi}\\fi}"),
+            "{d}"
+        );
+        // without a selection nothing is wrapped
+        let todo = render_driver_spec(&DriverSpec { includeonly: None, ..s }).unwrap();
+        assert!(!todo.contains("lvCarga"), "{todo}");
+    }
+
+    #[test]
+    fn circuitikz_pictures_go_through_the_externalized_tikzpicture() {
+        let f = FigureInject { dir: "figuras-cache".into(), sello: "ABC123".into(), solo_en_figure: true, lista: false, slugs: vec![] };
+        let l = render_figuras(&f).unwrap().join("\n");
+        assert!(l.contains("\\AddToHook{package/circuitikz/after}{\\def\\circuitikz{"), "{l}");
+        assert!(l.contains("{\\end{circuitikz}}\\tikzpicture}\\def\\endcircuitikz{\\endtikzpicture}}"), "{l}");
+        assert!(l.contains("\\ifdefined\\tikzexternalrealjob\\AtBeginDocument{\\DisableGenericHook{shipout/background}"), "{l}");
+    }
+
+    #[test]
     fn chunker_no_parte_un_caracter_entre_bloques() {
         let bytes = "añb€".as_bytes(); // ñ = 2 bytes, € = 3 bytes
         for corte in 1..bytes.len() {
@@ -1018,6 +1075,7 @@ mod tests {
             flags: vec!["CompilacionReducida".into(), "TikzExternalizar".into()],
             marca: None,
             includeonly: Some(vec!["Secciones/Desnormalización".into(), "Secciones/Uno".into()]),
+            cargadores: vec![],
             draft_images: true,
             figuras: None,
             solo_cache: false,

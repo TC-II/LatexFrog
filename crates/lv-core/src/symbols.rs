@@ -82,6 +82,8 @@ pub struct Symbols {
     pub sections: Vec<Section>,
     pub defs: Vec<Def>,
     pub files: Vec<FileEntry>,
+    /// What the document is made of, in document order: headings, parts without one, and pieces (`composicion`).
+    pub composition: Vec<crate::composicion::Item>,
     /// Lo que el lint encontró sin compilar.
     pub lint: Vec<Problem>,
     pub scan_ms: u64,
@@ -500,12 +502,13 @@ fn ordenar_secciones(ix: &ProjectIndex, todas: Vec<Section>) -> Vec<Section> {
     out
 }
 
-const OCULTAS: [&str; 6] = [".latexfrog", ".lv", ".git", "node_modules", "figuras-cache", "target"];
+const OCULTAS: [&str; 5] = [".latexfrog", ".lv", ".git", "node_modules", "target"];
 const IMAGENES: [&str; 6] = ["png", "jpg", "jpeg", "pdf", "eps", "svg"];
 const LIMITE_ARCHIVOS: usize = 6000;
 
 fn recorrer(root: &Path, rel: &str, nivel: u32, out: &mut Vec<FileEntry>) {
     let Ok(rd) = std::fs::read_dir(root.join(rel)) else { return };
+    let cache = rel.is_empty().then(|| crate::config::figure_cache_folder(root));
     let mut hijos: Vec<_> = rd.flatten().collect();
     hijos.sort_by_key(|e| e.file_name().to_string_lossy().to_lowercase());
     for e in hijos {
@@ -516,7 +519,7 @@ fn recorrer(root: &Path, rel: &str, nivel: u32, out: &mut Vec<FileEntry>) {
         let rel_hijo = if rel.is_empty() { nombre.clone() } else { format!("{rel}/{nombre}") };
         let Ok(t) = e.file_type() else { continue };
         if t.is_dir() {
-            if !OCULTAS.contains(&nombre.as_str()) && !nombre.starts_with(".lvtmp-") && nivel < 8 {
+            if !OCULTAS.contains(&nombre.as_str()) && cache.as_deref() != Some(nombre.as_str()) && !nombre.starts_with(".lvtmp-") && nivel < 8 {
                 recorrer(root, &rel_hijo, nivel + 1, out);
             }
         } else {
@@ -578,6 +581,8 @@ impl Symbols {
             }
         }
         let headings = macros.headings();
+        // the sections that come from a hand-drawn title, by index in `s.sections`
+        let mut dibujados: Vec<usize> = Vec::new();
 
         let mut bibitems: HashSet<String> = HashSet::new();
         let mut contexto_previo: Vec<String> = Vec::new();
@@ -692,6 +697,9 @@ impl Symbols {
                     let h = headings[&name];
                     let title = recortar(&titulo_legible(&args[h.arg]), 120);
                     if !title.is_empty() && !args[h.arg].contains('#') {
+                        if h.drawn {
+                            dibujados.push(s.sections.len());
+                        }
                         s.sections.push(Section { level: h.level, title, file: rel.clone(), line, label: None });
                     }
                 }
@@ -709,6 +717,15 @@ impl Symbols {
             }
         }
 
+        // A hand-drawn title (`\metaEjercicio`) heads what follows it: one level above the shallowest real section, so the
+        // `\section`s of an exercise are its children, not its siblings.
+        if !dibujados.is_empty() {
+            let reales = s.sections.iter().enumerate().filter(|(i, _)| !dibujados.contains(i)).map(|(_, x)| x.level).min();
+            let nivel = reales.map_or(2, |l| l.saturating_sub(1));
+            for &i in &dibujados {
+                s.sections[i].level = nivel;
+            }
+        }
         s.sections = ordenar_secciones(ix, std::mem::take(&mut s.sections));
 
         // La etiqueta de cada sección: la primera de su archivo en las 4 líneas que siguen, antes de la sección que viene.

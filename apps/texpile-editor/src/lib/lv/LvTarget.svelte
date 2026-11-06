@@ -34,7 +34,8 @@
 	<div class="flex min-w-0 items-center gap-1.5 text-xs @max-[20rem]:hidden" data-testid="lv-target">
 		<span class="size-2 shrink-0 rounded-full" style="background: {active.color ?? 'var(--color-surface-500)'}"></span>
 		<select
-			class="max-w-28 rounded border border-surface-300-700 bg-transparent px-1 py-0.5"
+			class="h-6 max-w-28 truncate rounded border border-surface-300-700 bg-transparent px-1 py-0 whitespace-nowrap"
+			title={active.label}
 			aria-label={m.lv_profile()}
 			value={active.id}
 			disabled={locked}

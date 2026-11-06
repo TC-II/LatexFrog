@@ -1,10 +1,12 @@
 {
   "main": "main.tex",
-  "parts": 0,
+  "parts": 2,
   "headings": [
     "Voltage divider",
-    "Wheatstone bridge"
+    "Wheatstone bridge",
+    "Balance"
   ],
+  "headingLevels": [1, 1, 2],
   "imageCaptions": [
     "A divider",
     "A bridge"

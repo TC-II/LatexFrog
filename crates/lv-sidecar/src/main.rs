@@ -105,6 +105,7 @@ fn run(p: &Value, cmd: &str, s: &Arc<Session>) -> Result<Value, String> {
         "symbols" => to_json(s.symbols().map_err(err)?),
         "synctex-forward" => to_json(s.synctex_forward_in(text(p, "file")?, number(p, "line")? as u32, p.get("profile").and_then(Value::as_str)).map_err(err)?),
         "synctex-inverse" => to_json(s.synctex_inverse(text(p, "profile")?, number(p, "page")? as u32, number(p, "x")?, number(p, "y")?).map_err(err)?),
+        "synctex-files" => to_json(s.synctex_files(text(p, "profile")?).map_err(err)?),
         "pdf-for" => to_json(s.elegir_pdf(text(p, "file")?).map_err(err)?),
         "figures-status" => to_json(s.figures_status().map_err(err)?),
         "figure-images" => to_json(s.figure_images(text(p, "file")?).map_err(err)?),
