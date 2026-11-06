@@ -15,7 +15,7 @@ const sidecars = new Map<number, Sidecar>();
 let nextId = 1;
 
 /** LV_SIDECAR, then the copy the installer ships, then the repository's release build, then the PATH */
-function executable(): string {
+export function executable(): string {
 	if (process.env.LV_SIDECAR) return process.env.LV_SIDECAR;
 	const candidates = [join(process.resourcesPath, EXE), join(app.getAppPath(), 'target', 'release', EXE)];
 	return candidates.find((p) => existsSync(p)) ?? 'lv-sidecar';

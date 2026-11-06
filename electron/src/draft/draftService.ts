@@ -4,7 +4,7 @@
 // image filenames (draftImages) and Type1 font paths (fontT1Map) attached, the
 // bibliography cycled between passes (draftBib), and refs exported for the warm daemon
 // (draftRefs). Same engine as the user's own compile, so exact by construction.
-import { execFile } from 'node:child_process';
+import { liveExecFile as execFile, type LiveProcess } from '../lv/lvLive';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
@@ -95,7 +95,7 @@ const OUT = '_draft';
 // the editor just fires the fresh compile and the stale one bails. gen is the monotonic run
 // id per root; a run is superseded once its root's gen moves past it. Keyed per root so one
 // window's compile can never cancel another window's.
-type CompileRun = { gen: number; child: import('node:child_process').ChildProcess | null };
+type CompileRun = { gen: number; child: LiveProcess | null };
 const compileRuns = new Map<string, CompileRun>();
 function runFor(root: string): CompileRun {
 	const key = process.platform === 'win32' ? path.resolve(root).toLowerCase() : path.resolve(root);
@@ -183,7 +183,7 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 				engine,
 				// -synctex=1 so the instant path can map a source line to its page box (draft.synctex.gz)
 				['-no-shell-escape', '-interaction=nonstopmode', '-synctex=1', `-output-directory=${OUT}`, '-jobname=draft', job],
-				{ cwd: root, timeout: 120000, maxBuffer: 32 * 1024 * 1024 },
+				{ cwd: root, timeout: 120000 },
 				() => {
 					if (run.child === child) run.child = null;
 					resolve();

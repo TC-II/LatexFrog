@@ -1,7 +1,7 @@
 // Keeps the draft compile's BIBLIOGRAPHY fresh between passes -- nothing else.
 // Seeds a shipped .bbl under the draft jobname, reruns biber/bibtex only when their
 // inputs actually changed, and reports whether the .bbl moved (= the pass is stale).
-import { execFile } from 'node:child_process';
+import { liveExecFile as execFile } from '../lv/lvLive';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
@@ -25,7 +25,7 @@ function mtimeOf(p: string): number {
 }
 function run(cmd: string, args: string[], opts: { cwd: string; env?: NodeJS.ProcessEnv }): Promise<void> {
 	return new Promise((resolve) => {
-		const child = execFile(cmd, args, { ...opts, timeout: 90000, maxBuffer: 16 * 1024 * 1024 }, () => resolve());
+		const child = execFile(cmd, args, { ...opts, timeout: 90000 }, () => resolve());
 		child.on('error', () => resolve()); // tool missing -> citations just stay unresolved
 	});
 }

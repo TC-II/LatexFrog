@@ -1,7 +1,7 @@
 // Keeps ONE warm lualatex alive (the user's real preamble loaded, keyed by its hash) and
 // typesets single blocks on it over stdin/stdout -- nothing else. This is the "no delay
 // while typing" engine; the full recompile (draftService) reconciles on a debounce.
-import { spawn, type ChildProcess } from 'node:child_process';
+import { liveSpawn as spawn, type LiveProcess as ChildProcess } from '../lv/lvLive';
 import readline from 'node:readline';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -105,7 +105,7 @@ async function spawnDaemon(root: string, engineDir: string, preamble: string): P
 	const child = spawn(
 		'lualatex',
 		['-no-shell-escape', '-interaction=nonstopmode', '-output-directory=_draft', '-jobname=texd_daemon', texName],
-		{ cwd: root, windowsHide: true }
+		{ cwd: root }
 	);
 	const state: Daemon = {
 		child,

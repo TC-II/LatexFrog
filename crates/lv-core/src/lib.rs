@@ -20,6 +20,7 @@ pub mod fsio;
 pub mod fswatch;
 pub mod graph;
 pub mod historial;
+pub mod live;
 pub mod logparse;
 pub mod macros;
 pub mod migration;
