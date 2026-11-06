@@ -25,9 +25,11 @@ export function paintRecords(ctx: CanvasRenderingContext2D, records: any[], S: n
 		if (op.kind === 'glyph') {
 			op.path.fill = op.fill;
 			// a plain antialiased fill reads visibly thinner than the pdf.js raster it
-			// replaces (measured ~25% lighter strokes): a hairline stroke restores the weight
+			// replaces (measured ~25% lighter strokes): a hairline stroke restores the weight. The
+			// shortfall is a share of the stem, which shrinks with the page scale, so the stroke
+			// does too (0.3 at S = 1.5, where it was measured); a fixed width made small pages bold
 			op.path.stroke = op.fill;
-			op.path.strokeWidth = 0.3;
+			op.path.strokeWidth = 0.2 * S;
 			op.path.draw(ctx);
 		} else if (op.kind === 'rect') {
 			ctx.fillStyle = op.fill;

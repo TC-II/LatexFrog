@@ -243,8 +243,9 @@ export class DraftSession {
 		const dpr = Math.min(2, window.devicePixelRatio || 1);
 		cv.width = Math.round(this.paper.w * S * dpr);
 		cv.height = Math.round(this.paper.h * S * dpr);
-		cv.style.width = this.paper.w * S + 'px';
-		cv.style.height = this.paper.h * S + 'px';
+		// the CSS box is exactly that many device pixels: any other ratio makes the browser resample the page
+		cv.style.width = cv.width / dpr + 'px';
+		cv.style.height = cv.height / dpr + 'px';
 		const ctx = cv.getContext('2d');
 		if (!ctx) return;
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -261,7 +262,9 @@ export class DraftSession {
 		// patch -- compositing patch ink onto it would put mirrored glyphs back on the page
 		const rtl = this.rtlPage(n);
 		if (ready && (!patches.length || rtl)) {
-			ctx.drawImage(base as ImageBitmap, 0, 0, this.paper.w * S, this.paper.h * S);
+			// device pixels, one to one with the raster (see requestBase), so nothing is resampled
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.drawImage(base as ImageBitmap, 0, 0, cv.width, cv.height);
 			return;
 		}
 		// a spill page has no raster to wait for: the PDF this compile produced ends before it

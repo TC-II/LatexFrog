@@ -164,10 +164,15 @@ export class DraftBitmaps {
 				const pg = await (await this.openPdf()).getPage(n);
 				// pdf space is bp; we want basePxPt pixels per TeX pt
 				const scale = this.basePxPt(Math.min(2, window.devicePixelRatio || 1)) * (72.27 / 72);
-				const vp = pg.getViewport({ scale });
+				// whole pixels, rounded the way the page canvas rounds its own, and the render stretched to
+				// fill them: the raster then lands on the page one to one instead of being resampled
+				const natural = pg.getViewport({ scale });
+				const w = Math.max(1, Math.round(natural.width));
+				const h = Math.max(1, Math.round(natural.height));
+				const vp = pg.getViewport({ scale: (scale * w) / natural.width });
 				const c = document.createElement('canvas');
-				c.width = Math.ceil(vp.width);
-				c.height = Math.ceil(vp.height);
+				c.width = w;
+				c.height = h;
 				await pg.render({ canvas: c, canvasContext: c.getContext('2d')!, viewport: vp } as any).promise;
 				const bmp = await createImageBitmap(c);
 				if (gen !== this.pixGen) return;

@@ -285,13 +285,18 @@ export class PDFPageView {
 			const outputScale = window.devicePixelRatio || 1;
 			const { width, height } = this.viewport;
 
-			this.canvas.width = Math.floor(width * outputScale);
-			this.canvas.height = Math.floor(height * outputScale);
-			this.canvas.style.width = `${Math.floor(width)}px`;
-			this.canvas.style.height = `${Math.floor(height)}px`;
+			// whole device pixels, and a CSS size that is exactly that many device pixels: any other ratio
+			// (flooring each side separately, a fractional display scale) makes the browser resample the
+			// canvas, which reads as blur at small sizes
+			const pixelWidth = Math.max(1, Math.round(width * outputScale));
+			const pixelHeight = Math.max(1, Math.round(height * outputScale));
+			this.canvas.width = pixelWidth;
+			this.canvas.height = pixelHeight;
+			this.canvas.style.width = `${pixelWidth / outputScale}px`;
+			this.canvas.style.height = `${pixelHeight / outputScale}px`;
 
 			const ctx = this.canvas.getContext('2d')!;
-			ctx.scale(outputScale, outputScale);
+			ctx.scale(pixelWidth / width, pixelHeight / height);
 
 			this.renderTask = this.pdfPage.render({
 				canvasContext: ctx,
