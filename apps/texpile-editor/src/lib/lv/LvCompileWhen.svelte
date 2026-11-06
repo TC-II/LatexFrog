@@ -2,7 +2,9 @@
 	// Beside Compile: when this project compiles by itself, with whichever profile is chosen. It is the project's choice, not a
 	// profile's: on saving, once typing stops, or only with the Compile button. Kept in the project's state on this machine. The bar shows
 	// its icon only; the menu names each choice.
-	import { Hand, Save, Timer } from '@lucide/svelte';
+	import { Hand, Radio, Save, Timer } from '@lucide/svelte';
+	import { latexLiveMode, projectConfigSync } from '$lib/workspace/projectConfigSync.svelte';
+	import { workspaceRoot } from '$lib/workspace/workspaceStore';
 	import { menuItemClass, menuPanelClass } from '$lib/menus/menuStyles';
 	import { m } from '$lib/paraglide/messages';
 	import { AnchoredMenu } from '$lib/pdf-view/anchoredMenu.svelte';
@@ -16,12 +18,23 @@
 	const OPTIONS = [
 		{ when: 'save', icon: Save, label: () => m.lv_when_save(), hint: () => m.lv_when_save_hint() },
 		{ when: 'idle', icon: Timer, label: () => m.lv_when_idle(), hint: () => m.lv_when_idle_hint() },
-		{ when: 'manual', icon: Hand, label: () => m.lv_when_manual(), hint: () => m.lv_when_manual_hint() }
+		{ when: 'manual', icon: Hand, label: () => m.lv_when_manual(), hint: () => m.lv_when_manual_hint() },
+		{ when: 'live', icon: Radio, label: () => m.lv_when_live(), hint: () => m.lv_when_live_hint() }
 	] as const;
-	const current = $derived(OPTIONS.find((o) => o.when === lvProject.compileWhen) ?? OPTIONS[0]);
+	type When = (typeof OPTIONS)[number]['when'];
+	// Live is Texpile's incremental lualatex preview: it owns the PDF pane, so it replaces the automatic builds
+	const whenNow = $derived<When>(latexLiveMode() ? 'live' : lvProject.compileWhen);
+	const current = $derived(OPTIONS.find((o) => o.when === whenNow) ?? OPTIONS[0]);
 
-	function pick(when: (typeof OPTIONS)[number]['when']) {
+	function pick(when: When) {
 		menu.close();
+		const root = workspaceRoot.current;
+		if (when === 'live') {
+			projectConfigSync.setLiveMode(root, true);
+			void lvProject.setCompileWhen('manual');
+			return;
+		}
+		if (latexLiveMode()) projectConfigSync.setLiveMode(root, false);
 		void lvProject.setCompileWhen(when);
 	}
 </script>

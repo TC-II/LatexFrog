@@ -3254,6 +3254,8 @@
 	"lv_when_idle_hint": "Compile a moment after typing stops",
 	"lv_when_manual": "Manual",
 	"lv_when_manual_hint": "Compile only with the Compile button",
+	"lv_when_live": "Live",
+	"lv_when_live_hint": "The PDF follows your typing (lualatex, no shell escape)",
 	"lv_when_title": "Compiles: {when}",
 	"lv_outline_body": "Document body ({file})",
 	"lv_figures_body": "Document body",
