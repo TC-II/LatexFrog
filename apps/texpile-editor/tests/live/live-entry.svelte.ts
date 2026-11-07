@@ -10,6 +10,7 @@ import { mount, unmount } from 'svelte';
 import '../../src/app.css';
 import DraftView from '$lib/draft/DraftView.svelte';
 import { decideEdit } from '$lib/draft/heuristics/dispatch';
+import { daemonText } from '$lib/draft/heuristics/daemonText';
 
 // ?bridge=<port> pairs this page with one bridge instance (parallel shards run several)
 const SRV = 'http://localhost:' + (new URLSearchParams(location.search).get('bridge') ?? '8099');
@@ -47,13 +48,14 @@ let comp: any = null;
 
 (window as any).__live = {
 	// fresh component per fixture: no cross-fixture in-flight state, caches, or patches
-	async open(root: string) {
+	async open(root: string, mainFile = 'main.tex') {
 		if (comp) {
 			await unmount(comp);
 			comp = null;
 			(window as any).__draftEvents = [];
 		}
 		props.root = root;
+		props.mainFile = mainFile;
 		props.trigger = 0;
 		comp = mount(DraftView, { target: document.getElementById('app')!, props });
 		props.trigger++;
@@ -64,8 +66,12 @@ let comp: any = null;
 	decide: decideEdit,
 	// onRecompile mirrors the app: write the buffer to disk so the pass the component
 	// fires (abandon/reconcile) compiles the edited source
-	patch(req: any, root: string, buffer: string) {
-		return comp.instantPatch({ ...req, file: 'main.tex', onRecompile: () => post('/write', { root, content: buffer }) });
+	// `file`: the edited file, root-relative (a multi-file project edits a part, not the main file)
+	// the text goes through daemonText as the app's dispatcher sends it
+	patch(req: any, root: string, buffer: string, file = 'main.tex') {
+		const text = daemonText(req.text);
+		const orig = daemonText(req.orig);
+		return comp.instantPatch({ ...req, text, orig, file, onRecompile: () => post('/write', { root, file, content: buffer }) });
 	},
 	events: () => ((window as any).__draftEvents ?? []).splice(0)
 };
