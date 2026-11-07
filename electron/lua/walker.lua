@@ -212,11 +212,13 @@ local function infoFor(id)
 end
 -- LatexFrog: a glyph of a virtual font (Times or Palatino in T1 encoding: ptmr8t, a VF over the real ptmr8r) names
 -- a font no map file lists, so the renderer had nothing to draw it with and every patch on such a page was refused
--- (font-missing). When the character is plainly one character of one real font, the record names that font and
--- character instead -- what the PDF itself embeds. Anything else the VF does (a ligature built from two, an accent
--- moved over a letter) keeps the VF's name, refused as before.
+-- (font-missing). The record names the real fonts and characters instead -- what the PDF itself embeds. The VF's
+-- commands are followed when they only set characters of real fonts and move the pen: one character (most), one
+-- character shifted (Times math italic: V, P, f, t ... moved by its italic correction), or several characters (the
+-- T1 "ff", which Times builds from two f). Anything else (a rule, a special, a VF over another VF) keeps the VF's
+-- name, refused as before.
 local vfInfo = {}
-local function realGlyph(fid, ch)
+local function vfOf(fid)
 	local v = vfInfo[fid]
 	if v == nil then
 		v = false
@@ -227,27 +229,57 @@ local function realGlyph(fid, ch)
 		if f and f.type == "virtual" and f.characters then v = { chars = f.characters, fonts = f.fonts } end
 		vfInfo[fid] = v
 	end
-	if not v then return fid, ch end
+	return v
+end
+local realFonts = {}
+local function realFont(id)
+	local r = realFonts[id]
+	if r == nil then
+		local base = font.getfont(id) or (font.getcopy and font.getcopy(id))
+		r = (base and base.type ~= "virtual") and base or false
+		realFonts[id] = r
+	end
+	return r
+end
+-- nil: draw the glyph as it is. Otherwise a list of { font, char, dx, dy, w } in sp, dx/dy from the glyph's
+-- origin (dy down), w the piece's own width
+local function realGlyphs(fid, ch)
+	local v = vfOf(fid)
+	if not v then return nil end
 	local d = v.chars[ch]
 	local cmds = d and d.commands
-	if not cmds then return fid, ch end
-	local tf, tc
+	if not cmds then return nil end
+	-- a VF's font numbers index its own font list when it has one, else they are font ids
+	local function idOf(k)
+		if v.fonts then
+			local e = v.fonts[k or 1]
+			return e and e.id
+		end
+		return k
+	end
+	local parts, stack = {}, {}
+	local cur, x, y = idOf(1), 0, 0
 	for _, cmd in ipairs(cmds) do
 		local k = cmd[1]
-		if k == "font" and not tc then tf = cmd[2]
-		elseif k == "char" and not tc then tc = cmd[2]
-		elseif k == "slot" and not tc then tf, tc = cmd[2], cmd[3]
-		else return fid, ch end
+		if k == "font" then cur = idOf(cmd[2])
+		elseif k == "char" or k == "slot" then
+			local tf, tc = cur, cmd[2]
+			if k == "slot" then tf, tc = idOf(cmd[2]), cmd[3] end
+			local base = tf and realFont(tf)
+			local bc = base and base.characters and base.characters[tc]
+			if not bc then return nil end
+			parts[#parts + 1] = { tf, tc, x, y, bc.width or 0 }
+			x = x + (bc.width or 0)
+		elseif k == "right" then x = x + cmd[2]
+		elseif k == "down" then y = y + cmd[2]
+		elseif k == "push" then stack[#stack + 1] = { x, y }
+		elseif k == "pop" and #stack > 0 then
+			local at = table.remove(stack)
+			x, y = at[1], at[2]
+		else return nil end
 	end
-	if not tc then return fid, ch end
-	-- a VF's font numbers index its own font list when it has one, else they are font ids
-	if v.fonts then
-		local e = v.fonts[tf or 1]
-		tf = e and e.id
-	end
-	local base = tf and (font.getfont(tf) or (font.getcopy and font.getcopy(tf)))
-	if not base or base.type == "virtual" then return fid, ch end
-	return tf, tc
+	if #parts == 0 then return nil end
+	return parts
 end
 
 local function glyphIndexSuffix(n)
@@ -516,13 +548,25 @@ local function walk(head, parent, x, y, emit, fonts, last_ef, colorStack, rtl, s
 			local ef = n.expansion_factor or 0
 			last_ef = ef
 			local w = n.width * (1 + ef / 1000000.0)
-			local gf, gc = realGlyph(n.font, n.char)
-			fonts[gf] = true
+			local parts = realGlyphs(n.font, n.char)
 			if rtl then x = x - w end
-			emit(string.format(
-				'{"t":"g","c":%d,"f":%d,"x":%.4f,"y":%.4f,"w":%.4f,"ef":%d,"xo":%.4f,"yo":%.4f%s%s}',
-				gc, gf, x / pt, y / pt, w / pt, ef, (n.xoffset or 0) / pt, (n.yoffset or 0) / pt,
-				colSuffix(colorStack), glyphIndexSuffix(n)))
+			if not parts then
+				fonts[n.font] = true
+				emit(string.format(
+					'{"t":"g","c":%d,"f":%d,"x":%.4f,"y":%.4f,"w":%.4f,"ef":%d,"xo":%.4f,"yo":%.4f%s%s}',
+					n.char, n.font, x / pt, y / pt, w / pt, ef, (n.xoffset or 0) / pt, (n.yoffset or 0) / pt,
+					colSuffix(colorStack), glyphIndexSuffix(n)))
+			else
+				-- the VF's pieces, each where its commands put it; the pen still advances by the glyph's own width
+				local s = 1 + ef / 1000000.0
+				for _, p in ipairs(parts) do
+					fonts[p[1]] = true
+					emit(string.format(
+						'{"t":"g","c":%d,"f":%d,"x":%.4f,"y":%.4f,"w":%.4f,"ef":%d,"xo":%.4f,"yo":%.4f%s}',
+						p[2], p[1], (x + p[3] * s) / pt, y / pt, p[5] * s / pt, ef,
+						(n.xoffset or 0) / pt, ((n.yoffset or 0) - p[4]) / pt, colSuffix(colorStack)))
+				end
+			end
 			if not rtl then x = x + w end
 		elseif id == KERN then
 			local k = n.kern

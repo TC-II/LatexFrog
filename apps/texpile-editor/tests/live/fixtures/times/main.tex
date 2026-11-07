@@ -1,0 +1,20 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{mathptmx}
+\usepackage[T1]{fontenc}
+\begin{document}
+
+\section*{Times through virtual fonts}
+
+Paragraph timesone defines the \textbf{offset voltage} as the small output that stays when the input is
+zero, and it keeps going so the line breaks twice; the ff in offset and buffer is a ligature that T1 Times
+builds from two f glyphs.
+
+Paragraph timestwo carries math whose italic letters Times shifts: $V_{GS} = V_{t} + V_{OD}$ and
+$H(j\omega) = P(s)/T(s)$, with a frequency $f$ and a time $t$, long enough to wrap once more.
+
+Paragraph timesthree is plain Times text without ligatures or math, so it patches the way any paragraph
+in a Times document does, and it wraps over two lines.
+
+\end{document}
