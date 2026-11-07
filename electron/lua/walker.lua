@@ -312,12 +312,19 @@ end
 --
 -- A line with no tagged glyph emits no source field at all: absent means UNKNOWN, never
 -- guessed. That is what a float caption and a running head come back as.
+--
+-- The line's own glyphs come before those of a box it opens with: a list item's label is an
+-- \hbox LaTeX builds inside \item, before the item's paragraph starts and stamps its line, so
+-- its glyphs carry the PREVIOUS paragraph's line, and every item read as the one before it.
+-- Nested boxes are read only when the line has no glyph of its own (an \mbox, a math atom, an
+-- \includegraphics alone on it).
 local function firstGlyphSource(head, depth)
 	if depth > 4 then return nil end
+	for n in node.traverse_id(GLYPH, head) do
+		return node.has_attribute(n, M.srcline), node.has_attribute(n, M.srcfile)
+	end
 	for n in node.traverse(head) do
-		if n.id == GLYPH then
-			return node.has_attribute(n, M.srcline), node.has_attribute(n, M.srcfile)
-		elseif n.id == HLIST or n.id == VLIST then
+		if n.id == HLIST or n.id == VLIST then
 			local l, f = firstGlyphSource(n.head, depth + 1)
 			if l then return l, f end
 		end

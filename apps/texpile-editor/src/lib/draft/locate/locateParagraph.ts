@@ -45,7 +45,7 @@ export async function locateParagraph(
 	// bail here falls through to the search tiers unchanged, so this only ever saves work --
 	// including for the constructs the stamp gets wrong (list items point at the previous
 	// item, whose content then fails to match).
-	const src = await locateBySource(ctx, file, line, endLine, orig);
+	const src = await locateBySource(ctx, file, line, endLine, orig, listItem);
 	if (!('bail' in src)) return src;
 	// the same lookup for a paragraph the stamp put in two columns: the search tiers can only
 	// recover its break by trying every cut, and this states it

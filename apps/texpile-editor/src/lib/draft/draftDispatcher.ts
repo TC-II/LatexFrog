@@ -11,13 +11,10 @@
 import { decideEdit } from '$lib/draft/heuristics/dispatch';
 import { workspaceRoot } from '$lib/workspace/workspaceStore';
 import { relFromRoot } from '$lib/workspace/compilePipeline.svelte';
+import { daemonText } from '$lib/draft/heuristics/daemonText';
 
 const PATCH_DEBOUNCE_MS = 400;
 const RECOMPILE_DEBOUNCE_MS = 500;
-// a block starts at a line start, where TeX's reader drops spaces and tabs; after the daemon's
-// prefixes (\hspace*{\parindent}, a paragraph's parameters) they would be a real space, and
-// the reproduction never matches the page's band
-const lineStart = (s: string) => s.replace(/^[ \t]+/, '');
 
 /** the slice of DraftView this dispatcher drives (structural, to avoid importing the component) */
 export type DraftTarget = {
@@ -150,8 +147,8 @@ export class DraftDispatcher {
 					file,
 					line: d.line,
 					endLine: d.endLine,
-					text: lineStart(d.text),
-					orig: lineStart(d.orig),
+					text: daemonText(d.text),
+					orig: daemonText(d.orig),
 					transient: d.transient,
 					floatInner: d.floatInner,
 					floatTabular: d.floatTabular,

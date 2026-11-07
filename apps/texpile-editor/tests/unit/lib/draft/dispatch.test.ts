@@ -14,6 +14,21 @@ const DOC = [
 	''
 ].join('\n');
 
+describe('decideEdit inside a comment environment', () => {
+	const doc = DOC.replace('Beta four five six.', '\\begin{comment}\n  Hidden words here.\n\n  More hidden.\n\\end{comment}\n\nBeta four five six.');
+	it('needs neither a patch nor a pass', () => {
+		expect(decideEdit(doc, doc.replace('Hidden words', 'Hidden wordsx'))).toEqual({ kind: 'noop' });
+		expect(decideEdit(doc, doc.replace('More hidden', 'More hiddenx'))).toEqual({ kind: 'noop' });
+	});
+	it('is not a no-op when the edit opens or closes it', () => {
+		expect(decideEdit(doc, doc.replace('\\end{comment}\n', '')).kind).not.toBe('noop');
+		expect(decideEdit(doc, doc.replace('\\begin{comment}', '\\begin{commentx}')).kind).not.toBe('noop');
+	});
+	it('still patches the text after it', () => {
+		expect(decideEdit(doc, doc.replace('Beta four', 'Beta fourx')).kind).toBe('patch');
+	});
+});
+
 describe('decideEdit compound alignment', () => {
 	it('rides a clean-baseline insert on the previous block (engine-true spacing)', () => {
 		const src = DOC.replace('Beta four', 'Fresh inserted paragraph.\n\nBeta four');

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { counterBefore, isFloatEnv, resetEngineTruth, updateEngineTruth } from '$lib/draft/engineTruth';
+import { counterBefore, counterBeforeStep, isFloatEnv, resetEngineTruth, updateEngineTruth } from '$lib/draft/engineTruth';
 import { decideEdit, daemonReady } from '$lib/draft/heuristics/dispatch';
 
 afterEach(() => resetEngineTruth());
@@ -22,6 +22,23 @@ describe('counterBefore', () => {
 		// other files' lines never alias into this one
 		expect(counterBefore('section', 11, 'main.tex')).toBe(1);
 		expect(counterBefore('footnote', 5, 'main.tex')).toBe(null);
+	});
+});
+
+describe('counterBeforeStep', () => {
+	it('reads a resumed list off the item step, past an assignment no snapshot logged', () => {
+		// \begin{enumerate}[resume] at 32 resets through \setcounter (0), then enumitem assigns 1 directly; the item at 33 steps to 2
+		updateEngineTruth({
+			mainRel: 'main.tex',
+			counters: [
+				{ l: 32, f: 'main.tex', s: { enumi: 0 } },
+				{ l: 33, f: 'main.tex', s: { enumi: 2 } }
+			]
+		});
+		expect(counterBefore('enumi', 33, 'main.tex')).toBe(0);
+		expect(counterBeforeStep('enumi', 33, 'main.tex')).toBe(1);
+		// a line that logged nothing falls back to the snapshots before it
+		expect(counterBeforeStep('enumi', 40, 'main.tex')).toBe(2);
 	});
 });
 

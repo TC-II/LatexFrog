@@ -102,6 +102,7 @@ export function decideEdit(baseline: string, src: string, file?: string): EditDe
 	const base = baselineOf(baseline);
 	const oldP = base.paras;
 	const srcLines = src.split('\n');
+	if (src !== baseline && editInsideCommentEnv(base.lines, srcLines)) return { kind: 'noop' };
 	editedMemo = readEdited(editedMemo ?? base.read, src);
 	const newP = splitParaLines(src, srcLines, editedMemo.tree);
 	let single = -1;
@@ -121,6 +122,38 @@ export function decideEdit(baseline: string, src: string, file?: string): EditDe
 	}
 	if (single < 0) return structuralOf(base, oldP, newP, oldP.length !== newP.length ? 'para-count' : 'multi-para', file);
 	return buildPatch(base, oldP[single], newP[single], file);
+}
+
+// comment.sty reads \begin{comment} and \end{comment} only as lines of their own (spaces before them allowed)
+const COMMENT_BEGIN = /^[ \t]*\\begin\{comment\}[ \t]*\r?$/;
+const COMMENT_END = /^[ \t]*\\end\{comment\}[ \t]*\r?$/;
+const COMMENT_EDGE = /\\(begin|end)\{comment\}/;
+/**
+ * The comment package skips its environment's lines unread, so an edit between them sets nothing: there is no
+ * band to patch, and the pass it used to fall to (cal-empty, then a quiet compile per keystroke) changed nothing
+ * either. True when every changed line lies inside one such environment, its \begin and \end lines untouched.
+ */
+function editInsideCommentEnv(a: string[], b: string[]): boolean {
+	let lo = 0;
+	while (lo < a.length && lo < b.length && a[lo] === b[lo]) lo++;
+	let ea = a.length - 1;
+	let eb = b.length - 1;
+	while (ea >= lo && eb >= lo && a[ea] === b[eb]) {
+		ea--;
+		eb--;
+	}
+	// the changed lines, in both versions, may not open or close a comment environment themselves
+	for (let i = lo; i <= ea; i++) if (COMMENT_EDGE.test(a[i])) return false;
+	for (let i = lo; i <= eb; i++) if (COMMENT_EDGE.test(b[i])) return false;
+	// the environment open at the first changed line must still be open after the last one
+	let open = false;
+	for (let i = 0; i < lo; i++) {
+		if (!open && COMMENT_BEGIN.test(a[i])) open = true;
+		else if (open && COMMENT_END.test(a[i])) open = false;
+	}
+	if (!open) return false;
+	for (let i = ea + 1; i < a.length; i++) if (COMMENT_END.test(a[i])) return true;
+	return false;
 }
 
 // The single-block instant dispatch for a (baseline, edited) paragraph pair. Also used by

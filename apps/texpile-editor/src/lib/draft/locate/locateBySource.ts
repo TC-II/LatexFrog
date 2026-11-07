@@ -26,7 +26,8 @@ export async function locateBySource(
 	file: string,
 	line: number,
 	endLine: number,
-	orig: string
+	orig: string,
+	listItem = false
 ): Promise<Cal | CalBail> {
 	function bail(why: string, detail?: unknown): CalBail {
 		ctx.emit('locate-source-bail', { why, ...(typeof detail === 'object' ? detail : { detail }) });
@@ -43,9 +44,13 @@ export async function locateBySource(
 	// lines at, so a narrowed environment needs no variant search to be found. Snapped to an
 	// announced width when it is one, so the calibration this tier asks for is the SAME
 	// request the later tiers make and they share one answer instead of paying twice.
+	// A block sent with its own wrapper (a list item re-wrapped in its list, a whole environment, a heading) is
+	// set by that wrapper inside the column, as on the page, so it is asked at the column's width, as the forward
+	// tier asks it: at its lines' own width the list's margin narrowed it a second time, and every item longer than
+	// a line broke differently and fell to the search.
 	const raw = median(lines.map((l) => l.w));
 	if (!(raw > 0)) return bail('no-width');
-	const W = [paper.colW, paper.textW].find((k) => k > 0 && Math.abs(k - raw) <= 0.5) ?? raw;
+	const W = listItem && paper.colW > 0 ? paper.colW : ([paper.colW, paper.textW].find((k) => k > 0 && Math.abs(k - raw) <= 0.5) ?? raw);
 	const recs = ctx.pageRecords(pageNo);
 	const allG = recs.filter((x: any) => x.t === 'g');
 	if (!allG.length) return bail('no-page-glyphs');

@@ -1,7 +1,7 @@
 // Splitting a .tex buffer into prose paragraphs, and re-wrapping one paragraph as the exact
 // TeX the daemon typesets. The dispatcher diffs in units of these.
 import type { Tree } from '@lezer/common';
-import { counterBefore, isFloatEnv, lexCats } from '../engineTruth';
+import { counterBefore, counterBeforeStep, isFloatEnv, lexCats } from '../engineTruth';
 import { latexTreeOf } from '$lib/languages/latex/syntax/latexTrees';
 import { commonEnvFacts } from '$lib/languages/latex/knowledge/environments/envFacts';
 import { commandsWith } from '$lib/languages/latex/knowledge/commands/commandFacts';
@@ -167,11 +167,14 @@ export function splitParaLines(src: string, lines: string[], tree: Tree = latexT
 // reconstructing TeX counter state in JS is exactly the approximation we don't do.)
 export function wrapItem(t: string, w?: string, line?: number, file?: string) {
 	if (!w) return t;
-	const pin = w === 'enumerate' && line !== undefined ? counterBefore('enumi', line, file) : null;
+	const pin = w === 'enumerate' && line !== undefined ? counterBeforeStep('enumi', line, file) : null;
 	const setc = w === 'enumerate' ? `\\setcounter{enumi}{${pin ?? 0}}` : '';
 	// \par: the daemon opens a paragraph before the text, and beamer's itemize writes a color change into it,
-	// which TeX then sets as an empty line the page never had
-	return `\\par\\begin{${w}}${setc}\\item ${t}\\end{${w}}`;
+	// which TeX then sets as an empty line the page never had.
+	// An item whose last line is a comment (a commented-out \item after it) would comment out the \end: it goes on a line of its own
+	const last = t.slice(t.lastIndexOf('\n') + 1);
+	const sep = stripTexComments(last) === last ? '' : '\n';
+	return `\\par\\begin{${w}}${setc}\\item ${t}${sep}\\end{${w}}`;
 }
 // comment stripping is ONLY for JS-side lexing guards (brace balance); dispatched text
 // ships verbatim -- the engine's own catcodes decide what a % means. Comment chars come

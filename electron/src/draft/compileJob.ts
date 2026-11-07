@@ -39,7 +39,11 @@ export function writeHooksFile(outAbs: string): void {
 			// clears it again so material outside a paragraph reads as unknown rather than
 			// inheriting the last one. The walker reads it back at shipout.
 			'\\AddToHook{para/begin}{\\directlua{texpile_para()}}\n' +
-			'\\AddToHook{para/end}{\\directlua{texpile_para_end()}}\n'
+			'\\AddToHook{para/end}{\\directlua{texpile_para_end()}}\n' +
+				// a display's lines read as unknown, and the text after it, which continues its paragraph, is restamped with
+				// its own line by the next line read
+				'\\everydisplay\\expandafter{\\the\\everydisplay\\directlua{texpile_display_begin()}\\aftergroup\\TexpileAfterDisplay}\n' +
+				'\\def\\TexpileAfterDisplay{\\directlua{texpile_after_display()}}\n'
 	);
 }
 

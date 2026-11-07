@@ -232,11 +232,10 @@ end)
 -- of stamping instead of needing a second channel. Line numbers are FILE-LOCAL (a paragraph
 -- in an \input'ed fragment reports its line within that fragment), hence the file id.
 --
--- Deliberately NOT covered: \item. Its paragraph starts late enough that \inputlineno has
--- moved on, so the second item of a list reports the first item's line, and nesting drifts
--- further (measured: up to 4 lines, with two items claiming the same line). Consumers verify
--- content before trusting a claim, so a list item simply fails that check and falls back to
--- the search; it is never mislocated.
+-- An \item's label is built inside \item, before its paragraph starts, so the label's glyphs
+-- carry the previous paragraph's line; the walker reads a line's own glyphs before a box it
+-- opens with, and the item reads its own line. Consumers verify content before trusting a
+-- claim either way, so a wrong one falls back to the search; it is never mislocated.
 function texpile_para()
 	if not src_line_attr then return end
 	local f = ((status and status.filename or ""):gsub("\\", "/"):match("[^/]+$") or ""):lower()
@@ -270,6 +269,32 @@ function texpile_para_end()
 		para_closed = table.remove(para_open)
 	end
 end
+
+-- A display (\[...\], equation*, align*) does not end its paragraph: the text after it continues the same one, so
+-- it kept the stamp of the line the paragraph started on, and no line of the page named the source line that text
+-- is on. The editor's blocks start there, so its lookup found nothing and searched. When a display closes, the next
+-- source line TeX reads stamps the paragraph's continuation with its own number. Only inside a paragraph: past its
+-- end the stamp is the unset sentinel and stays so.
+-- The display's own lines are no block's text (its environment is a block of its own, which no stamp names), so
+-- inside the display the stamp is unset; it is a group, and TeX puts the paragraph's value back when it closes.
+local after_display = false
+function texpile_display_begin()
+	if src_line_attr then tex.setattribute(src_line_attr, -2147483647) end
+end
+function texpile_after_display()
+	after_display = true
+end
+pcall(function()
+	luatexbase.add_to_callback("process_input_buffer", function()
+		if not after_display then return nil end
+		after_display = false
+		if not src_line_attr then return nil end
+		local cur = tex.getattribute(src_line_attr)
+		-- \inputlineno already counts the line being read
+		if cur and cur > 0 then tex.setattribute(src_line_attr, tex.inputlineno) end
+		return nil
+	end, "texpile.afterdisplay")
+end)
 
 local function src_files_json()
 	local inv = {}

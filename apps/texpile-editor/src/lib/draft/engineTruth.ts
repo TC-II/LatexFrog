@@ -61,6 +61,21 @@ export function counterBefore(name: string, line: number, file?: string): number
 	return v;
 }
 
+/** the value `name` had before the step that `line` of `file` makes on it (an \item steps its list counter), or
+ *  `counterBefore` when that line logged nothing. Read off the step, not the snapshots before it: a package that
+ *  assigns the counter directly (enumitem's `resume`) logs no snapshot, and the last one before the line is stale */
+export function counterBeforeStep(name: string, line: number, file?: string): number | null {
+	const cs = truth.counters;
+	if (!cs?.length) return null;
+	const want = file ? baseOf(file) : truth.mainRel ? baseOf(truth.mainRel) : undefined;
+	let at: number | null = null;
+	for (const c of cs) {
+		if (want && c.f && c.f !== want) continue;
+		if (c.l === line && c.s[name] !== undefined) at = c.s[name];
+	}
+	return at !== null && at > 0 ? at - 1 : counterBefore(name, line, file);
+}
+
 /** the \begin{document} line, valid only for the file the compile ran on */
 export function bodyLineFor(file?: string): number | null {
 	if (truth.bodyLine === undefined) return null;

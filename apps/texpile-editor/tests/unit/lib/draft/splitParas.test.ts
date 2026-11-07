@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { splitParas } from '$lib/draft/heuristics/splitParas';
+import { splitParas, wrapItem } from '$lib/draft/heuristics/splitParas';
+
+describe('wrapItem', () => {
+	it('puts the list end on its own line after an item ending in a comment', () => {
+		const p = splitParas('\\begin{enumerate}\n\\item First.\n\\item Second.\n%\\item Third, commented out\n\\end{enumerate}');
+		const second = p.find((x) => x.text.startsWith('Second'))!;
+		expect(second.text.endsWith('%\\item Third, commented out')).toBe(true);
+		expect(wrapItem(second.text, second.wrap)).toMatch(/commented out\n\\end\{enumerate\}$/);
+	});
+
+	it('keeps the end on the same line otherwise, an escaped percent included', () => {
+		expect(wrapItem('Ten \\% off.', 'itemize')).toBe('\\par\\begin{itemize}\\item Ten \\% off.\\end{itemize}');
+	});
+});
 
 describe('splitParas boundaries', () => {
 	it('a part line and a class heading end the paragraph above them', () => {
