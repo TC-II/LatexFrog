@@ -275,17 +275,28 @@ end
 -- is on. The editor's blocks start there, so its lookup found nothing and searched. When a display closes, the next
 -- source line TeX reads stamps the paragraph's continuation with its own number. Only inside a paragraph: past its
 -- end the stamp is the unset sentinel and stays so.
--- The display's own lines are no block's text (its environment is a block of its own, which no stamp names), so
--- inside the display the stamp is unset; it is a group, and TeX puts the paragraph's value back when it closes.
+-- The display's own lines name the line the display opened on: an environment display's block of its own (\begin
+-- line, or the \end line for an alignment amsmath reads whole before it typesets), or for \[ inside a paragraph's
+-- text, a line of that paragraph's block, which typesets the display with it. Not the paragraph's first line, which
+-- made the lines above claim the display. The display is a group: TeX puts the paragraph's value back when it closes.
 local after_display = false
 function texpile_display_begin()
-	if src_line_attr then tex.setattribute(src_line_attr, -2147483647) end
+	if src_line_attr then tex.setattribute(src_line_attr, tex.inputlineno) end
 end
 function texpile_after_display()
 	after_display = true
 end
+-- LatexFrog: every file the pass read a line of (engine basenames, lowercase, as srcFiles): an edit to any other file
+-- cannot change the output, so the preview leaves it alone instead of searching the pages and compiling again
+local read_files, read_last = {}, nil
 pcall(function()
 	luatexbase.add_to_callback("process_input_buffer", function()
+		local fn = status.filename
+		if fn ~= read_last then
+			read_last = fn
+			local b = ((fn or ""):gsub("\\", "/"):match("[^/]+$") or ""):lower()
+			if b ~= "" then read_files[b] = true end
+		end
 		if not after_display then return nil end
 		after_display = false
 		if not src_line_attr then return nil end
@@ -301,6 +312,12 @@ local function src_files_json()
 	for f, i in pairs(src_files) do inv[i] = f end
 	local t = {}
 	for i = 1, src_filen do t[i] = '"' .. tostring(inv[i] or ""):gsub('[%c"\\]', "") .. '"' end
+	return "[" .. table.concat(t, ",") .. "]"
+end
+
+local function read_files_json()
+	local t = {}
+	for f in pairs(read_files) do t[#t + 1] = '"' .. f:gsub('[%c"\\]', "") .. '"' end
 	return "[" .. table.concat(t, ",") .. "]"
 end
 
@@ -389,8 +406,8 @@ local function write_manifest()
 			i, p.w, p.h, p.ht, p.gs or 0, p.gsn or 0, p.go or 0, unc .. dev)
 	end
 	f:write(string.format(
-		'{"count":%d,"paperW":%.4f,"paperH":%.4f,"colW":%.4f,"textW":%.4f,"footSkip":%.4f,"colSep":%.4f,"blSkip":%.4f,"parSkip":%.4f,"topSkip":%.4f,"lsLimit":%.4f,"hOffset":%.4f,"vOffset":%.4f,"srcFiles":%s%s,"pages":[%s]}',
-		pageno, pw, ph, cw, tw, fsk, csep, bls, pks, tsk, lsl, hoff, voff, src_files_json(),
+		'{"count":%d,"paperW":%.4f,"paperH":%.4f,"colW":%.4f,"textW":%.4f,"footSkip":%.4f,"colSep":%.4f,"blSkip":%.4f,"parSkip":%.4f,"topSkip":%.4f,"lsLimit":%.4f,"hOffset":%.4f,"vOffset":%.4f,"srcFiles":%s,"inputs":%s%s,"pages":[%s]}',
+		pageno, pw, ph, cw, tw, fsk, csep, bls, pks, tsk, lsl, hoff, voff, src_files_json(), read_files_json(),
 		body_line and string.format(',"bodyLine":%d', body_line) or "", table.concat(t, ",")))
 	f:close()
 	-- counter snapshots ride a sidecar (they are per-line, not per-page)

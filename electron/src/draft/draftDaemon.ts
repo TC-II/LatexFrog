@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { resolveType1 } from '../fontT1Map';
 import { shellEnvReady } from '../shell/shellEnv';
+import { preambleThroughInputs } from '../lv/preambleInputs';
 import { onToolPathChange } from '../shell/toolDirs';
 
 const BLOCK_TIMEOUT_MS = 6000;
@@ -18,11 +19,11 @@ const OUT_REL = '_draft';
 // of the compile-side shim in draftService so the daemon warms whatever the compile compiles.
 const PDF_SHIM = `\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi`;
 
-function splitPreamble(mainPath: string): { preamble: string } | null {
-	const src = fs.readFileSync(mainPath, 'utf8');
-	const m = src.match(/^.*\\begin\{document\}.*$/m);
-	if (!m) return null;
-	return { preamble: src.slice(0, m.index! + m[0].length) };
+// \input paths resolve against the root, where the daemon runs, not the main file's folder
+function splitPreamble(root: string, mainFile: string): { preamble: string } | null {
+	const src = fs.readFileSync(path.join(root, mainFile), 'utf8');
+	const preamble = preambleThroughInputs(root, src);
+	return preamble === null ? null : { preamble };
 }
 // (The old unicode-math injection is GONE: the daemon typesets the user's true fonts --
 // classic Type1 fonts are parsed and painted directly by the renderer, not re-typeset.)
@@ -378,7 +379,7 @@ export async function splitSkeleton(
 	const run = queue.then(async (): Promise<SkeletonResult> => {
 		try {
 			armIdleStop();
-			const split = splitPreamble(path.join(body.root, body.mainFile));
+			const split = splitPreamble(body.root, body.mainFile);
 			if (!split) return { ok: false, error: 'no \\begin{document} in main file' };
 			const state = await ensureDaemon(body.root, body.engineDir, split.preamble);
 			return await skeletonOn(state, body.items, body.targetPt, body);
@@ -418,7 +419,7 @@ export async function typesetParagraph(body: {
 	const run = queue.then(async (): Promise<ParagraphResult> => {
 		try {
 			armIdleStop();
-			const split = splitPreamble(path.join(body.root, body.mainFile));
+			const split = splitPreamble(body.root, body.mainFile);
 			if (!split) return { ok: false, error: 'no \\begin{document} in main file' };
 			const preamble = split.preamble;
 			const state = await ensureDaemon(body.root, body.engineDir, preamble);

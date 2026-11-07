@@ -2,6 +2,8 @@
 // it opened with, and every parameter TeX broke it and stacked its lines with (page-extract records them at
 // the line break). Only the first paragraph takes them; one typed after it gets the document's own, as it
 // would on the page, so the old values are handed back when the first one ends.
+import { itemTextStart } from '../heuristics/splitParas';
+
 export type ParaParams = {
 	i: number;
 	font: { e: string; f: string; s: string; h: string; z: string; b: string } | null;
@@ -22,6 +24,18 @@ export type ParaParams = {
 };
 
 const ORDER = ['pt', 'fil', 'fill', 'filll'];
+
+/** A list item's club penalty, put inside its list just before the \item. The prefix in front of the wrapper sets
+ *  LaTeX's \@clubpenalty too, but the \par that opens the wrapper ends the daemon's empty paragraph first and the
+ *  prefix's restore fires there; \item reads \@clubpenalty when its own paragraph starts, so an item under a heading
+ *  (club 10000) broke as if it were not. Before the \item, not after: anything between \item and the text moved the
+ *  text 0.4pt right (measured on the daemon). */
+export function itemClub(p: ParaParams | null | undefined, text: string): string {
+	const at = p ? itemTextStart(text) : 0;
+	if (!at) return text;
+	const item = at - '\\item '.length;
+	return `${text.slice(0, item)}\\ifcsname @clubpenalty\\endcsname\\csname @clubpenalty\\endcsname=${p!.pen[0]}\\relax\\fi${text.slice(item)}`;
+}
 
 function dim(v: number): string {
 	return `${v.toFixed(4)}pt`;

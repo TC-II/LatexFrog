@@ -31,13 +31,20 @@ function liveCopies(root: string): Copy[] {
 	return out;
 }
 
-/** renames the copy in the pass's source files (engine basenames, lowercase), its counters and its SyncTeX */
-export function aliasLiveCopies(root: string, outAbs: string, srcFiles: string[] | undefined, counters: { f?: string }[]): void {
+/** renames the copy in the pass's source files and files read (engine basenames, lowercase), its counters and its
+ *  SyncTeX */
+export function aliasLiveCopies(
+	root: string,
+	outAbs: string,
+	srcFiles: string[] | undefined,
+	counters: { f?: string }[],
+	inputs?: string[]
+): void {
 	const copies = liveCopies(root);
 	if (!copies.length) return;
 	const byBase = new Map(copies.map((c) => [path.posix.basename(c.copy).toLowerCase(), path.posix.basename(c.original).toLowerCase()]));
 	const alias = (f: string) => byBase.get(f.toLowerCase()) ?? f;
-	if (srcFiles) for (let i = 0; i < srcFiles.length; i++) srcFiles[i] = alias(srcFiles[i]);
+	for (const names of [srcFiles, inputs]) if (names) for (let i = 0; i < names.length; i++) names[i] = alias(names[i]);
 	for (const c of counters) if (c.f) c.f = alias(c.f);
 	const p = path.join(outAbs, 'draft.synctex.gz');
 	try {

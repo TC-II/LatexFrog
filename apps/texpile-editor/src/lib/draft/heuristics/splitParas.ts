@@ -10,7 +10,27 @@ import { lineOpenings } from './structure/lineOpenings';
 import { lineStartsOf } from './structure/sourceLines';
 
 // open: an environment block with no \end
-export type Para = { text: string; startLine: number; wrap?: string; idx?: number; env?: string; head?: string; open?: boolean };
+// wrapArgs: the list's optional argument as written on its \begin line (enumitem's label=, leftmargin=...)
+export type Para = { text: string; startLine: number; wrap?: string; wrapArgs?: string; idx?: number; env?: string; head?: string; open?: boolean };
+
+/** the bracketed optional argument right after `\begin{name}` on a line, braces balanced, or '' */
+export function listArgs(line: string, name: string): string {
+	const at = line.indexOf(`\\begin{${name}}`);
+	if (at < 0) return '';
+	let i = at + name.length + 8;
+	while (line[i] === ' ' || line[i] === '\t') i++;
+	if (line[i] !== '[') return '';
+	let depth = 0;
+	for (let j = i + 1; j < line.length; j++) {
+		const c = line[j];
+		if (c === '\\') j++;
+		else if (c === '{') depth++;
+		else if (c === '}') depth--;
+		else if (c === ']' && depth === 0) return line.slice(i, j + 1);
+		else if (c === '%') return '';
+	}
+	return '';
+}
 
 // Split a .tex buffer into prose paragraphs (line-numbered), treating blank lines and
 // block-level command lines (\begin, \item, \chapter, ...) as boundaries -- so the header
@@ -34,6 +54,23 @@ const NON_BLOCK_ENVS = new Set(['document', 'frame', ...DRAFT_LISTS]);
 /** an environment whose content is ordinary prose or per-item lists, so it is no env block */
 export function isProseEnv(name: string): boolean {
 	return NON_BLOCK_ENVS.has(name);
+}
+
+// environments that set their content in boxes or columns of their own, or hold drawing code: never split inside
+const BOXING_ENVS = new Set(['minipage', 'multicols', 'multicols*', 'tikzpicture', 'pgfpicture', 'circuitikz', 'axis', 'forest', 'tabbing']);
+
+function mayContainProse(name: string): boolean {
+	if (NON_BLOCK_ENVS.has(name) || BOXING_ENVS.has(name) || isFloatEnv(name)) return false;
+	const f = commonEnvFacts(name);
+	return !f.body && !f.cells && !f.rows && !f.item && !f.in;
+}
+
+/** A plain environment holding several paragraphs -- a frame or margin wrapper around a whole exercise or the whole
+ *  document (mdframed, adjustwidth). Captured whole it could never patch: it spans pages, and every edit in it took a
+ *  full pass. Its paragraphs split like the top level's, and the locate ladder's checks hold as anywhere else. A
+ *  single-paragraph environment (abstract, a centred line) stays one block: the daemon reproduces it whole. */
+export function isProseContainer(name: string, block: string): boolean {
+	return mayContainProse(name) && /\n[ \t]*\r?\n/.test(block.replace(/\s+$/, ''));
 }
 // sectioning lines are captured as their own single-line blocks so a title edit rides the
 // instant path. \chapter (page-clearing) stays a boundary -> the debounced recompile
@@ -59,13 +96,17 @@ export function splitParaLines(src: string, lines: string[], tree: Tree = latexT
 	let cur: string[] = [];
 	let start = 0;
 	let wrap = '';
+	let wrapArgs = '';
 	let idx = 0;
 	let curHead = '';
-	const listStack: { env: string; n: number }[] = [];
+	const listStack: { env: string; n: number; args: string }[] = [];
 	const starts = lineStartsOf(lines);
-	const openings = lineOpenings(src, tree, starts, NON_BLOCK_ENVS);
+	// the environments split inside: the prose ones, and those of the rest that may be prose containers
+	const proseEnvs = new Set(NON_BLOCK_ENVS);
+	for (const m of src.matchAll(/\\begin\s*\{([^{}\s]+)\}/g)) if (mayContainProse(m[1])) proseEnvs.add(m[1]);
+	const openings = lineOpenings(src, tree, starts, proseEnvs);
 	function flush() {
-		if (cur.length) out.push({ text: cur.join('\n'), startLine: start + 1, wrap: wrap || undefined, idx, head: curHead || undefined });
+		if (cur.length) out.push({ text: cur.join('\n'), startLine: start + 1, wrap: wrap || undefined, ...(wrap && wrapArgs ? { wrapArgs } : {}), idx, head: curHead || undefined });
 		cur = [];
 		curHead = '';
 	}
@@ -75,6 +116,8 @@ export function splitParaLines(src: string, lines: string[], tree: Tree = latexT
 		const command = opening?.kind === 'command' ? opening : null;
 		if (opening?.kind === 'begin' && !NON_BLOCK_ENVS.has(opening.name) && !listStack.length) {
 			flush();
+			// its \begin line is a boundary, like \begin{document}'s
+			if (!opening.open && isProseContainer(opening.name, lines.slice(i, opening.lastLine + 1).join('\n'))) continue;
 			out.push({
 				text: lines.slice(i, opening.lastLine + 1).join('\n'),
 				startLine: i + 1,
@@ -92,7 +135,7 @@ export function splitParaLines(src: string, lines: string[], tree: Tree = latexT
 		}
 		if (opening?.kind === 'begin' && DRAFT_LISTS.includes(opening.name)) {
 			flush();
-			listStack.push({ env: opening.name, n: 0 });
+			listStack.push({ env: opening.name, n: 0, args: listArgs(ln, opening.name) });
 			continue;
 		}
 		if (opening?.kind === 'end' && DRAFT_LISTS.includes(opening.name)) {
@@ -112,6 +155,7 @@ export function splitParaLines(src: string, lines: string[], tree: Tree = latexT
 			start = i;
 			cur = [ln.slice(command.end - starts[i]).replace(/^[ \t]*/, '')];
 			wrap = top ? top.env : '';
+			wrapArgs = top ? top.args : '';
 			idx = top ? top.n : 0;
 			continue;
 		}
@@ -165,7 +209,8 @@ export function splitParaLines(src: string, lines: string[], tree: Tree = latexT
 // wrong digit fails exact verification and takes the full pass, which
 // paints the real number. (A JS re-count of \item lines used to guess the value: deleted --
 // reconstructing TeX counter state in JS is exactly the approximation we don't do.)
-export function wrapItem(t: string, w?: string, line?: number, file?: string) {
+// args: the list's own optional argument (its labels and margins), so the item is set as the page set it
+export function wrapItem(t: string, w?: string, line?: number, file?: string, args = '') {
 	if (!w) return t;
 	const pin = w === 'enumerate' && line !== undefined ? counterBeforeStep('enumi', line, file) : null;
 	const setc = w === 'enumerate' ? `\\setcounter{enumi}{${pin ?? 0}}` : '';
@@ -174,7 +219,23 @@ export function wrapItem(t: string, w?: string, line?: number, file?: string) {
 	// An item whose last line is a comment (a commented-out \item after it) would comment out the \end: it goes on a line of its own
 	const last = t.slice(t.lastIndexOf('\n') + 1);
 	const sep = stripTexComments(last) === last ? '' : '\n';
-	return `\\par\\begin{${w}}${setc}\\item ${t}${sep}\\end{${w}}`;
+	return `${itemHead(w, args, setc)}${t}${sep}\\end{${w}}`;
+}
+
+function itemHead(w: string, args: string, setc: string): string {
+	return `\\par\\begin{${w}}${args}${setc}\\item `;
+}
+
+/** where the item's own text starts in a wrapItem block (after its list's \begin, options, counter pin and \item),
+ *  or 0 for any other block. Settings for the item's paragraph go there: in front of the wrapper, the \par that opens
+ *  it ends the daemon's empty paragraph first, and a hook armed for the paragraph's end fires on that one instead. */
+export function itemTextStart(text: string): number {
+	const m = /^\\par\\begin\{([^{}]+)\}/.exec(text);
+	if (!m) return 0;
+	const args = listArgs(text, m[1]);
+	const rest = text.slice(m[0].length + args.length);
+	const pin = /^\\setcounter\{enumi\}\{-?\d+\}/.exec(rest)?.[0] ?? '';
+	return rest.startsWith(pin + '\\item ') ? m[0].length + args.length + pin.length + 6 : 0;
 }
 // comment stripping is ONLY for JS-side lexing guards (brace balance); dispatched text
 // ships verbatim -- the engine's own catcodes decide what a % means. Comment chars come
@@ -229,7 +290,7 @@ export function wrapHead(t: string, head?: string, line?: number, file?: string)
 }
 // a Para as the daemon should typeset it (list items re-wrapped, headings pinned)
 export function paraTex(p: Para, file?: string) {
-	return wrapHead(wrapItem(p.text, p.wrap, p.startLine, file), p.head, p.startLine, file);
+	return wrapHead(wrapItem(p.text, p.wrap, p.startLine, file, p.wrapArgs), p.head, p.startLine, file);
 }
 
 // While typing you pass through unbalanced states (\textbf{ before the }, $ before its

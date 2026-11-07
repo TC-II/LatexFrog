@@ -303,7 +303,12 @@ export class DraftSession {
 			if (this.vp.fitMode) this.vp.fitToWidth(); // size to the pane now that the paper dims are known
 		}
 		// counter truth + the executed \begin{document} line: the decision layer pins to these
-		updateEngineTruth({ counters: r.counters ?? [], bodyLine: r.bodyLine, mainRel: this.opts.mainFile() });
+		updateEngineTruth({
+			counters: r.counters ?? [],
+			bodyLine: r.bodyLine,
+			mainRel: this.opts.mainFile(),
+			inputs: Array.isArray(r.inputs) ? new Set(r.inputs as string[]) : undefined
+		});
 		this.pages = r.pages;
 		// the walker checks its own glyph placement against the engine's line width and had
 		// been discarding the answer. It is 0.0000 on every page of every fixture, so a

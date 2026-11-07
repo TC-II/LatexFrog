@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { counterBefore, counterBeforeStep, isFloatEnv, resetEngineTruth, updateEngineTruth } from '$lib/draft/engineTruth';
+import { counterBefore, counterBeforeStep, isFloatEnv, resetEngineTruth, unreadByCompile, updateEngineTruth } from '$lib/draft/engineTruth';
 import { decideEdit, daemonReady } from '$lib/draft/heuristics/dispatch';
 
 afterEach(() => resetEngineTruth());
@@ -91,5 +91,21 @@ describe('engine catcode table', () => {
 		updateEngineTruth({ catcodes: cats });
 		expect(daemonReady('50% { of it }')).toBe(true);
 		expect(daemonReady('open { brace % not a comment')).toBe(false);
+	});
+});
+
+describe('files the compile never read', () => {
+	it('knows a file left out of the pass, never the main file, and nothing without the list', () => {
+		expect(unreadByCompile('chapters/two.tex')).toBe(false);
+		updateEngineTruth({ mainRel: 'main.tex', inputs: new Set(['main.tex', 'one.tex', 'preamble.tex']) });
+		expect(unreadByCompile('chapters/two.tex')).toBe(true);
+		expect(unreadByCompile('chapters/One.tex')).toBe(false);
+		expect(unreadByCompile('main.tex')).toBe(false);
+	});
+
+	it('makes an edit to such a file a no-op', () => {
+		updateEngineTruth({ mainRel: 'main.tex', inputs: new Set(['main.tex']) });
+		expect(decideEdit(DOC, DOC.replace('Alpha one', 'Alpha onex'), 'old/draft.tex')).toEqual({ kind: 'noop' });
+		expect(decideEdit(DOC, DOC.replace('Alpha one', 'Alpha onex'), 'main.tex').kind).toBe('patch');
 	});
 });

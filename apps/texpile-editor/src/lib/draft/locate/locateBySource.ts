@@ -2,7 +2,7 @@
 import { COL_GUTTER, ENGINE_EPS, GLUE_GAP_TOL, LINE_GAP_FALLBACK, ROW_BREAK, SPREAD_TOL } from '../heuristics/tolerances';
 import { INDENT_PREFIX } from '../daemonIndent';
 import { bandFontPrefix } from './bandFont';
-import { paraPrefix } from '../column/paraPrefix';
+import { itemClub, paraPrefix } from '../column/paraPrefix';
 import { bandWindow } from '../geometry/bandWindow';
 import { columnWindows } from '../heuristics/columnWindows';
 import { glyphRows } from '../geometry/glyphRows';
@@ -91,7 +91,7 @@ export async function locateBySource(
 		const p = wave === 0 ? '' : params ? paraPrefix(params) : bandFontPrefix(recs, lines);
 		if (wave === 1 && !p) break;
 		for (const ind of indented ? [true, false] : [false, true]) {
-			const c = await ctx.typesetParagraph({ text: p + (ind ? INDENT_PREFIX : '') + orig, hsize: W });
+			const c = await ctx.typesetParagraph({ text: p + (ind ? INDENT_PREFIX : '') + itemClub(wave === 1 ? params : null, orig), hsize: W });
 			if (!c.ok) continue;
 			const cl = c.records.filter((x: any) => x.t === 'line');
 			if (!cl.length || (c.stats && (c.stats as any).certified === false)) continue;

@@ -11,7 +11,7 @@ import { bandChanged } from './heuristics/eligibility/bandChanged';
 import { editFocus } from './heuristics/editFocus';
 import { cachedProof, findBand, paragraphOf, planPatch, proofKey, proveOn, storeProof } from './column/planPatch';
 import type { BandProof, ProofRefusal } from './column/bandProof';
-import { paraPrefix, type ParaParams } from './column/paraPrefix';
+import { itemClub, paraPrefix, type ParaParams } from './column/paraPrefix';
 import { whyPhrase } from './whyPhrase';
 import type { Cal, CalBail, PaperMetrics } from './locate/locate.types';
 import { patchInk, type Patch, type PatchReq } from './patch/patch.types';
@@ -346,7 +346,7 @@ export class DraftPatcher {
 				openings.push({ lead: '\\par', hsize: band.column.w });
 			let opening = openings[Math.min(cal.opening ?? 0, openings.length - 1)];
 			function typesetAs(text: string, o = opening) {
-				return h.daemonTypeset({ text: o.lead + text, hsize: o.hsize });
+				return h.daemonTypeset({ text: o.lead + itemClub(params, text), hsize: o.hsize });
 			}
 			let r = await typesetAs(req.text);
 			if (!r.ok || (r.stats && (r.stats as any).certified === false)) {

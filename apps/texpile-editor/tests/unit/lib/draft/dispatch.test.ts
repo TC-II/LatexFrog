@@ -293,3 +293,21 @@ describe('mid-typing math balance', () => {
 		expect(d.endLine - d.line).toBe(2);
 	});
 });
+
+describe('prose containers', () => {
+	it('patches a paragraph inside a multi-paragraph frame, not as an environment body', () => {
+		const doc = String.raw`\begin{document}
+\begin{adjustwidth*}{0mm}{}
+Alpha one two.
+
+Beta three four.
+\end{adjustwidth*}
+\end{document}
+`;
+		const d = decideEdit(doc, doc.replace('Beta three', 'Beta threex'));
+		expect(d.kind).toBe('patch');
+		if (d.kind !== 'patch') return;
+		expect(d.line).toBe(5);
+		expect(d.text).toContain('Beta threex four.');
+	});
+});

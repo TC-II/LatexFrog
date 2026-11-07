@@ -1,5 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { splitParas, wrapItem } from '$lib/draft/heuristics/splitParas';
+import { itemTextStart, listArgs, splitParas, wrapItem } from '$lib/draft/heuristics/splitParas';
+import { itemClub } from '$lib/draft/column/paraPrefix';
+
+describe('list options', () => {
+	const doc = String.raw`\begin{enumerate}[label=\alph*., leftmargin=1.5cm, itemsep=0.4em]
+    \item Calcule la tension.
+    \item Otro.
+\end{enumerate}`;
+
+	it('carries the list optional argument to its items', () => {
+		const p = splitParas(doc);
+		expect(p[0].wrapArgs).toBe(String.raw`[label=\alph*., leftmargin=1.5cm, itemsep=0.4em]`);
+		expect(wrapItem(p[0].text, p[0].wrap, undefined, undefined, p[0].wrapArgs)).toBe(
+			String.raw`\par\begin{enumerate}[label=\alph*., leftmargin=1.5cm, itemsep=0.4em]\setcounter{enumi}{0}\item Calcule la tension.\end{enumerate}`
+		);
+	});
+
+	it('reads brackets inside braces and stops at a comment', () => {
+		expect(listArgs(String.raw`\begin{itemize} [label={[\arabic*]}] x`, 'itemize')).toBe(String.raw`[label={[\arabic*]}]`);
+		expect(listArgs(String.raw`\begin{itemize}[label=% cut`, 'itemize')).toBe('');
+		expect(listArgs(String.raw`\begin{itemize}`, 'itemize')).toBe('');
+	});
+
+	it('pins an item club penalty just before its item, nowhere else', () => {
+		const t = String.raw`\par\begin{itemize}[nosep]\item Body.\end{itemize}`;
+		expect(t.slice(itemTextStart(t))).toBe(String.raw`Body.\end{itemize}`);
+		const p = { pen: [10000, 150, 0, 100, 50] } as never;
+		expect(itemClub(p, t)).toBe(
+			String.raw`\par\begin{itemize}[nosep]\ifcsname @clubpenalty\endcsname\csname @clubpenalty\endcsname=10000\relax\fi\item Body.\end{itemize}`
+		);
+		expect(itemClub(p, 'Plain.')).toBe('Plain.');
+		expect(itemClub(null, t)).toBe(t);
+		const n = String.raw`\par\begin{enumerate}\setcounter{enumi}{2}\item Third.\end{enumerate}`;
+		expect(n.slice(itemTextStart(n))).toBe(String.raw`Third.\end{enumerate}`);
+	});
+});
 
 describe('wrapItem', () => {
 	it('puts the list end on its own line after an item ending in a comment', () => {
@@ -62,5 +97,40 @@ describe('splitParas reads the syntax tree', () => {
 	it('keeps a list inside a command argument in its paragraph', () => {
 		const paras = splitParas('\\footnote{\n\\begin{itemize}\n\\item one\n\\end{itemize}}');
 		expect(paras.some((p) => p.wrap)).toBe(false);
+	});
+});
+
+describe('prose containers', () => {
+	const doc = String.raw`\begin{document}
+\begin{ejresuelto}[frametitle={A}]
+First paragraph of the frame.
+
+Second paragraph, $x$ inline.
+\begin{equation*}
+a = b
+\end{equation*}
+\end{ejresuelto}
+\begin{center}
+One centred line.
+\end{center}
+\end{document}`;
+
+	it('splits a multi-paragraph environment like the top level, its displays still whole', () => {
+		const p = splitParas(doc);
+		expect(p.map((x) => [x.startLine, x.env ?? ''])).toEqual([
+			[3, ''],
+			[5, ''],
+			[6, 'equation*'],
+			[10, 'center']
+		]);
+	});
+
+	it('keeps a box environment whole even with several paragraphs', () => {
+		const box = String.raw`\begin{minipage}{3cm}
+One.
+
+Two.
+\end{minipage}`;
+		expect(splitParas(box)).toEqual([expect.objectContaining({ env: 'minipage', startLine: 1 })]);
 	});
 });

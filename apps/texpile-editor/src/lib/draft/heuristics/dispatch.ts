@@ -2,15 +2,15 @@
 // (no Svelte, no DOM, no engine calls): diff the buffer against the baseline, pick
 // patch / merged insert-delete / full recompile, and assemble the exact TeX to send.
 // The same code drives the app and the headless edit-class matrix (tests/live).
-import { isProseEnv, paraTex, splitParaLines, wrapHead, wrapItem, type Para } from './splitParas';
+import { isProseContainer, isProseEnv, paraTex, splitParaLines, wrapHead, wrapItem, type Para } from './splitParas';
 import { daemonReady, repairForPreview } from './repairForPreview';
 import { scanAlignment, type Align } from './alignScan';
-import { bodyLineFor, counterBefore, isFloatEnv } from '../engineTruth';
+import { bodyLineFor, counterBefore, isFloatEnv, unreadByCompile } from '../engineTruth';
 import { editTier } from './eligibility/editTier';
 import { aroundSpan, alignSwitchBefore, captionSpanIn, hasFootnote, tableSpanIn } from './structure/floatParts';
 import { bodyLineIn } from './structure/sourceLines';
 import { readEdited, readSource, type ReadSource } from './structure/editedSource';
-import { enclosingEnvironmentName } from './structure/enclosingEnvironment';
+import { enclosingEnvironment } from './structure/enclosingEnvironment';
 
 export { splitParas, stripTexComments, wrapItem, type Para } from './splitParas';
 export { daemonReady, repairForPreview } from './repairForPreview';
@@ -103,6 +103,8 @@ export function decideEdit(baseline: string, src: string, file?: string): EditDe
 	const oldP = base.paras;
 	const srcLines = src.split('\n');
 	if (src !== baseline && editInsideCommentEnv(base.lines, srcLines)) return { kind: 'noop' };
+	// a file the last pass never read: nothing on the pages comes from it
+	if (file && src !== baseline && unreadByCompile(file)) return { kind: 'noop' };
 	editedMemo = readEdited(editedMemo ?? base.read, src);
 	const newP = splitParaLines(src, srcLines, editedMemo.tree);
 	let single = -1;
@@ -186,14 +188,16 @@ function buildPatch(base: Baseline, oP: Para, nP: Para, file?: string): EditDeci
 	{
 		// document/frame are exempt: text after \begin{document} or inside a beamer frame is
 		// ordinary prose, not an env body
-		const env = enclosingEnvironmentName(base, oP.startLine);
-		if (env && !isProseEnv(env)) return { kind: 'env-body', env, line: oP.startLine };
+		// a multi-paragraph frame or margin wrapper (splitParas splits inside it) holds prose too
+		const encl = enclosingEnvironment(base, oP.startLine);
+		if (encl && !isProseEnv(encl.name) && !isProseContainer(encl.name, encl.text))
+			return { kind: 'env-body', env: encl.name, line: oP.startLine };
 	}
 	// A cell edit inside a FLOATED table can't typeset the whole float (the daemon discards
 	// float material), but the inner tabular alone typesets fine: dispatch just the tabular
 	// when the change is confined to it. Caption/placement edits keep the whole-block
 	// dispatch, which cal-empties into the full pass.
-	let dispatchText = wrapHead(wrapItem(sendText, nP.wrap, oP.startLine, file), nP.head, oP.startLine, file);
+	let dispatchText = wrapHead(wrapItem(sendText, nP.wrap, oP.startLine, file, nP.wrapArgs), nP.head, oP.startLine, file);
 	let dispatchOrig = paraTex(oP, file);
 	let floatInner = false;
 	let floatTabular = false;

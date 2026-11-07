@@ -23,6 +23,7 @@ import readline from 'node:readline';
 import { jobPrefix, mirrorSourceFolders, writeHooksFile, OUT } from './compileJob';
 import { shellEnvReady } from '../shell/shellEnv';
 import { onToolPathChange } from '../shell/toolDirs';
+import { splitThroughInputs } from '../lv/preambleInputs';
 
 export const WARM_BODY = 'texd-body.tex';
 const JOB = 'texd_warm';
@@ -32,20 +33,21 @@ const JOB = 'texd_warm';
 // (draftBib owns draft.bbl).
 export type ReadBackFiles = { byTex: string[]; byTools: string[] };
 
-export type WarmSplit = { preamble: string; beginLine: number };
+/** bodyFile: root-relative, the file whose rest after line beginLine is the body -- the main file,
+ *  or (LatexFrog) the file it \input's that holds \begin{document} */
+export type WarmSplit = { preamble: string; beginLine: number; bodyFile: string };
 
 /** the main file up to and including its \begin{document} line, and that line's 1-based number */
-export function splitForWarm(mainAbs: string): WarmSplit | null {
+export function splitForWarm(root: string, mainFile: string): WarmSplit | null {
 	let src: string;
 	try {
-		src = fs.readFileSync(mainAbs, 'utf8');
+		src = fs.readFileSync(path.join(root, mainFile), 'utf8');
 	} catch {
 		return null;
 	}
-	const m = src.match(/^.*\\begin\{document\}.*$/m);
-	if (!m || m.index === undefined) return null;
-	const preamble = src.slice(0, m.index + m[0].length);
-	return { preamble, beginLine: preamble.split('\n').length };
+	const s = splitThroughInputs(root, src);
+	if (!s || !s.bodyIsRest) return null;
+	return { preamble: s.preamble, beginLine: s.beginLine, bodyFile: s.file ?? mainFile.replace(/\\/g, '/') };
 }
 
 /** the body padded to the main file's own line numbers: line k here IS line k there */
@@ -181,7 +183,7 @@ export function rewarmCompiler(root: string, mainFile: string, engineDir: string
 	if (rewarmTimer) clearTimeout(rewarmTimer);
 	rewarmTimer = setTimeout(() => {
 		rewarmTimer = null;
-		const split = splitForWarm(path.join(root, mainFile));
+		const split = splitForWarm(root, mainFile);
 		if (!split) return;
 		stopWarmCompiler();
 		void spawnWarm(root, engineDir, split.preamble, readBack).catch(() => undefined);

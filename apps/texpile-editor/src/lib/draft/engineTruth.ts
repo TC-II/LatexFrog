@@ -20,6 +20,8 @@ export type EngineTruth = {
 	bodyLine?: number;
 	/** root-relative main file the compile ran on (bodyLine/counters belong to its project) */
 	mainRel?: string;
+	/** LatexFrog: basenames (lowercase) of every file the last full compile read a line of */
+	inputs?: ReadonlySet<string>;
 };
 
 let truth: EngineTruth = {};
@@ -32,6 +34,17 @@ export function updateEngineTruth(t: Partial<EngineTruth>): void {
 }
 export function resetEngineTruth(): void {
 	truth = {};
+}
+
+/** LatexFrog: the last compile read no line of `file` (root-relative), so no edit to it can change the pages -- a
+ *  chapter left out by \includeonly, a commented-out \input. False when unknown, and always for the main file. Judged
+ *  by basename, as the engine names files: two files of one name count as read when either was. */
+export function unreadByCompile(file: string): boolean {
+	const inputs = truth.inputs;
+	if (!inputs?.size) return false;
+	const base = baseOf(file);
+	if (truth.mainRel && baseOf(truth.mainRel) === base) return false;
+	return !inputs.has(base);
 }
 
 const COMMON_FLOATS = new Set(commonRegistry('floats').map((f) => f.name));

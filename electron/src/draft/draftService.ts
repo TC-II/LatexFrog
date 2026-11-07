@@ -71,6 +71,8 @@ export type DraftResult =
 			// 1-based index into this. Line numbers are file-local, so the id is what makes
 			// "line 45" mean anything in a multi-file project.
 			srcFiles: string[];
+			// LatexFrog: every file the pass read a line of (engine basenames, lowercase); absent from an older engine
+			inputs?: string[];
 			// the line \begin{document} executed at (in the main file), from the hook itself
 			bodyLine?: number;
 			// per-line counter snapshots (see page-extract.lua): the daemon pins to these
@@ -163,7 +165,7 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 	const job = `${jobPrefix(engineDir)}\\input{${mainRel}}`;
 	// A pre-warmed engine (preamble loaded, parked before the body) takes the FIRST pass;
 	// extra passes and every fallback go cold. lualatex only: the warm pool spawns that.
-	const split = engine === 'lualatex' ? splitForWarm(path.join(root, mainFile)) : null;
+	const split = engine === 'lualatex' ? splitForWarm(root, mainFile) : null;
 	let warmLeft = split ? takeWarmCompiler(root, split.preamble) : null;
 	let usedWarm = false;
 	function enginePass(): Promise<void> {
@@ -173,7 +175,7 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 			warmLeft = null;
 			usedWarm = true;
 			// adopt: a superseded run's partial products must never be promoted over draft.*
-			const g = goWarmCompiler(w, root, fs.readFileSync(path.join(root, mainFile), 'utf8'), split.beginLine, () => !superseded());
+			const g = goWarmCompiler(w, root, fs.readFileSync(path.join(root, split.bodyFile), 'utf8'), split.beginLine, () => !superseded());
 			run.child = g.child; // a superseding compile of this root kills this to unblock itself
 			return g.done.then(() => {
 				if (run.child === g.child) run.child = null;
@@ -308,7 +310,8 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 	// what the padding buys). Put the main file's name back so nothing downstream can tell
 	// which kind of pass ran. Multi-pass compiles end on a cold pass and alias nothing.
 	if (usedWarm && split && passes === 1) {
-		const mainBase = path.basename(mainRel);
+		// the body's own file: the main file, or the one it \input's that holds \begin{document}
+		const mainBase = path.basename(split.bodyFile);
 		// the padded body reads as texd-body.tex, and anything read via \jobname (the seeded
 		// bbl, an .ind) as texd_warm.*; a cold pass names main.tex and draft.* there
 		const alias = (f: string): string => {
@@ -319,13 +322,19 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 		};
 		const sf = (manifest as { srcFiles?: string[] }).srcFiles;
 		if (sf) for (let i = 0; i < sf.length; i++) sf[i] = alias(sf[i]);
+		// LatexFrog: the warm engine read the main file's preamble as its own wrapper's text, not from the file
+		const inputs = (manifest as { inputs?: string[] }).inputs;
+		if (inputs) {
+			for (let i = 0; i < inputs.length; i++) inputs[i] = alias(inputs[i]);
+			inputs.push(path.basename(mainRel).toLowerCase());
+		}
 		for (const c of counters) if (c.f) c.f = alias(c.f);
 		// begindoc fired inside the warm wrapper, so its line number names the wrong file
 		manifest.bodyLine = split.beginLine;
-		aliasSynctex(outAbs, mainRel);
+		aliasSynctex(outAbs, split.bodyFile);
 	}
 	// LatexFrog: a profile's Live driver reads the opening file's body from a copy; name the original
-	aliasLiveCopies(root, outAbs, (manifest as { srcFiles?: string[] }).srcFiles, counters);
+	aliasLiveCopies(root, outAbs, (manifest as { srcFiles?: string[] }).srcFiles, counters, (manifest as { inputs?: string[] }).inputs);
 
 	// seam sidecar: per-break pruned runs; absent (older engine, luatexbase missing) means
 	// the chain planner falls back to its guessed junction gap and stays provisional
@@ -393,6 +402,7 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 		topSkip: (manifest as { topSkip?: number }).topSkip || 0,
 		lsLimit: (manifest as { lsLimit?: number }).lsLimit || 0,
 		srcFiles: (manifest as { srcFiles?: string[] }).srcFiles || [],
+		inputs: (manifest as { inputs?: string[] }).inputs,
 		bodyLine: manifest.bodyLine,
 		counters,
 		seams,

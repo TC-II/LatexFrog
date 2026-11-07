@@ -210,6 +210,46 @@ local function infoFor(id)
 	end
 	return i
 end
+-- LatexFrog: a glyph of a virtual font (Times or Palatino in T1 encoding: ptmr8t, a VF over the real ptmr8r) names
+-- a font no map file lists, so the renderer had nothing to draw it with and every patch on such a page was refused
+-- (font-missing). When the character is plainly one character of one real font, the record names that font and
+-- character instead -- what the PDF itself embeds. Anything else the VF does (a ligature built from two, an accent
+-- moved over a letter) keeps the VF's name, refused as before.
+local vfInfo = {}
+local function realGlyph(fid, ch)
+	local v = vfInfo[fid]
+	if v == nil then
+		v = false
+		local f = font.getfont(fid)
+		-- a VF TeX loaded itself reports type "unknown" and no commands there; its copy carries them (made once
+		-- per font, and only for such fonts: a Lua-loaded font already says what it is)
+		if f and f.type == "unknown" and font.getcopy then f = font.getcopy(fid) end
+		if f and f.type == "virtual" and f.characters then v = { chars = f.characters, fonts = f.fonts } end
+		vfInfo[fid] = v
+	end
+	if not v then return fid, ch end
+	local d = v.chars[ch]
+	local cmds = d and d.commands
+	if not cmds then return fid, ch end
+	local tf, tc
+	for _, cmd in ipairs(cmds) do
+		local k = cmd[1]
+		if k == "font" and not tc then tf = cmd[2]
+		elseif k == "char" and not tc then tc = cmd[2]
+		elseif k == "slot" and not tc then tf, tc = cmd[2], cmd[3]
+		else return fid, ch end
+	end
+	if not tc then return fid, ch end
+	-- a VF's font numbers index its own font list when it has one, else they are font ids
+	if v.fonts then
+		local e = v.fonts[tf or 1]
+		tf = e and e.id
+	end
+	local base = tf and (font.getfont(tf) or (font.getcopy and font.getcopy(tf)))
+	if not base or base.type == "virtual" then return fid, ch end
+	return tf, tc
+end
+
 local function glyphIndexSuffix(n)
 	local i = infoFor(n.font)
 	if not i.harf and n.char < PUA_START then return "" end
@@ -476,11 +516,12 @@ local function walk(head, parent, x, y, emit, fonts, last_ef, colorStack, rtl, s
 			local ef = n.expansion_factor or 0
 			last_ef = ef
 			local w = n.width * (1 + ef / 1000000.0)
-			fonts[n.font] = true
+			local gf, gc = realGlyph(n.font, n.char)
+			fonts[gf] = true
 			if rtl then x = x - w end
 			emit(string.format(
 				'{"t":"g","c":%d,"f":%d,"x":%.4f,"y":%.4f,"w":%.4f,"ef":%d,"xo":%.4f,"yo":%.4f%s%s}',
-				n.char, n.font, x / pt, y / pt, w / pt, ef, (n.xoffset or 0) / pt, (n.yoffset or 0) / pt,
+				gc, gf, x / pt, y / pt, w / pt, ef, (n.xoffset or 0) / pt, (n.yoffset or 0) / pt,
 				colSuffix(colorStack), glyphIndexSuffix(n)))
 			if not rtl then x = x + w end
 		elseif id == KERN then
