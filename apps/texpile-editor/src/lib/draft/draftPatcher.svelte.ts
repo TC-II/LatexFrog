@@ -200,6 +200,10 @@ export class DraftPatcher {
 			// while a compile is in flight, hold the latest edit; run it once compile finishes
 			if (h.compiling()) this.queuedPatch = req;
 			h.emit('bail', !h.hasNative() ? 'no-native' : !h.pageCount() ? 'no-pages' : 'compiling');
+			// LatexFrog: no pages means the last pass failed (a broken document): there is nothing to patch, and
+			// the edit may be the fix, so it owes the document a pass at the typing pause -- else fixing an error
+			// in prose showed nothing until some structural edit came along
+			if (h.hasNative() && !h.pageCount() && !h.compiling()) this.schedulePause(req.onRecompile, 'no-pages');
 			return;
 		}
 		if (this.patching) {

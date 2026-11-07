@@ -25,7 +25,8 @@ export function classify(events) {
 	if (!outcome) outcome = events.some((e) => e.kind === 'compile-start') ? 'RECOMPILE' : 'NOFEEDBACK';
 	const first = events[0];
 	const visual = events.find((e) => VISUAL.has(e.kind));
-	const compiled = [...events].reverse().find((e) => e.kind === 'compiled');
+	// a pass the document stopped settles too: its time is how long the error took to show
+	const compiled = [...events].reverse().find((e) => e.kind === 'compiled' || e.kind === 'compile-failed');
 	let latencyMs = null;
 	if (first && visual) latencyMs = Math.round(visual.t - first.t);
 	else if (first && compiled) latencyMs = Math.round(compiled.t - first.t);
@@ -52,6 +53,7 @@ export function classify(events) {
 				'locate-inverse-span',
 				'locate-inverse-ok',
 				'compile-start',
+				'compile-failed',
 				// the incremental record store disagreeing with the engine's own. Invisible in
 				// the UI -- it costs a later LOCATE, not this render -- so the sweep must carry it
 				'records-adopted-drift'
@@ -64,6 +66,7 @@ export function classify(events) {
 					? `RECORDS-DRIFT/p${e.detail?.page}/dy${e.detail?.maxDy}/rows${e.detail?.rows}v${e.detail?.freshRows}`
 					: null) ||
 				(e.kind.startsWith('skel-') ? (e.detail?.why ?? e.kind) : null) ||
+				(e.kind === 'compile-failed' ? `tex-errors:${e.detail?.errors}` : null) ||
 				e.detail?.reason ||
 				e.detail?.stage ||
 				(e.detail?.why ? e.detail.why + (e.detail.err ? '=' + String(e.detail.err).slice(0, 80) : '') : null) ||
@@ -84,7 +87,8 @@ export async function collectUntilQuiet(page, { quietMs = 900, maxMs = 12000 } =
 			all.push(...batch);
 			lastNew = Date.now();
 		} else if (Date.now() - lastNew > quietMs) {
-			const pending = all.filter((e) => e.kind === 'compile-start').length > all.filter((e) => e.kind === 'compiled').length;
+			const settled = all.filter((e) => e.kind === 'compiled' || e.kind === 'compile-failed').length;
+			const pending = all.filter((e) => e.kind === 'compile-start').length > settled;
 			if (!pending || Date.now() - t0 > maxMs) break;
 		}
 		if (Date.now() - t0 > maxMs) break;

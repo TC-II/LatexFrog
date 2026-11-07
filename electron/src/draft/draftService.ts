@@ -87,7 +87,29 @@ export type DraftResult =
 			pages: DraftPage[];
 	  }
 	/** error 'engine-missing' names the program in `tool` */
-	| { ok: false; error: string; ms: number; log?: string; superseded?: true; tool?: string };
+	| { ok: false; error: string; ms: number; log?: string; superseded?: true; tool?: string; errors?: number; first?: string };
+
+/** LatexFrog: a log's TeX errors -- how many, and the first one with its input line ("l.363") -- or null when it has none */
+export function texErrors(log: string): { count: number; first: string } | null {
+	const lines = log.split(/\r?\n/);
+	let count = 0;
+	let first = '';
+	for (let i = 0; i < lines.length; i++) {
+		const l = lines[i];
+		if (!l.startsWith('! ') || /^!\s+==> Fatal error/.test(l) || /^! Emergency stop/.test(l)) continue;
+		count++;
+		if (first) continue;
+		first = l.slice(2).trim();
+		for (let j = i + 1; j < Math.min(lines.length, i + 12); j++) {
+			const at = /^l\.(\d+)/.exec(lines[j]);
+			if (at) {
+				first += ` (l.${at[1]})`;
+				break;
+			}
+		}
+	}
+	return count ? { count, first } : null;
+}
 
 type DraftBody = { root: string; mainFile: string; engineDir: string; engine?: string; readBack: ReadBackFiles };
 
@@ -264,18 +286,22 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 
 	const manifestPath = path.join(outAbs, 'pages.json');
 	if (!fs.existsSync(manifestPath)) {
-		let log = '';
+		let full = '';
 		try {
-			log = fs
-				.readFileSync(path.join(outAbs, 'draft.log'), 'utf8')
-				.split('\n')
-				.filter((l) => /^!|error/i.test(l))
-				.slice(-12)
-				.join('\n');
+			full = fs.readFileSync(path.join(outAbs, 'draft.log'), 'utf8');
 		} catch {
 			/* no log */
 		}
+		const log = full
+			.split('\n')
+			.filter((l) => /^!|error/i.test(l))
+			.slice(-12)
+			.join('\n');
 		rewarm();
+		// LatexFrog: the engine ran and the document stopped it (TeX gives up at 100 errors): say that, with the
+		// first error, instead of suggesting lualatex is missing. The Problems panel lists them all from the log.
+		const tex = texErrors(full);
+		if (tex) return { ok: false, error: 'tex-errors', errors: tex.count, first: tex.first, ms, log };
 		return { ok: false, error: 'Draft compile produced no pages (is lualatex on PATH? see _draft/draft.log)', ms, log };
 	}
 

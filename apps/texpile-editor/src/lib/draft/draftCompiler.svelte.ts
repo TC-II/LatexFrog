@@ -158,8 +158,14 @@ export class DraftCompiler {
 			} else if (!(r as { superseded?: boolean }).superseded) {
 				// svelte-check doesn't reliably narrow this cross-module discriminated union.
 				// A service-side 'superseded' isn't an error -- the newer compile will render.
-				const fail = r as { error: string; log?: string; tool?: string };
-				if (fail.error === 'engine-busy') {
+				const fail = r as { error: string; log?: string; tool?: string; errors?: number; first?: string };
+				if (fail.error === 'tex-errors') {
+					// LatexFrog: the document stopped the engine before any page: say so with the first error; the
+					// Problems panel has every one of them, with its file and line
+					this.error = m.lv_draft_tex_errors({ count: fail.errors ?? 0, first: fail.first ?? '' });
+					this.status = '';
+					this.hooks.emit('compile-failed', { errors: fail.errors, first: fail.first });
+				} else if (fail.error === 'engine-busy') {
 					// another window owns the live-preview engine: pause with the banner
 					this.busyElsewhere = true;
 					this.status = '';

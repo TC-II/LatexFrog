@@ -3234,6 +3234,7 @@
 	"lv_draft_images": "Draft images",
 	"lv_draft_delivery": "Delivered output is never draft",
 	"lv_draft_always": "This profile always uses draft images",
+	"lv_draft_tex_errors": "The document has {count} errors and TeX stopped before producing a page. First: {first}. Problems lists them all.",
 	"lv_file_in_build": "This file is in the build",
 	"lv_file_other_part": "This file ({part}) is not in the build",
 	"lv_file_unrelated": "This file is not part of the document",
