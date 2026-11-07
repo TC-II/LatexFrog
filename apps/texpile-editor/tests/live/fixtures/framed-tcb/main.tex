@@ -1,0 +1,51 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{changepage}
+\usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+% the framed fixture's solved box, drawn by tcolorbox the way mdframed draws it there: a 4pt rule on the left, 35pt
+% out in the margin, the text 30pt to its right, no other frame
+\tcbset{frametitle/.style={title={#1}}}
+\newtcolorbox{solved}[1][]{
+  breakable, enhanced, parbox=false, frame hidden, boxrule=0pt, boxsep=0pt, arc=0pt,
+  colback=white, borderline west={4pt}{0pt}{teal},
+  enlarge left by=-35pt, width=\linewidth+35pt,
+  left=34pt, right=0pt, top=6pt, bottom=6pt,
+  before skip=12pt, after skip=12pt,
+  fonttitle=\bfseries, coltitle=black, colbacktitle=white, titlerule=0pt,
+  toptitle=6pt, bottomtitle=0pt, lefttitle=34pt,
+  #1
+}
+\begin{document}
+
+\begin{adjustwidth*}{0mm}{}
+
+\section*{Wrapped document}
+
+Margin paragraph marginone sits inside a margin wrapper that spans the whole document, the
+way some course notes put every page in one adjustwidth environment, and it wraps the
+column a few times so the layout has something to measure.
+
+Margin paragraph margintwo follows it with a different word count so the two paragraphs
+break their lines in different places on the page.
+
+\begin{solved}[frametitle={Solved example}]
+Framed paragraph frameone opens the solved example inside a coloured frame whose rule runs
+down the left side, and it goes on long enough to wrap the frame width two or three times.
+
+Framed paragraph frametwo continues the example with an inline formula $V_o = -V_i R_2/R_1$
+and a sentence that keeps going so that it, too, wraps inside the frame.
+\begin{equation*}
+  A = -\frac{R_2}{R_1}
+\end{equation*}
+Framed paragraph framethree comes after the display, still inside the frame, and closes the
+example with a last sentence that wraps once.
+\end{solved}
+
+Margin paragraph marginthree comes after the frame and before the end of the wrapper, a plain
+paragraph again at the full text width.
+
+\end{adjustwidth*}
+
+\end{document}

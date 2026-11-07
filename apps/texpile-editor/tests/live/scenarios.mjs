@@ -246,6 +246,34 @@ export const FIXTURES = [
 			}
 		]
 	},
+	// the same solved box drawn by tcolorbox and by the framed package, to see which one Live follows (a candidate to
+	// replace mdframed in the course notes). Same text and scenarios as framed; what they show is measured, not assumed.
+	...['framed-tcb', 'framed-leftbar'].map((name) => ({
+		name,
+		scenarios: [
+			{ name: 'wrapper-prose', anchor: 'marginone', expect: ['EXACT'] },
+			{ name: 'wrapper-after-frame', anchor: 'marginthree', expect: ['EXACT'] },
+			{ name: 'frame-prose', anchor: 'frameone', expect: ['EXACT', 'RECOMPILE'] },
+			{ name: 'frame-after-display', anchor: 'framethree', expect: ['EXACT', 'RECOMPILE'] },
+			{
+				name: 'frame-grow-line',
+				anchor: 'frametwo',
+				op: { t: 'append', text: ' plus an appended clause long enough to make this framed paragraph one line taller' },
+				expect: ['EXACT', 'RECOMPILE'],
+				maxMs: 16000
+			}
+		]
+	})),
+	{
+		// Times in T1 (mathptmx): every glyph is a virtual font's; the ff ligature is two f of the real font and the
+		// math italic V, P, T, f, t are shifted -- each must patch, and draw where the engine puts it
+		name: 'times',
+		scenarios: [
+			{ name: 'times-ligature', anchor: 'timesone', expect: ['EXACT'] },
+			{ name: 'times-math-shifted', anchor: 'timestwo', expect: ['EXACT'] },
+			{ name: 'times-plain', anchor: 'timesthree', expect: ['EXACT'] }
+		]
+	},
 	{
 		// the user's tutorial project: 11pt article, heavy preamble (tikz/mhchem/natbib),
 		// \input fragments, bibtex -- the document both reported bugs came from

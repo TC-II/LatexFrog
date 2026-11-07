@@ -1,0 +1,59 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{changepage}
+\usepackage{xcolor}
+\usepackage{framed}
+% the framed fixture's solved box, drawn by the framed package: a 4pt rule on the left, 35pt out in the margin, the
+% text 30pt to its right. The lengths reproduce the mdframed box: same line breaks, same baselines, text 0.5pt right.
+\ExplSyntaxOn
+\tl_new:N \l_solved_title_tl
+\keys_define:nn { solved } { frametitle .tl_set:N = \l_solved_title_tl }
+\NewDocumentEnvironment{solved}{O{}}
+  {
+    \keys_set:nn { solved } {#1}
+    \par\addvspace{6.7pt}
+    \def\FrameCommand{\hspace{-35pt}{\color{teal}\vrule~width~4pt}\hspace{30pt}}
+    \MakeFramed{\advance\hsize-\width\FrameRestore}
+    \tl_if_empty:NF \l_solved_title_tl
+      { \noindent{\bfseries \l_solved_title_tl}\par\vspace{8.2pt} }
+    \use:c{@afterindentfalse}\use:c{@afterheading}
+  }
+  {
+    \par\vspace{6pt}
+    \endMakeFramed
+    \par\addvspace{7.2pt}
+  }
+\ExplSyntaxOff
+\begin{document}
+
+\begin{adjustwidth*}{0mm}{}
+
+\section*{Wrapped document}
+
+Margin paragraph marginone sits inside a margin wrapper that spans the whole document, the
+way some course notes put every page in one adjustwidth environment, and it wraps the
+column a few times so the layout has something to measure.
+
+Margin paragraph margintwo follows it with a different word count so the two paragraphs
+break their lines in different places on the page.
+
+\begin{solved}[frametitle={Solved example}]
+Framed paragraph frameone opens the solved example inside a coloured frame whose rule runs
+down the left side, and it goes on long enough to wrap the frame width two or three times.
+
+Framed paragraph frametwo continues the example with an inline formula $V_o = -V_i R_2/R_1$
+and a sentence that keeps going so that it, too, wraps inside the frame.
+\begin{equation*}
+  A = -\frac{R_2}{R_1}
+\end{equation*}
+Framed paragraph framethree comes after the display, still inside the frame, and closes the
+example with a last sentence that wraps once.
+\end{solved}
+
+Margin paragraph marginthree comes after the frame and before the end of the wrapper, a plain
+paragraph again at the full text width.
+
+\end{adjustwidth*}
+
+\end{document}
