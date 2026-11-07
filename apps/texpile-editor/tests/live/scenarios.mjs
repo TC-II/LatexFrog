@@ -229,6 +229,24 @@ export const FIXTURES = [
 		]
 	},
 	{
+		// a whole-document margin wrapper and a multi-paragraph mdframed frame: their paragraphs patch like any other,
+		// and a frame paragraph that grows a line (the frame's rule has to grow with it) must never draw wrong
+		name: 'framed',
+		scenarios: [
+			{ name: 'wrapper-prose', anchor: 'marginone', expect: ['EXACT'] },
+			{ name: 'wrapper-after-frame', anchor: 'marginthree', expect: ['EXACT'] },
+			{ name: 'frame-prose', anchor: 'frameone', expect: ['EXACT'] },
+			{ name: 'frame-after-display', anchor: 'framethree', expect: ['EXACT'] },
+			{
+				name: 'frame-grow-line',
+				anchor: 'frametwo',
+				op: { t: 'append', text: ' plus an appended clause long enough to make this framed paragraph one line taller' },
+				expect: ['EXACT', 'RECOMPILE'],
+				maxMs: 16000
+			}
+		]
+	},
+	{
 		// the user's tutorial project: 11pt article, heavy preamble (tikz/mhchem/natbib),
 		// \input fragments, bibtex -- the document both reported bugs came from
 		name: 'tut',

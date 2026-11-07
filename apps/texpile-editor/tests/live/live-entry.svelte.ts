@@ -71,7 +71,16 @@ let comp: any = null;
 	patch(req: any, root: string, buffer: string, file = 'main.tex') {
 		const text = daemonText(req.text);
 		const orig = daemonText(req.orig);
-		return comp.instantPatch({ ...req, text, orig, file, onRecompile: () => post('/write', { root, file, content: buffer }) });
+		(window as any).__adopted = false;
+		return comp.instantPatch({
+			...req,
+			text,
+			orig,
+			file,
+			onRecompile: () => post('/write', { root, file, content: buffer }),
+			// the patch derived the page's records itself: the app moves its baseline here, without a compile
+			onBaseline: () => ((window as any).__adopted = true)
+		});
 	},
 	events: () => ((window as any).__draftEvents ?? []).splice(0)
 };
