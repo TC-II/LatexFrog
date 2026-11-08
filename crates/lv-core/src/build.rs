@@ -67,6 +67,10 @@ pub enum BuildEvent {
         /// Las figuras cuya subcompilación lanzó pgf durante el build (`-jobname`); la sesión las verifica. No viaja a la interfaz.
         #[serde(skip)]
         figuras: Vec<String>,
+        /// A TeX run ended with a code that is not a plain TeX error (a crash: stack overflow, `127`): latexmk said `gave return code N`.
+        /// The session uses it to retry without the precompiled preamble. Does not travel to the interface.
+        #[serde(skip)]
+        engine_crashed: bool,
         /// Cuánto tardó cada regla de latexmk (`pdflatex`, `biber`, `makeindex`...), en orden, con la hora de su línea `Run number N of rule`
         /// del stdout; es lo que lee el historial. No viaja a la interfaz.
         #[serde(skip)]
@@ -642,6 +646,8 @@ pub(crate) struct Contador {
     linea: String,
     pub pasadas: u32,
     pub truncado: bool,
+    /// latexmk dijo `gave return code N` con un N que no es el 0 ni el 1 de un error común de TeX: el motor se cayó.
+    pub motor_caido: bool,
     /// Las figuras cuya subcompilación lanzó pgf (el `-jobname` con el que se lanzó), en orden y sin repetir.
     pub figuras: Vec<String>,
     /// Cuándo arrancó cada regla de latexmk (`Run number N of rule 'X'`): sirve para saber cuánto tardó cada pasada.
@@ -666,6 +672,13 @@ fn regla_de(linea: &str) -> Option<&str> {
     let fin = linea[r..].find('\'')?;
     let n = &linea[r..r + fin];
     (!n.is_empty()).then_some(n)
+}
+
+/// El N de `Command for 'pdflatex' gave return code N`.
+fn codigo_de_retorno(linea: &str) -> Option<i64> {
+    let i = linea.find("gave return code ")? + "gave return code ".len();
+    let digitos: String = linea[i..].trim_start().chars().take_while(|c| c.is_ascii_digit() || *c == '-').collect();
+    digitos.parse().ok()
 }
 
 /// Lo que sigue a `-jobname "` hasta la comilla de cierre, si hay.
@@ -714,6 +727,11 @@ impl Contador {
         // termina en salto se acota para no crecer sin límite.
         self.linea.push_str(s);
         while let Some(i) = self.linea.find('\n') {
+            if let Some(codigo) = codigo_de_retorno(&self.linea[..i]) {
+                if codigo != 0 && codigo != 1 {
+                    self.motor_caido = true;
+                }
+            }
             if let Some(regla) = regla_de(&self.linea[..i]) {
                 self.marcas.push((regla.to_string(), Instant::now()));
                 let n = self.marcas.iter().filter(|(r, _)| r == regla).count() as u32;
@@ -1002,6 +1020,7 @@ impl Builder {
                 warnings: 0,
                 badboxes: 0,
                 herramientas: contador.herramientas(Instant::now()),
+                engine_crashed: contador.motor_caido,
                 figuras: contador.figuras,
             });
         });
@@ -1178,6 +1197,24 @@ mod tests {
         let l = latexmk_args_for("completo", "lualatex", true).unwrap();
         assert!(!l.iter().any(|x| x.contains("max-print-line")), "{l:?}");
         assert!(l.contains(&"-r".to_string()) && l.last().unwrap() == ".latexfrog/drivers/lv-completo.tex");
+    }
+
+    #[test]
+    fn a_crashed_engine_is_a_return_code_other_than_a_plain_tex_error() {
+        let ejecutar = |texto: &str| {
+            let mut c = Contador::default();
+            c.push(texto);
+            c.motor_caido
+        };
+        assert!(!ejecutar("  pdflatex: Command for 'pdflatex' gave return code 1\n"), "a TeX error is code 1");
+        assert!(!ejecutar("Run number 1 of rule 'pdflatex'\n"));
+        assert!(ejecutar("  pdflatex: Command for 'pdflatex' gave return code 255\n"));
+        assert!(ejecutar("  pdflatex: Command for 'pdflatex' gave return code 127\n"));
+        // the line may arrive in pieces
+        let mut c = Contador::default();
+        c.push("  pdflatex: Command for 'pdflatex' gave ret");
+        c.push("urn code 255\n");
+        assert!(c.motor_caido);
     }
 
     #[test]

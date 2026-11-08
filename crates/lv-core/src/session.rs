@@ -1037,8 +1037,8 @@ impl Session {
 
     fn al_terminar(self: &Arc<Self>, ev: BuildEvent, perfil: &str, cache_dir: &str, retry: bool, desde: std::time::SystemTime, ctx: &historia::Ctx) {
         let mut ev = ev;
-        let BuildEvent::Finished { id, ok, cancelled, truncated_aux, .. } = &ev else { return };
-        let (id, ok, cancelled, truncated_aux) = (*id, *ok, *cancelled, *truncated_aux);
+        let BuildEvent::Finished { id, ok, cancelled, truncated_aux, engine_crashed, .. } = &ev else { return };
+        let (id, ok, cancelled, truncated_aux, engine_crashed) = (*id, *ok, *cancelled, *truncated_aux, *engine_crashed);
         // Primero las figuras: también antes del reintento por `.aux` truncado, que vería un `.md5` de una figura rota y la daría por buena.
         let rotas = self.verificar_build(&ev, perfil, cache_dir, desde);
         if !ok && truncated_aux && !cancelled && !retry && !es_de_servicio(perfil) {
@@ -1053,6 +1053,23 @@ impl Session {
             }
             match self.lanzar(perfil, true, Some(ctx.clone())) {
                 Ok(_) => return, // el `Finished` de este intento no se informa ni se anota: el del reintento lo reemplaza
+                Err(e) => (self.sink)(BuildEvent::Error { message: format!("could not retry: {e}") }),
+            }
+        }
+        // TeX crashed while running with the precompiled preamble: that preamble cannot be carried by a format (seen: TikZ shadows in a
+        // list label overflow the stack). Note it, and build once more without it.
+        if !ok && engine_crashed && !cancelled && !retry && !es_de_servicio(perfil) && crate::formato::marcar_fallido(&self.root, perfil) {
+            (self.sink)(BuildEvent::Log {
+                id,
+                text: format!("\n== TeX crashed with the precompiled preamble of profile \"{perfil}\": retrying once without it\n"),
+            });
+            let n = aux::clean_profile(&self.root, perfil, cache_dir);
+            (self.sink)(BuildEvent::Log { id, text: format!("== {n} auxiliares borrados\n") });
+            if let Ok(mut c) = ctx.lock() {
+                c.reparado = true;
+            }
+            match self.lanzar(perfil, true, Some(ctx.clone())) {
+                Ok(_) => return,
                 Err(e) => (self.sink)(BuildEvent::Error { message: format!("could not retry: {e}") }),
             }
         }

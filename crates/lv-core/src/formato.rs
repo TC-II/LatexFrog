@@ -100,6 +100,19 @@ pub fn asegurar_con_nombre(root: &Path, dir: &str, pre: &str, driver: &str, huel
     }
 }
 
+/// The precompiled preamble of a profile made TeX crash (a stack overflow, say, from TikZ shadows in a list label that a format cannot
+/// carry): note it as failed for the preamble it was made from, and drop it, so the next build of that preamble goes without it.
+/// `false` when the profile had no format.
+pub fn marcar_fallido(root: &Path, perfil: &str) -> bool {
+    let base = root.join(format!(".latexfrog/build/{perfil}/lv-{perfil}-pre"));
+    let Ok(huella) = std::fs::read_to_string(base.with_extension("huella")) else { return false };
+    let fmt = base.with_extension("fmt");
+    let tenia = fmt.is_file();
+    let _ = std::fs::remove_file(&fmt);
+    let _ = std::fs::write(base.with_extension("fallo"), huella);
+    tenia
+}
+
 /// Para un build de un perfil: el archivo que abre el documento (`\begin{document}`) y lo que viene después de esa línea, que es lo que
 /// se compila con el formato cargado. `None` si no hay `\begin{document}` en los archivos del preámbulo o su `\end{document}` está en
 /// otro archivo (entonces el build va sin formato). `copia` da el archivo que se lee de verdad (el de `.latexfrog/piezas` si hay sustitución).
@@ -154,6 +167,20 @@ mod tests {
         std::fs::write(dir.join("lv-p-resto.origen"), "main.tex").unwrap();
         assert_eq!(origen_del_resto(d.path(), ".latexfrog/build/p/lv-p-resto.tex").as_deref(), Some("main.tex"));
         assert_eq!(origen_del_resto(d.path(), ".latexfrog/build/p/lv-p.tex"), None);
+    }
+
+    #[test]
+    fn a_format_that_crashed_tex_is_dropped_and_not_made_again_for_the_same_preamble() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(!marcar_fallido(d.path(), "p"), "no format, nothing to drop");
+        let dir = d.path().join(".latexfrog/build/p");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("lv-p-pre.fmt"), "x").unwrap();
+        std::fs::write(dir.join("lv-p-pre.huella"), "ABC").unwrap();
+        assert!(marcar_fallido(d.path(), "p"));
+        assert!(!dir.join("lv-p-pre.fmt").exists());
+        // the same preamble does not try again; the format is not rebuilt (no TeX is run here)
+        assert_eq!(asegurar_con_nombre(d.path(), ".latexfrog/build/p", "lv-p-pre", "driver", "ABC"), None);
     }
 
     #[test]
