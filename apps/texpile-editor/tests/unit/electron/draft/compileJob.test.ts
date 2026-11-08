@@ -2,10 +2,16 @@ import { it, expect, afterAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { mirrorSourceFolders } from '../../../../../../electron/src/draft/compileJob';
+import { mirrorSourceFolders, PDF_SHIM } from '../../../../../../electron/src/draft/compileJob';
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'texpile-compilejob-')));
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+
+it('defines the pdfTeX-only primitives that templates use unguarded, only when absent', () => {
+	for (const name of ['pdfoutput', 'pdfgentounicode', 'pdfglyphtounicode']) {
+		expect(PDF_SHIM).toContain(`\\ifdefined\\${name}\\else`);
+	}
+});
 
 it('gives every folder of .tex files its twin under _draft, so \\include can write its .aux', () => {
 	fs.mkdirSync(path.join(root, 'chapters', 'appendix'), { recursive: true });

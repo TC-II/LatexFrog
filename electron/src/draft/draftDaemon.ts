@@ -10,14 +10,12 @@ import { resolveType1 } from '../fontT1Map';
 import { shellEnvReady } from '../shell/shellEnv';
 import { preambleThroughInputs } from '../lv/preambleInputs';
 import { onToolPathChange } from '../shell/toolDirs';
+import { PDF_SHIM } from './compileJob';
 
 const BLOCK_TIMEOUT_MS = 6000;
 const OUT_REL = '_draft';
-// \pdfoutput is a pdfTeX primitive luatex lacks; arXiv preambles that set it unguarded
-// (\pdfoutput=1) would crash the warm engine. Define it as a dummy count if absent (harmless
-// no-op otherwise). Prepended before the preamble so it runs before that assignment. Mirror
-// of the compile-side shim in draftService so the daemon warms whatever the compile compiles.
-const PDF_SHIM = `\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi`;
+// PDF_SHIM (pdfTeX primitives luatex lacks) is prepended before the preamble, and is the very
+// string the compile uses, so the daemon warms whatever the compile compiles.
 
 // \input paths resolve against the root, where the daemon runs, not the main file's folder
 function splitPreamble(root: string, mainFile: string): { preamble: string } | null {

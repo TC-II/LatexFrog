@@ -13,7 +13,12 @@ export const OUT = '_draft';
 // (\pdfoutput=1) and crash lualatex. Define it as a dummy count if absent so the assignment
 // is a harmless no-op. Injected before the preamble runs; a no-op for docs that never touch
 // it (only defines what isn't there). Mirror of PDF_SHIM in draftDaemon.
-export const PDF_SHIM = `\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi`;
+// The same goes for \pdfgentounicode and \pdfglyphtounicode (glyphtounicode.tex, used by many
+// book templates): they only shape the PDF text layer, which the draft never ships.
+export const PDF_SHIM =
+	`\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi` +
+	`\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi` +
+	`\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi`;
 
 /** everything that precedes the document in the job: extractor, hooks, shim */
 export function jobPrefix(engineDir: string): string {
