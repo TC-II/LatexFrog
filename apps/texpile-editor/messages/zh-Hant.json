@@ -1,5 +1,7 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"lv_outline_cond": "僅當定義了 {name} 時：目前不在 PDF 中",
+	"lv_outline_cond_never": "位於 iffalse 中：永遠不在 PDF 中",
 	"lv_outline_title": "Project outline",
 	"lv_outline_loading": "Reading the project...",
 	"lv_outline_empty": "No chapters or sections in the project's files.",

@@ -147,6 +147,10 @@ pub struct DriverSpec {
     pub marca: Option<(crate::config::WatermarkCfg, String)>,
     /// Partes que entran, por `\includeonly`. `None` = no se toca.
     pub includeonly: Option<Vec<String>>,
+    /// The parts `\include`d by the document but left out by `includeonly`: their `.aux` is still read (labels and counters keep
+    /// the numbers of the whole document), but what it writes to the contents and the lists (`\@writefile`) is dropped, so a
+    /// chapter alone does not list the chapters it left out.
+    pub excluidas: Vec<String>,
     /// Loader macros whose calls are parts (`ProjectIndex::loader_gates`): with `includeonly`, a call not on the list loads nothing.
     pub cargadores: Vec<(String, crate::graph::Gate)>,
     pub draft_images: bool,
@@ -336,6 +340,11 @@ fn texto_seguro(t: &str, que: &str) -> Result<()> {
 /// y carga la raíz real del proyecto (4.2 del plan). El nombre del driver es el `\jobname`, así que va sin espacios ni
 /// tildes aunque la raíz los tenga (S4). El orden es el de `spikes/s4-driver/gen-driver.mjs`, el que se midió.
 /// The driver line that removes `TEXMF_OUTPUT_DIRECTORY` from pgf's figure runs (outside Windows).
+/// `\@input` from `\begin{document}` on: the aux of a part left out (`\lv@fuera@<name>.aux`) goes in with `\@writefile` off.
+/// It stays for the whole run: the contents and the lists are written when the main aux is read again at `\end{document}`.
+/// The macros are defined outside the hook, so no `#` goes through the hook's code.
+const LEER_AUX_SIN_LISTAS: &str = r"\makeatletter\def\lv@sin#1{\let\lv@wf\@writefile\let\@writefile\@gobbletwo\lv@input@orig{#1}\let\@writefile\lv@wf}\def\lv@input@leer#1{\ifcsname lv@fuera@\detokenize{#1}\endcsname\expandafter\lv@sin\else\expandafter\lv@input@orig\fi{#1}}\AddToHook{begindocument/before}{\let\lv@input@orig\@input\let\@input\lv@input@leer}\makeatother";
+
 const SALIDA_DE_PGF: &str = "\\AddToHook{begindocument/before}{\\ifdefined\\tikzexternalize\\tikzset{external/system call/.add={env -u TEXMF_OUTPUT_DIRECTORY }{}}\\fi}";
 
 pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
@@ -403,6 +412,15 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
         // `\includeonly` sólo vale en el preámbulo. El hook corre al principio de `\begin{document}`, antes de que LaTeX
         // lo prohíba, y así no hay que editar la raíz del usuario (S4: el PDF sale idéntico píxel a píxel).
         l.push(format!("\\AddToHook{{begindocument/before}}{{\\includeonly{{{}}}}}", partes.join(",")));
+        // The aux of a part left out is read at \begin{document} (from the main aux's `\@input`): read it without its lines for
+        // the contents, the lists of figures and tables. Names compared detokenized, so accents and spaces are safe.
+        let fuera: Vec<&String> = s.excluidas.iter().filter(|p| !partes.contains(p) && texto_seguro(p, "the part").is_ok()).collect();
+        if !fuera.is_empty() {
+            for p in fuera {
+                l.push(format!("\\expandafter\\def\\csname lv@fuera@\\detokenize{{{p}.aux}}\\endcsname{{}}"));
+            }
+            l.push(LEER_AUX_SIN_LISTAS.into());
+        }
         // A part a loader `\input`s is out of `\includeonly`'s reach: the macro is wrapped, once the preamble has defined it, so
         // a call whose name is not chosen loads nothing. It still runs, into a box that is thrown away and with `\input` off, so
         // its counters step and a chosen exercise keeps the number it has in the whole document (as `\include` keeps a chapter's).
@@ -1094,6 +1112,25 @@ mod tests {
     }
 
     #[test]
+    fn the_aux_of_a_part_left_out_is_read_without_its_contents_lines() {
+        let s = DriverSpec {
+            perfil: "p".into(),
+            root_rel: "main.tex".into(),
+            includeonly: Some(vec!["Cap/uno".into()]),
+            excluidas: vec!["Cap/dos".into(), "Secciones/Aproximación de Cauer".into()],
+            ..Default::default()
+        };
+        let d = render_driver_spec(&s).unwrap();
+        assert!(d.contains("\\expandafter\\def\\csname lv@fuera@\\detokenize{Cap/dos.aux}\\endcsname{}"), "{d}");
+        assert!(d.contains("\\csname lv@fuera@\\detokenize{Secciones/Aproximación de Cauer.aux}\\endcsname"), "{d}");
+        assert!(!d.contains("lv@fuera@\\detokenize{Cap/uno"), "{d}");
+        assert!(d.contains("\\let\\@writefile\\@gobbletwo"), "{d}");
+        // all parts in: nothing
+        let todo = render_driver_spec(&DriverSpec { excluidas: vec![], ..s }).unwrap();
+        assert!(!todo.contains("lv@fuera"), "{todo}");
+    }
+
+    #[test]
     fn a_loader_part_left_out_is_skipped_by_wrapping_its_macro() {
         let s = DriverSpec {
             perfil: "p".into(),
@@ -1288,6 +1325,7 @@ mod tests {
             flags: vec!["CompilacionReducida".into(), "TikzExternalizar".into()],
             marca: None,
             includeonly: Some(vec!["Secciones/Desnormalización".into(), "Secciones/Uno".into()]),
+            excluidas: vec![],
             cargadores: vec![],
             draft_images: true,
             figuras: None,

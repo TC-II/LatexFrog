@@ -88,6 +88,12 @@
 	$effect(() => {
 		if (!lvProject.active && (view === 'history' || view === 'doctor' || view === 'leftover')) view = 'problems';
 	});
+	// the Diagnostics tab reopens on the panel last shown in it
+	const diagView = $derived(view === 'history' || view === 'doctor' || view === 'leftover');
+	let lastDiag = $state<DockView>('doctor');
+	$effect(() => {
+		if (diagView) lastDiag = view;
+	});
 	let menuOpen = $state(false);
 
 	// Terminal drags in @xterm/* + css, so it loads when the dock first mounts, not at boot
@@ -154,6 +160,21 @@
 	     knows exists, and Comments was going first. So the strip is a @container and the terminal
 	     name below drops out before the tabs are squeezed - see there. -->
 	<div class="toolbar-hscroll flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+		{#if agentOn}
+			<!-- LatexFrog: first, the tab used most. Grayed where it cannot run; it still opens, to say why -->
+			<button
+				class="rounded-base flex shrink-0 items-center gap-1 px-2 py-1 whitespace-nowrap {view === 'agent'
+					? 'preset-tonal'
+					: 'hover:preset-tonal'} {agentBlocked ? 'text-muted' : ''}"
+				onclick={() => (view = 'agent')}
+			>
+				{m.agent_panel_tab()}
+				<!-- a count only while it waits on the reader, as Problems shows one only when there is a problem -->
+				{#if agentSession.asks.length > 0}
+					<DockTabCount count={agentSession.asks.length} tone="warning" />
+				{/if}
+			</button>
+		{/if}
 		{#if terminalEnabled}
 			<button
 				class="rounded-base shrink-0 px-2 py-1 whitespace-nowrap {view === 'terminal' ? 'preset-tonal' : 'hover:preset-tonal'}"
@@ -191,33 +212,18 @@
 				<DockTabCount count={openComments} tone="primary" />
 			{/if}
 		</button>
+		<!-- LatexFrog: the engine's three panels (Doctor, History, Leftover processes) are one tab; its count is the Doctor's
+		     warnings, the only one of the three that asks for something. A leftover process still raises its own toast. -->
 		{#if lvProject.active}
-			{#each [['history', m.lv_diag_history()], ['doctor', m.lv_diag_doctor()], ['leftover', m.lv_diag_orphans()]] as [id, label] (id)}
-				<button
-					class="rounded-base flex shrink-0 items-center gap-1 px-2 py-1 whitespace-nowrap {view === id ? 'preset-tonal' : 'hover:preset-tonal'}"
-					data-testid="lv-dock-{id}"
-					onclick={() => (view = id as DockView)}
-				>
-					<LvFrog />
-					{label}
-					{#if id === 'doctor' && lvProject.doctorWarnings > 0}
-						<DockTabCount count={lvProject.doctorWarnings} tone="warning" />
-					{/if}
-				</button>
-			{/each}
-		{/if}
-		{#if agentOn}
-			<!-- grayed where it cannot run; it still opens, to say why -->
 			<button
-				class="rounded-base flex shrink-0 items-center gap-1 px-2 py-1 whitespace-nowrap {view === 'agent'
-					? 'preset-tonal'
-					: 'hover:preset-tonal'} {agentBlocked ? 'text-muted' : ''}"
-				onclick={() => (view = 'agent')}
+				class="rounded-base flex shrink-0 items-center gap-1 px-2 py-1 whitespace-nowrap {diagView ? 'preset-tonal' : 'hover:preset-tonal'}"
+				data-testid="lv-dock-diagnostics"
+				onclick={() => (view = lastDiag)}
 			>
-				{m.agent_panel_tab()}
-				<!-- a count only while it waits on the reader, as Problems shows one only when there is a problem -->
-				{#if agentSession.asks.length > 0}
-					<DockTabCount count={agentSession.asks.length} tone="warning" />
+				<LvFrog />
+				{m.lv_diag_title()}
+				{#if lvProject.doctorWarnings > 0}
+					<DockTabCount count={lvProject.doctorWarnings} tone="warning" />
 				{/if}
 			</button>
 		{/if}
@@ -321,8 +327,26 @@
 			<ProblemsPanel root={cwd} onJump={onProblemJump} />
 		</div>
 	{:else if view === 'history' || view === 'doctor' || view === 'leftover'}
-		<div class="bg-surface-50-950 absolute inset-0 z-10 overflow-hidden">
-			{#if view === 'history'}<LvHistoryPanel />{:else if view === 'doctor'}<LvDoctorPanel />{:else}<LvLeftoverPanel />{/if}
+		<div class="bg-surface-50-950 absolute inset-0 z-10 flex flex-col overflow-hidden">
+			<div class="flex shrink-0 items-center gap-1 px-2 pt-1 text-xs" role="tablist">
+				{#each [['doctor', m.lv_diag_doctor()], ['history', m.lv_diag_history()], ['leftover', m.lv_diag_orphans()]] as [id, label] (id)}
+					<button
+						role="tab"
+						aria-selected={view === id}
+						class="rounded-base flex items-center gap-1 px-2 py-0.5 {view === id ? 'preset-tonal' : 'hover:preset-tonal text-muted'}"
+						data-testid="lv-dock-{id}"
+						onclick={() => (view = id as DockView)}
+					>
+						{label}
+						{#if id === 'doctor' && lvProject.doctorWarnings > 0}
+							<DockTabCount count={lvProject.doctorWarnings} tone="warning" />
+						{/if}
+					</button>
+				{/each}
+			</div>
+			<div class="relative min-h-0 flex-1">
+				{#if view === 'history'}<LvHistoryPanel />{:else if view === 'doctor'}<LvDoctorPanel />{:else}<LvLeftoverPanel />{/if}
+			</div>
 		</div>
 	{:else if view === 'agent'}
 		<div class="bg-surface-50-950 absolute inset-0 z-10 overflow-hidden">

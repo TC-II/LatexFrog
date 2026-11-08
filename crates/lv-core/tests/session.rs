@@ -134,10 +134,13 @@ fn el_driver_del_parcial_lleva_flags_e_includeonly_de_la_seleccion() {
     s.set_state(StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
     assert!(matches!(s.request_build(Some("parcial")).unwrap(), BuildAck::Started { .. }));
     esperar_finales(&r, 1, 60);
-    assert_eq!(
-        driver(&d, "parcial"),
-        "% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Dos}}\n\\input{\"main\"}\n"
+    let t = driver(&d, "parcial");
+    assert!(
+        t.starts_with("% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Dos}}\n"),
+        "{t}"
     );
+    // the part left out: its aux is read without its contents lines
+    assert!(t.contains("\\csname lv@fuera@\\detokenize{Secciones/Uno.aux}\\endcsname") && t.ends_with("\\input{\"main\"}\n"), "{t}");
     // El rápido es de todas las partes: va con la lista COMPLETA en el \includeonly (F8b: una raíz con su propio \includeonly no lo
     // recorta, S6). El documento compila como está escrito: ninguna variable suya entra al driver.
     s.request_build(Some("rapido")).unwrap();

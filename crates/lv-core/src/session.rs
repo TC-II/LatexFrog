@@ -669,6 +669,7 @@ impl Session {
             partial: parcial,
             flags,
             marca: pc.watermark.clone().filter(|w| w.on).map(|w| (w, pc.label.clone().unwrap_or_else(|| perfil.to_string()))),
+            excluidas: if extra.live { Vec::new() } else { includeonly.as_ref().map(|sel| nombres.iter().filter(|n| !sel.contains(n)).cloned().collect()).unwrap_or_default() },
             includeonly,
             cargadores: ix.loader_gates(),
             // (la exportación nunca va en borrador, ni aunque su perfil lo diga: es lo que se entrega)

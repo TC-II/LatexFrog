@@ -41,7 +41,7 @@ export type Problem = {
 	line_end: number | null;
 	context: string;
 };
-export type Section = { level: number; title: string; file: string; line: number; label: string | null };
+export type Section = { level: number; title: string; file: string; line: number; label: string | null; cond?: string };
 /** what the document is made of, in document order: the same blocks a profile chooses from */
 export type CompositionItem =
 	| { kind: 'section'; index: number; part: string | null; piece?: string | null; opens?: string }

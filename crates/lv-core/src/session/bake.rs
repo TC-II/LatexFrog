@@ -338,6 +338,7 @@ impl Session {
             flags,
             marca: None,
             includeonly,
+            excluidas: Vec::new(),
             cargadores: ix.loader_gates(),
             draft_images: false,
             figuras,

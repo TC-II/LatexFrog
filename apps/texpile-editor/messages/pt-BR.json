@@ -1,5 +1,7 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"lv_outline_cond": "Só quando {name} está definido: não está no PDF agora",
+	"lv_outline_cond_never": "Dentro de iffalse: nunca no PDF",
 	"lv_outline_title": "Project outline",
 	"lv_outline_loading": "Reading the project...",
 	"lv_outline_empty": "No chapters or sections in the project's files.",

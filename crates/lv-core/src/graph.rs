@@ -133,6 +133,53 @@ pub struct ProjectIndex {
 
 // --- lectura de los comandos -------------------------------------------------------------------------------------------
 
+/// For each line of a text without comments, the switch whose true branch it is in, innermost first: `X` inside
+/// `\ifdefined\X ... \else`, `iffalse` inside `\iffalse`; `None` elsewhere (any other conditional is not followed).
+pub(crate) fn guardas_por_linea(t: &str) -> Vec<Option<String>> {
+    static R: OnceLock<Regex> = OnceLock::new();
+    // every control word: the conditionals change the state, the first other one is where the line's command is
+    let re = R.get_or_init(|| Regex::new(r"\\(ifdefined\s*\\([A-Za-z@]+)|[A-Za-z@]+)").expect("patrón válido"));
+    // each open conditional: the switch of its true branch, and whether we are past its \else
+    let mut pila: Vec<(Option<String>, bool)> = Vec::new();
+    let actual = |p: &Vec<(Option<String>, bool)>| p.iter().rev().find_map(|(g, e)| if *e { None } else { g.clone() });
+    let mut out = Vec::new();
+    for l in t.lines() {
+        // the state where the line's first command (other than a conditional) is: `\ifdefined\X\input{a}\fi` is behind X,
+        // `\ifdefined\X\else\input{a}\fi` is not
+        let mut estado = None;
+        for c in re.captures_iter(l) {
+            let tok = c.get(1).map_or("", |m| m.as_str());
+            let inicio = c.get(0).map_or(0, |m| m.start());
+            let condicional = c.get(2).is_some() || tok == "fi" || tok == "else" || (tok.starts_with("if") && tok != "ifthenelse");
+            if !condicional {
+                if estado.is_none() {
+                    estado = Some(actual(&pila));
+                }
+                continue;
+            }
+            // `\newif\ifx` declares, `\ifthenelse` is a macro: neither opens anything a `\fi` closes
+            if tok == "ifthenelse" || l[..inicio].trim_end().ends_with("\\newif") {
+                continue;
+            }
+            if let Some(x) = c.get(2) {
+                pila.push((Some(x.as_str().to_string()), false));
+            } else if tok == "fi" {
+                pila.pop();
+            } else if tok == "else" {
+                if let Some(top) = pila.last_mut() {
+                    top.1 = true;
+                }
+            } else if tok == "iffalse" {
+                pila.push((Some("iffalse".into()), false));
+            } else if tok.starts_with("if") {
+                pila.push((None, false));
+            }
+        }
+        out.push(estado.unwrap_or_else(|| actual(&pila)));
+    }
+    out
+}
+
 /// Texto sin lo que sigue a un `%` que no esté escapado (`\%` es un porcentaje; `\\%` es salto de línea y comentario).
 pub(crate) fn sin_comentario(linea: &str) -> &str {
     let mut barras = 0;
@@ -898,6 +945,71 @@ impl ProjectIndex {
                         cola.push(t.to_string());
                     }
                 }
+            }
+        }
+        out
+    }
+
+    /// The files the document reads only behind a switch that is off: every inclusion of the file (or of a file that brings it)
+    /// sits in the true branch of `\ifdefined\X` with `\X` defined nowhere in the project, or inside `\iffalse`. Maps each such
+    /// file to the switch (`X`, or `iffalse`). A test bench a book loads with `\ifdefined\BancoDePruebas` is code of the project,
+    /// but not in its PDF until someone defines the macro.
+    pub fn conditional_files(&self, root: &Path) -> BTreeMap<String, String> {
+        let textos: HashMap<&str, String> = self
+            .files
+            .keys()
+            .chain(self.packages.iter())
+            .filter_map(|f| leer_texto(&root.join(f)).map(|t| (f.as_str(), t.lines().map(sin_comentario).collect::<Vec<_>>().join("\n"))))
+            .collect();
+        let definida = |x: &str| {
+            let re = Regex::new(&format!(r"\\(?:[gex]?def|let|global\\let)\s*\\{x}\b|\\(?:newcommand|renewcommand|providecommand|DeclareRobustCommand)\*?\s*\{{?\s*\\{x}\b|\\csname\s+{x}\\endcsname")).ok();
+            re.is_some_and(|re| textos.values().any(|t| re.is_match(t)))
+        };
+        // the switch each structural inclusion is behind, per parent file
+        let mut guarda_de: HashMap<(String, String), Option<String>> = HashMap::new();
+        for (padre, aristas) in &self.files {
+            let Some(t) = textos.get(padre.as_str()) else { continue };
+            let por_linea = guardas_por_linea(t);
+            for e in aristas.iter().filter(|e| e.kind.estructural()) {
+                if let Some(h) = &e.target {
+                    let g = por_linea.get(e.line as usize - 1).cloned().flatten().filter(|x| x == "iffalse" || !definida(x));
+                    let k = (padre.clone(), h.clone());
+                    // two inclusions from one parent: the file is off only if both are
+                    let prev = guarda_de.remove(&k);
+                    guarda_de.insert(k, match prev {
+                        Some(None) => None,
+                        _ => g,
+                    });
+                }
+            }
+        }
+        let mut out = BTreeMap::new();
+        let mut memo: HashMap<String, Option<String>> = HashMap::new();
+        fn apagado(f: &str, ix: &ProjectIndex, g: &HashMap<(String, String), Option<String>>, memo: &mut HashMap<String, Option<String>>, pila: &mut HashSet<String>) -> Option<String> {
+            if let Some(m) = memo.get(f) {
+                return m.clone();
+            }
+            if f == ix.root_file || !pila.insert(f.to_string()) {
+                return None;
+            }
+            let padres = ix.parents.get(f).cloned().unwrap_or_default();
+            let mut razon = None;
+            let mut todos = !padres.is_empty();
+            for p in &padres {
+                let r = g.get(&(p.clone(), f.to_string())).cloned().flatten().or_else(|| apagado(p, ix, g, memo, pila));
+                match r {
+                    Some(x) => razon = razon.or(Some(x)),
+                    None => todos = false,
+                }
+            }
+            pila.remove(f);
+            let r = if todos { razon } else { None };
+            memo.insert(f.to_string(), r.clone());
+            r
+        }
+        for f in self.files.keys() {
+            if let Some(x) = apagado(f, self, &guarda_de, &mut memo, &mut HashSet::new()) {
+                out.insert(f.clone(), x);
             }
         }
         out

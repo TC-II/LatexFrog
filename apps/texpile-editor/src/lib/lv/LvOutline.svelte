@@ -204,11 +204,12 @@
 			{@const target = opens ?? s.file}
 			<button
 				type="button"
-				class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left {treeText(depth)} {isActive(target) ? 'text-primary-ink' : ''} {selected === `${s.file}:${s.line}:${i}` ? 'preset-tonal' : ''} {missing(s.file) || out ? 'opacity-45' : ''}"
+				class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left {treeText(depth)} {isActive(target) ? 'text-primary-ink' : ''} {selected === `${s.file}:${s.line}:${i}` ? 'preset-tonal' : ''} {missing(s.file) || out || s.cond ? 'opacity-45' : ''}"
 				style="padding-left: {4 + depth * 14}px"
 				data-depth={depth}
-				title={missing(s.file) ? `${s.file}:${s.line} — ${m.lv_outline_not_in_pdf()}` : out ? `${s.file}:${s.line} — ${m.lv_outline_left_out({ profile: lvProject.shownProfileLabel })}` : `${s.file}:${s.line}`}
+				title={s.cond ? `${s.file}:${s.line} — ${s.cond === 'iffalse' ? m.lv_outline_cond_never() : m.lv_outline_cond({ name: '\\' + s.cond })}` : missing(s.file) ? `${s.file}:${s.line} — ${m.lv_outline_not_in_pdf()}` : out ? `${s.file}:${s.line} — ${m.lv_outline_left_out({ profile: lvProject.shownProfileLabel })}` : `${s.file}:${s.line}`}
 				data-left-out={out || undefined}
+				data-cond={s.cond || undefined}
 				data-not-in-pdf={missing(s.file) || undefined}
 				data-parent={parent || undefined}
 				data-outline-row

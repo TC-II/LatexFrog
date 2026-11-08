@@ -52,6 +52,10 @@ pub struct Section {
     pub line: u32,
     /// La etiqueta que sigue al título (en las 4 líneas de abajo, antes de la sección siguiente).
     pub label: Option<String>,
+    /// The switch its file is read behind, when it is off (`ProjectIndex::conditional_files`): the heading is the project's but not
+    /// in its PDF until the macro is defined.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cond: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -193,11 +197,23 @@ fn corchetes(b: &[u8], texto: &str, mut i: usize, out: &mut Vec<String>) -> usiz
     }
 }
 
+/// Commands that take another command as their first argument to configure or redefine it: what follows them is a name.
+const COMO_ARGUMENTO: &[&str] = &[
+    "titlespacing", "titleformat", "titlecontents", "renewcommand", "newcommand", "providecommand", "DeclareRobustCommand", "RenewDocumentCommand",
+    "NewDocumentCommand", "ProvideDocumentCommand", "DeclareDocumentCommand", "patchcmd", "pretocmd", "apptocmd", "xpatchcmd", "xpretocmd", "xapptocmd",
+    "NewCommandCopy", "RenewCommandCopy", "LetLtxMacro", "let", "def", "gdef", "edef", "xdef", "robustify", "AddToHook", "csname", "setkomafont",
+    "addtokomafont", "RedeclareSectionCommand", "DeclareSectionCommand", "setsecnumdepth", "ShowCommand", "show", "meaning", "ifx", "ifdefined",
+];
+/// `\let\new\old`: the command two back copies the third.
+const COPIAS: &[&str] = &["let", "global", "NewCommandCopy", "RenewCommandCopy", "LetLtxMacro"];
+
 fn escanear(texto: &str) -> Vec<Cmd> {
     let limpio: String = texto.lines().map(sin_comentario).collect::<Vec<_>>().join("\n");
     let b = limpio.as_bytes();
     let mut out = Vec::new();
     let (mut i, mut linea) = (0usize, 1u32);
+    // the last two control words and where each ended
+    let mut previo: [Option<(&str, usize)>; 2] = [None, None];
     while i < b.len() {
         match b[i] {
             b'\n' => {
@@ -220,6 +236,19 @@ fn escanear(texto: &str) -> Vec<Cmd> {
                 }
                 let nombre = &limpio[ini..j];
                 i = j;
+                // `\titlespacing\section{0pt}...`, `\titleformat{\chapter}`, `\let\oldsection\section`: the command is the argument
+                // of one that configures it, not a call
+                let pegado = |fin: usize, hasta: usize| fin <= hasta && limpio[fin..hasta].bytes().all(|c| matches!(c, b' ' | b'\t' | b'\n' | b'\r' | b'{' | b'}' | b'*'));
+                let como_argumento = match previo {
+                    [_, Some((p, fin))] if COMO_ARGUMENTO.contains(&p) && pegado(fin, ini - 1) => true,
+                    // `\let\old\section`: two back
+                    [Some((p2, fin2)), Some((_, fin))] if COPIAS.contains(&p2) && pegado(fin, ini - 1) && limpio[fin2..].trim_start().starts_with('\\') => true,
+                    _ => false,
+                };
+                previo = [previo[1], Some((nombre, j))];
+                if como_argumento {
+                    continue;
+                }
                 let Some(f) = firma(nombre) else { continue };
                 let linea_cmd = linea;
                 let mut k = j;
@@ -323,8 +352,89 @@ fn sin_texorpdfstring(t: &str) -> String {
     out
 }
 
+/// Commands whose arguments are not read as text (a color, a length, a key, a path), with how many go: `{\color{oiB}Preface}` reads
+/// "Preface", not "oiBPreface".
+const SIN_TEXTO: &[(&str, usize)] = &[
+    ("color", 1),
+    ("textcolor", 1),
+    ("colorbox", 1),
+    ("fcolorbox", 2),
+    ("label", 1),
+    ("index", 1),
+    ("hspace", 1),
+    ("vspace", 1),
+    ("rule", 2),
+    ("fontsize", 2),
+    ("includegraphics", 1),
+    ("href", 1),
+    ("resizebox", 2),
+    ("scalebox", 1),
+    ("raisebox", 1),
+    ("phantom", 1),
+    ("hphantom", 1),
+    ("vphantom", 1),
+    ("footnote", 1),
+    ("thanks", 1),
+];
+
+fn sin_argumentos_no_texto(t: &str) -> String {
+    let b = t.as_bytes();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'\\' {
+            let mut j = i + 1;
+            while j < b.len() && b[j].is_ascii_alphabetic() {
+                j += 1;
+            }
+            if let Some((_, n)) = SIN_TEXTO.iter().find(|(c, _)| *c == &t[i + 1..j]) {
+                let mut k = j;
+                if b.get(k) == Some(&b'*') {
+                    k += 1;
+                }
+                let mut ok = true;
+                for _ in 0..*n {
+                    // optional arguments first (`\includegraphics[width=1cm]{x}`)
+                    while let Some(c) = t[k..].trim_start().strip_prefix('[') {
+                        match c.find(']') {
+                            Some(e) => k = t.len() - c.len() + e + 1,
+                            None => break,
+                        }
+                    }
+                    match grupo(t, k) {
+                        Some((_, e)) => k = e,
+                        None => {
+                            ok = false;
+                            break;
+                        }
+                    }
+                }
+                if ok {
+                    out.push(' ');
+                    i = k;
+                    continue;
+                }
+            }
+            if j == i + 1 {
+                // `\\`, `\{`, `\%`: the backslash and the character it escapes, together
+                let c = t[i + 1..].chars().next().map(char::len_utf8).unwrap_or(0);
+                out.push_str(&t[i..i + 1 + c]);
+                i += 1 + c;
+            } else {
+                out.push_str(&t[i..j]);
+                i = j;
+            }
+            continue;
+        }
+        let ch = t[i..].chars().next().unwrap_or(' ');
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
 pub(crate) fn titulo_legible(t: &str) -> String {
-    let t = sin_texorpdfstring(t);
+    let t = sin_argumentos_no_texto(&sin_texorpdfstring(t));
     let mut out = String::new();
     let mut chars = t.chars().peekable();
     while let Some(c) = chars.next() {
@@ -679,7 +789,7 @@ impl Symbols {
                         let level = SECCIONES.iter().position(|x| *x == n).unwrap_or(2) as u8;
                         let titulo = recortar(&titulo_legible(c.opciones.first().map_or(&arg, |o| if o.trim().is_empty() { &arg } else { &arg })), 120);
                         let _ = c.estrella;
-                        s.sections.push(Section { level, title: titulo, file: rel.clone(), line: c.linea, label: None });
+                        s.sections.push(Section { level, title: titulo, file: rel.clone(), line: c.linea, label: None, cond: None });
                     }
                     "newcommand" | "renewcommand" | "providecommand" | "NewDocumentCommand" | "RenewDocumentCommand" | "DeclareDocumentCommand" | "ProvideDocumentCommand" | "DeclareMathOperator" | "def" => {
                         let nombre = arg.trim_start_matches('\\').to_string();
@@ -732,7 +842,7 @@ impl Symbols {
                         if h.drawn {
                             dibujados.push(s.sections.len());
                         }
-                        s.sections.push(Section { level: h.level, title, file: rel.clone(), line, label: None });
+                        s.sections.push(Section { level: h.level, title, file: rel.clone(), line, label: None, cond: None });
                     }
                 }
             }
@@ -759,6 +869,10 @@ impl Symbols {
             }
         }
         s.sections = ordenar_secciones(ix, std::mem::take(&mut s.sections));
+        let apagados = ix.conditional_files(root);
+        for sec in &mut s.sections {
+            sec.cond = apagados.get(&sec.file).cloned();
+        }
 
         // La etiqueta de cada sección: la primera de su archivo en las 4 líneas que siguen, antes de la sección que viene.
         let por_archivo: BTreeMap<&str, Vec<&Label>> = s.labels.iter().fold(BTreeMap::new(), |mut m, l| {
@@ -1035,6 +1149,39 @@ mod tests {
         let s = simbolos(&d, "main.tex");
         assert_eq!(s.labels[0].line, 5);
         assert_eq!(s.sections[0].line, 8);
+    }
+
+    #[test]
+    fn a_heading_command_configured_or_copied_is_not_a_heading_and_colors_are_not_title_text() {
+        let d = proyecto(&[(
+            "main.tex",
+            "\\titlespacing\\section{0pt}{12pt}{4pt}\n\\titleformat{\\chapter}{\\Large}{}{0pt}{}\n\\let\\oldsection\\section\n\\renewcommand{\\subsection}{x}\n\\begin{document}\n\\chapter*{{\\color{oiB}Preface}}\n\\clearpage\\section{Real \\textcolor{red}{one}}\n\\section{With \\label{s:x}label}\n\\end{document}\n",
+        )]);
+        let s = simbolos(&d, "main.tex");
+        let t: Vec<&str> = s.sections.iter().map(|x| x.title.as_str()).collect();
+        assert_eq!(t, ["Preface", "Real one", "With label"]);
+    }
+
+    #[test]
+    fn a_file_read_only_behind_a_switch_that_is_off_marks_its_headings() {
+        let d = proyecto(&[
+            (
+                "main.tex",
+                "\\documentclass{book}\n\\newif\\ifbanco\n\\begin{document}\n\\input{uno}\n\\ifdefined\\Banco\n\\input{banco}\n\\fi\n\\ifdefined\\Encendido\\input{tres}\\fi\n\\iffalse\n\\input{viejo}\n\\fi\n\\ifdefined\\Nada\\else\\input{cuatro}\\fi\n\\end{document}\n",
+            ),
+            ("uno.tex", "\\def\\Encendido{}\n\\chapter{Uno}\n"),
+            ("banco.tex", "\\chapter{Banco}\n\\input{banco-b}\n"),
+            ("banco-b.tex", "\\section{Dentro del banco}\n"),
+            ("tres.tex", "\\chapter{Tres}\n"),
+            ("viejo.tex", "\\chapter{Viejo}\n"),
+            ("cuatro.tex", "\\chapter{Cuatro}\n"),
+        ]);
+        let s = simbolos(&d, "main.tex");
+        let c: Vec<(&str, Option<&str>)> = s.sections.iter().map(|x| (x.title.as_str(), x.cond.as_deref())).collect();
+        assert_eq!(
+            c,
+            [("Uno", None), ("Banco", Some("Banco")), ("Dentro del banco", Some("Banco")), ("Tres", None), ("Viejo", Some("iffalse")), ("Cuatro", None)]
+        );
     }
 
     #[test]

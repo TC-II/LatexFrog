@@ -157,6 +157,7 @@ impl Session {
             flags,
             marca: None,
             includeonly: parte.clone().map(|p| vec![p]),
+            excluidas: Vec::new(),
             cargadores: ix.loader_gates(),
             draft_images: false,
             figuras,
