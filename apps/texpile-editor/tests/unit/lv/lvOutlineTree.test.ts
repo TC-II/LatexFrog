@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { outlineDepths, type OutlineItem } from '$lib/lv/lvOutlineTree';
+import { outlineDepths, outlineParents, outlineVisible, type OutlineItem } from '$lib/lv/lvOutlineTree';
 
 describe('the depth of each row of the project tree', () => {
 	// a guide whose list has `\part*{Ejercicios}`, two exercises (titled by `\exercise`, a level 2 heading at the call line), a worked
@@ -29,5 +29,16 @@ describe('the depth of each row of the project tree', () => {
 
 	it('a project without guides keeps the rank of its headings', () => {
 		expect(outlineDepths([0, 1, 2].map((index) => ({ kind: 'section', index, part: null })), [0, 2, 1])).toEqual([0, 2, 1]);
+	});
+});
+
+describe('folding', () => {
+	const depths = [0, 1, 2, 1, 0, 1];
+	it('a row with deeper rows after it is a parent', () => {
+		expect(outlineParents(depths)).toEqual([true, true, false, false, true, false]);
+	});
+	it('a folded row hides its block and nothing after it', () => {
+		expect(outlineVisible(depths, [false, true, false, false, false, false])).toEqual([true, true, false, true, true, true]);
+		expect(outlineVisible(depths, [true, true, false, false, false, false])).toEqual([true, false, false, false, true, true]);
 	});
 });

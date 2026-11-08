@@ -56,3 +56,18 @@ export function outlineDepths(items: OutlineItem[], levels: number[], groups: Re
 		return d;
 	});
 }
+
+/** whether each row has rows under it: the next row is deeper */
+export const outlineParents = (depths: number[]): boolean[] => depths.map((d, i) => (depths[i + 1] ?? -1) > d);
+
+/** whether each row shows: none of the rows above it that hold it is folded */
+export function outlineVisible(depths: number[], folded: boolean[]): boolean[] {
+	/** the depth of the shallowest folded row whose block we are inside */
+	let hideBelow = Infinity;
+	return depths.map((d, i) => {
+		if (d <= hideBelow) hideBelow = Infinity;
+		const shows = hideBelow === Infinity;
+		if (shows && folded[i]) hideBelow = d;
+		return shows;
+	});
+}
