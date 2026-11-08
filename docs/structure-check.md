@@ -66,7 +66,17 @@ A finding is fixed only when the fix is general: a rule about LaTeX, not about o
 - **phd template:** it has a title with math, and an optional short title.
 - **latexindent:** its documentation (0 headings found) and its test cases are fixture files, with sections in the preamble.
 
-**Open.** AltaCV, ElegantBook, latex-book and OpenLogic do not build with the configuration LatexFrog infers for a new project. They already failed this way before these fixes. This is the inference worth looking at next.
+**Engine inference.** Two projects failed with the configuration LatexFrog infers for a new project. Both causes were general:
+- **AltaCV:** fontspec is loaded only inside `\iftutex`, and the document supports pdfLaTeX. Such a guarded load, or one in the `\else` of `\ifpdftex`, no longer asks for XeLaTeX. AltaCV now builds.
+- **ElegantBook in Chinese:** fontspec sits behind `\ifpdftex`, but the class calls `\xeCJKsetup`. xeCJK's commands now ask for XeLaTeX. The project still fails on this machine because the Windows font SimHei is not installed.
+
+The harness used to force XeLaTeX on its own whenever it saw fontspec. That rule is gone, so the check now covers the app's inference too.
+
+**Not the app.**
+- latex-book needs `sourceserifpro.sty`, which this TeX installation does not have.
+- l3kernel's documentation needs its `.dtx` bootstrap.
+- The OpenLogic course reads `../../sty`, outside the folder taken as the project.
+- latexindent's test cases put sections in the preamble on purpose.
 
 ## Rerunning
 

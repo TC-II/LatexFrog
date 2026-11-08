@@ -631,10 +631,66 @@ fn motor_de(root: &Path, archivos: &[Archivo], raiz: &str) -> String {
         return "lualatex".into();
     }
     let unicode = re(&UNICODE, &paquete("fontspec|unicode-math"));
-    if archivos.iter().any(|a| unicode.is_match(&a.texto)) {
+    // a load inside the branch that runs only under XeTeX or LuaTeX (`\iftutex`, `\ifxetex`, the `\else` of `\ifpdftex`) is
+    // the document's way of supporting both: it does not ask for a Unicode engine
+    // xeCJK's own commands (ctex under XeTeX) work only there, whatever branch they sit in
+    static XECJK: OnceLock<Regex> = OnceLock::new();
+    let xecjk = re(&XECJK, &format!(r"{}|\\(?:xeCJKsetup|setCJKmainfont|setCJKsansfont|setCJKmonofont)\b", paquete("xeCJK")));
+    if archivos.iter().any(|a| unicode.is_match(&sin_ramas_unicode(&a.texto)) || xecjk.is_match(&a.texto)) {
         return "xelatex".into();
     }
     "pdflatex".into()
+}
+
+/// The text without what only runs under a Unicode engine: the true branch of `\iftutex`, `\ifxetex`, `\ifluatex`
+/// (and their capitalised forms, `\ifxetexorluatex`) and the `\else` branch of `\ifpdftex`/`\ifPDFTeX`. Other conditionals
+/// nest and are kept.
+fn sin_ramas_unicode(t: &str) -> String {
+    static R: OnceLock<Regex> = OnceLock::new();
+    let r = re(&R, r"\\(if[A-Za-z@]*|else|fi)\b");
+    // per open conditional: Some(true) when its true branch is the Unicode one, Some(false) for \ifpdftex, None for others;
+    // and whether we are past its \else
+    let mut pila: Vec<(Option<bool>, bool)> = Vec::new();
+    let oculto = |p: &Vec<(Option<bool>, bool)>| p.iter().any(|(k, e)| matches!(k, Some(u) if *u != *e));
+    let mut out = String::with_capacity(t.len());
+    let mut desde = 0;
+    for m in r.find_iter(t) {
+        if !oculto(&pila) {
+            out.push_str(&t[desde..m.start()]);
+        }
+        desde = m.end();
+        let tok = &m.as_str()[1..];
+        let antes = t[..m.start()].trim_end();
+        if antes.ends_with(r"\newif") || antes.ends_with(r"\let") || antes.ends_with(r"\def") {
+            if !oculto(&pila) {
+                out.push_str(m.as_str());
+            }
+            continue;
+        }
+        match tok {
+            "fi" => {
+                pila.pop();
+            }
+            "else" => {
+                if let Some(top) = pila.last_mut() {
+                    top.1 = true;
+                }
+            }
+            "ifthenelse" => {}
+            _ => {
+                let k = match tok.to_lowercase().as_str() {
+                    "iftutex" | "ifxetex" | "ifluatex" | "ifxetexorluatex" => Some(true),
+                    "ifpdftex" => Some(false),
+                    _ => None,
+                };
+                pila.push((k, false));
+            }
+        }
+    }
+    if !oculto(&pila) {
+        out.push_str(&t[desde..]);
+    }
+    out
 }
 
 // --- la propuesta ------------------------------------------------------------------------------------------------------------
@@ -909,6 +965,12 @@ mod tests {
         assert_eq!(motor(&[("main.tex", doc), ("latexmkrc", "$pdf_mode = 4;   # LuaLaTeX\n")]), "lualatex");
         assert_eq!(motor(&[("main.tex", doc), ("latexmkrc", "$pdf_mode = 1;\n$pdflatex = 'xelatex %O %S';\n")]), "xelatex");
         assert_eq!(motor(&[("main.tex", doc), ("style/guide.cls", "\\LoadClass{article}\n\\RequirePackage[no-math]{fontspec}\n")]), "xelatex");
+        // fontspec only under XeTeX or LuaTeX: the document also builds with pdfLaTeX (AltaCV)
+        assert_eq!(motor(&[("main.tex", doc), ("cv.cls", "\\LoadClass{article}\n\\iftutex\n  \\RequirePackage{fontspec}\n\\else\n  \\RequirePackage[T1]{fontenc}\n\\fi\n")]), "pdflatex");
+        assert_eq!(motor(&[("main.tex", doc), ("cv.cls", "\\ifPDFTeX\\RequirePackage{lmodern}\\else\\RequirePackage{fontspec}\\fi\n")]), "pdflatex");
+        assert_eq!(motor(&[("main.tex", doc), ("cv.cls", "\\ifdefined\\foo\\else\\RequirePackage{fontspec}\\fi\n")]), "xelatex");
+        // xeCJK's commands need XeTeX even when fontspec is behind \ifpdftex (ElegantBook in Chinese)
+        assert_eq!(motor(&[("main.tex", doc), ("book.cls", "\\ifpdftex\\RequirePackage{newtxtext}\\else\\RequirePackage{fontspec}\\fi\n\\RequirePackage{ctex}\n\\xeCJKsetup{AutoFakeBold=true}\n")]), "xelatex");
         assert_eq!(motor(&[("main.tex", doc), ("style/guide.cls", "\\RequirePackage{fontspec}\n\\RequirePackage{luacode}\n")]), "lualatex");
         assert_eq!(motor(&[("main.tex", doc)]), "pdflatex");
     }

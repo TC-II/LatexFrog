@@ -37,7 +37,6 @@ const copy = (from, to) => {
 			!(process.env.FRESH === '1' && /[\\/]\.latexfrog$/.test(p))
 	});
 };
-const NEEDS_UNICODE = /\\usepackage(\[[^\]]*\])?\{(fontspec|xeCJK|ctex|polyglossia|unicode-math)\}|\\documentclass(\[[^\]]*\])?\{ctex/;
 
 async function project(spec) {
 	const [src, hint] = spec.split('=');
@@ -76,17 +75,7 @@ async function project(spec) {
 		profiles['t-one'] = { label: 'one', autoCompile: false, parts: 'selection' };
 		profiles['t-two'] = { label: 'two', autoCompile: false, parts: 'selection' };
 		const file = { ...cfg, root: cfg.root ?? view.rootFile, profiles };
-		const text = [view.rootFile, ...(sym?.files ?? [])]
-			.filter((f) => typeof f === 'string' && f.endsWith('.tex'))
-			.map((f) => {
-				try {
-					return fs.readFileSync(path.join(root, f), 'utf8');
-				} catch {
-					return '';
-				}
-			})
-			.join('\n');
-		if ((file.engine ?? 'pdflatex') === 'pdflatex' && NEEDS_UNICODE.test(text)) file.engine = 'xelatex';
+		// the engine is the one the app infers: this checks the inference too
 		delete file.publish;
 		const w = await s.req('config-write', { text: JSON.stringify(file, null, 2) });
 		if (!w.ok) throw new Error('config-write: ' + w.error);
