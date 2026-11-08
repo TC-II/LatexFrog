@@ -46,6 +46,8 @@ pub struct Opciones {
     pub dir: String,
     /// Subcompilaciones a la vez.
     pub jobs: usize,
+    /// The search paths the project's `latexmkrc` sets (`build::entorno_del_latexmkrc`): these runs do not go through latexmk.
+    pub entorno: Vec<(String, String)>,
 }
 
 /// Qué pasó con lo que se pidió cocinar.
@@ -91,6 +93,11 @@ fn sep_de_rutas() -> char {
     }
 }
 
+/// `TEXINPUTS` as the project's `latexmkrc` leaves it, or as the app got it.
+fn texinputs(o: &Opciones) -> String {
+    o.entorno.iter().find(|(k, _)| k == "TEXINPUTS").map(|(_, v)| v.clone()).unwrap_or_else(|| std::env::var("TEXINPUTS").unwrap_or_default())
+}
+
 impl Cocinero {
     pub fn new() -> Self {
         Cocinero { programa: None, pre_args: vec![] }
@@ -110,8 +117,8 @@ impl Cocinero {
             }
             None => Command::new(&o.engine),
         };
-        c.current_dir(&o.root)
-            .env("max_print_line", "10000")
+        c.current_dir(&o.root).envs(o.entorno.iter().map(|(k, v)| (k, v)));
+        c.env("max_print_line", "10000")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
@@ -176,6 +183,11 @@ impl Cocinero {
             }
         };
         let figlist = salida.join(format!("{JOB_COCINA}.figlist"));
+        // pgf opens the list at the first figure: a listing that ends well without one found no figures.
+        if estado.success() && !figlist.exists() {
+            clear_suspect(&o.root, PERFIL_COCINA);
+            return Ok(Some(vec![]));
+        }
         let texto = fs::read_to_string(&figlist).map_err(|_| {
             Error::Other(format!(
                 "the figure listing did not produce {JOB_COCINA}.figlist: the document does not compile that far (see .latexfrog/build/{PERFIL_COCINA}/{JOB_COCINA}.log)"
@@ -193,7 +205,7 @@ impl Cocinero {
         cmd.args(["-shell-escape", "-halt-on-error", "-interaction=batchmode"])
             .arg(format!("-jobname={nombre}"))
             .arg(format!("\\def\\tikzexternalrealjob{{{JOB_COCINA}}}\\input{{{JOB_COCINA}}}"))
-            .env("TEXINPUTS", format!(".latexfrog/drivers{}{}", sep_de_rutas(), std::env::var("TEXINPUTS").unwrap_or_default()));
+            .env("TEXINPUTS", format!(".latexfrog/drivers{}{}", sep_de_rutas(), texinputs(o)));
         let hijo = cmd.spawn().map_err(|e| self.error_de_lanzamiento(o, e))?;
         job.assign(&hijo);
         Ok(hijo)
@@ -349,7 +361,7 @@ Set-Content "$job.log" 'This is pdfTeX'
             "powershell",
             ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"].iter().map(OsString::from).chain([script.into_os_string()]).collect(),
         );
-        let o = Opciones { root: d.path().to_path_buf(), engine: "pdflatex".into(), dir: "figuras-cache".into(), jobs: 2 };
+        let o = Opciones { root: d.path().to_path_buf(), engine: "pdflatex".into(), dir: "figuras-cache".into(), jobs: 2, entorno: vec![] };
         (d, o, c)
     }
 
@@ -393,9 +405,18 @@ Set-Content "$job.log" 'This is pdfTeX'
     #[test]
     fn un_listado_que_no_escribe_la_figlist_es_un_error_que_dice_donde_mirar() {
         let (d, o, _) = proyecto();
-        let c = Cocinero::con_programa("powershell", ["-NoProfile", "-Command", "exit 0"].iter().map(OsString::from).collect());
+        let c = Cocinero::con_programa("powershell", ["-NoProfile", "-Command", "exit 1 #"].iter().map(OsString::from).collect());
         let e = c.listar(&o, &job(), &sin_cancelar()).unwrap_err().to_string();
         assert!(e.contains("lv-cocina.figlist") && e.contains(".latexfrog/build/cocina"), "{e}");
+        let _ = d;
+    }
+
+    #[test]
+    fn a_listing_that_ends_well_without_a_figlist_found_no_figures() {
+        // pgf opens the list at the first figure: a document with none (or only figures left out) writes no list.
+        let (d, o, _) = proyecto();
+        let c = Cocinero::con_programa("powershell", ["-NoProfile", "-Command", "exit 0 #"].iter().map(OsString::from).collect());
+        assert_eq!(c.listar(&o, &job(), &sin_cancelar()).unwrap(), Vec::<String>::new());
         let _ = d;
     }
 

@@ -71,7 +71,9 @@ export type ConfigJson = {
 	[key: string]: unknown;
 };
 
-export type Piece = { clave: string; nombre: string; lugar?: string };
+/** `lugar` is `dentro` for a piece a part's own file prints (a guide's cover), and `parte` names that part */
+/** `firma`: a piece inside a part that the driver can leave out (its command's arguments); without it, it goes with its part */
+export type Piece = { clave: string; nombre: string; lugar?: string; parte?: string; firma?: string };
 
 export type FlagUse = 'partial' | 'externalize' | 'figureList' | 'ninguno';
 export type FiguresEdit = { mode: 'project' | 'app' | 'off'; dir: string; stampFiles: string[] };
@@ -88,6 +90,19 @@ const PROFILE_ID = /^[A-Za-z0-9_-]+$/;
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
 export const shortName = (name: string) => name.split('/').pop() ?? name;
+
+/** file names that say nothing about what is in them: the folder names the part instead (the engine's `etiquetas::de_ruta`) */
+const GENERIC = ['main', 'index', 'content', 'contents', 'body', 'document', 'chapter', 'root', 'master', 'text'];
+
+/** what a part is called everywhere: the name the engine read from its file (its title), or else its path's last piece, or its
+ * folder when that piece is a generic name (`contents/G1/main` is `G1`) */
+export function partLabel(name: string, labels?: Record<string, string>): string {
+	const label = labels?.[name];
+	if (label) return label;
+	const pieces = name.split('/').filter((x) => x && x !== '.');
+	const last = (pieces.at(-1) ?? name).replace(/\.tex$/, '');
+	return pieces.length > 1 && GENERIC.includes(last.toLowerCase()) ? pieces[pieces.length - 2] : last;
+}
 
 export function parseConfig(text: string): ConfigJson | null {
 	try {
@@ -170,14 +185,47 @@ export function defaultProfiles(config: ConfigJson, pieces: Piece[], hasParts: b
 }
 
 /** one row of the pieces list, in the book's order */
-export type Row = { kind: 'piece'; key: string; name: string } | { kind: 'current' } | { kind: 'all' } | { kind: 'chapter'; part: string };
+export type Row =
+	| { kind: 'piece'; key: string; name: string; part?: string; nested?: boolean; fixed?: boolean }
+	| { kind: 'current' }
+	| { kind: 'all' }
+	| { kind: 'chapter'; part: string; group?: string };
 
-/** what goes before the chapters, the chapters, and what goes after. A piece with no place (no chapters) goes before. */
-export function rows(pieces: Piece[], parts: string[]): Row[] {
-	const piece = (p: Piece): Row => ({ kind: 'piece', key: p.clave, name: p.nombre });
-	const before = pieces.filter((p) => p.lugar !== 'despues').map(piece);
-	const after = pieces.filter((p) => p.lugar === 'despues').map(piece);
-	const chapters: Row[] = parts.length ? [{ kind: 'current' }, { kind: 'all' }, ...parts.map((part): Row => ({ kind: 'chapter', part }))] : [];
+/**
+ * The parts a choice compiles when parts nest (`groups`: each exercise's guide): a part goes in when it is chosen, when the part
+ * that holds it is chosen, or when it holds a chosen one (an exercise needs its guide's frame). The engine's `with_groups`.
+ */
+export function withGroups(chosen: string[], groups: Record<string, string>, names: string[], also: Record<string, string[]> = {}): string[] {
+	const picked = new Set(chosen);
+	const holds = new Set(chosen.flatMap((c) => (groups[c] ? [groups[c]] : [])));
+	// a solutions book that loads its guide's exercise list holds the same exercises (`also`): choosing it brings them in too
+	const inChosen = (n: string) => (groups[n] !== undefined && picked.has(groups[n])) || (also[n] ?? []).some((g) => picked.has(g));
+	return names.filter((n) => picked.has(n) || inChosen(n) || holds.has(n));
+}
+
+/** whether `omit` leaves out the piece `key`, as the engine reads it (`omitida`): its own key, or for a guide's piece
+ *  (`block:makecover@g1/main`) a key without a guide (`block:makecover`), which leaves that piece out of every guide */
+export function omitted(key: string, omit: string[]): boolean {
+	const base = (k: string) => k.split(/[#@]/)[0];
+	return omit.some((o) => o === key || (o.startsWith('block:') && !o.includes('@') && key.includes('@') && base(o) === base(key)));
+}
+
+/** what goes before the chapters, the chapters (each followed by the pieces its own file prints), and what goes after. A piece
+ * with no place (no chapters) goes before. The same order Contents shows. */
+export function rows(pieces: Piece[], parts: string[], groups: Record<string, string> = {}): Row[] {
+	const piece = (p: Piece): Row => ({
+		kind: 'piece',
+		key: p.clave,
+		name: p.nombre,
+		...(p.parte ? { part: p.parte } : {}),
+		...(p.parte && groups[p.parte] ? { nested: true } : {}),
+		...(p.parte && p.firma === undefined ? { fixed: true } : {})
+	});
+	const inside = (p: Piece) => p.lugar === 'dentro' && !!p.parte && parts.includes(p.parte);
+	const before = pieces.filter((p) => !inside(p) && p.lugar !== 'despues').map(piece);
+	const after = pieces.filter((p) => !inside(p) && p.lugar === 'despues').map(piece);
+	const chapter = (part: string): Row[] => [{ kind: 'chapter', part, ...(groups[part] ? { group: groups[part] } : {}) }, ...pieces.filter((p) => inside(p) && p.parte === part).map(piece)];
+	const chapters: Row[] = parts.length ? [{ kind: 'current' }, { kind: 'all' }, ...parts.flatMap(chapter)] : [];
 	return [...before, ...chapters, ...after];
 }
 
@@ -206,8 +254,13 @@ export function relativeFolder(root: string, folder: string): string | null {
 }
 
 /** what the Compile button will build, in a few words */
-export function compileTarget(parts: string | undefined, currentPart: string | null, count: number): { kind: 'all' | 'current' | 'none' | 'count'; part?: string; count?: number } {
-	if (parts === 'current') return currentPart ? { kind: 'current', part: shortName(currentPart) } : { kind: 'none' };
+export function compileTarget(
+	parts: string | undefined,
+	currentPart: string | null,
+	count: number,
+	labels?: Record<string, string>
+): { kind: 'all' | 'current' | 'none' | 'count'; part?: string; count?: number } {
+	if (parts === 'current') return currentPart ? { kind: 'current', part: partLabel(currentPart, labels) } : { kind: 'none' };
 	if (parts === 'list' || parts === 'selection' || parts === 'one') return { kind: 'count', count };
 	return { kind: 'all' };
 }

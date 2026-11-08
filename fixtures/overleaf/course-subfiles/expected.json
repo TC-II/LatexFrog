@@ -1,0 +1,16 @@
+{
+  "main": "main.tex",
+  "parts": 7,
+  "headings": [
+    "Resistive circuits",
+    "Basics",
+    "voltage-divider",
+    "Networks",
+    "bridge",
+    "First-order circuits",
+    "rc-charge",
+    "rl-step"
+  ],
+  "headingLevels": [2, 0, 3, 0, 3, 2, 3, 3],
+  "imageCaptions": ["A voltage divider."]
+}

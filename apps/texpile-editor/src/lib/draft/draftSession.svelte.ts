@@ -2,6 +2,7 @@
 // One live draft-preview session: owns the compiled document state (pages, paper, page
 // records, live patches) and composes the fonts/bitmaps/viewport/patcher/compiler pieces.
 // Everything painted came from the real engine; see DraftView.svelte for the view shell.
+import { lvProject } from '$lib/lv/lvEngine.svelte';
 import { tick } from 'svelte';
 import { parseRecords, pageIsRtl } from './pageRecords';
 import { locateParagraph } from './locate/locateParagraph';
@@ -407,6 +408,13 @@ export class DraftSession {
 		// LatexFrog: the clicked word selected, as a double-click selects it on a profile's PDF; the ring where no word is
 		if (!this.selectWordAt(n, xPt - this.paper.mx, yPt - this.paper.my)) this.vp.showClickMark(n, xPt, yPt);
 		try {
+			// LatexFrog: the engine resolves it among the project's files, as for a profile's PDF
+			const lv = lvProject.active ? await lvProject.syncInverseLive(n, xPt / BP2PT, yPt / BP2PT) : undefined;
+			if (lv !== undefined) {
+				this.ev('inverse-sync', { page: n, x: +xPt.toFixed(1), y: +yPt.toFixed(1), input: lv?.file, line: lv?.line });
+				if (lv) inverse(lv.file, lv.line, wordAt(this.pageRecords(n), (r) => this.fonts.textMapOf(r), xPt - this.paper.mx, yPt - this.paper.my));
+				return;
+			}
 			const res: any = await nat.synctex({
 				action: 'edit',
 				pdf: this.opts.root() + '/_draft/draft.pdf',

@@ -158,6 +158,8 @@ pub struct DriverSpec {
     /// Archivos del proyecto que se compilan desde una copia con los bloques de las piezas omitidas comentados: `(original, copia)`,
     /// relativos a la raíz.
     pub sustituciones: Vec<(String, String)>,
+    /// Files read from a copy only while one part is read (`piezas::copias_en_partes`): (part, file, copy), relative to the root.
+    pub copias_en_partes: Vec<(String, String, String)>,
 }
 
 /// Dónde escribe la app el fragmento de la vista previa.
@@ -414,6 +416,50 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
             ));
         }
     }
+    // A part's files with pieces left out (a guide's cover, a heading left empty) are read from a copy with those lines commented
+    // (`piezas::copias_en_partes`). The kernel's substitution knows a file by its name alone, and the root and every guide are
+    // `main.tex`, so a copy is declared only while its part is read: the loaders that read parts are wrapped to say which part
+    // that is (`\lvParteActual`, a stack for an exercise inside its guide), declaring its copies on entering it and taking them
+    // back on leaving it. These wrappers go after the gates above, so a part left out still steps its counters as before.
+    let mut por_parte: Vec<(&str, Vec<(String, &str)>)> = Vec::new();
+    for (parte, rel, copia) in &s.copias_en_partes {
+        texto_seguro(parte, "the part")?;
+        let nombre = rel.rsplit('/').next().unwrap_or(rel);
+        if let Some(ch) = nombre.chars().chain(copia.chars()).find(|ch| PROHIBIDOS_EN_LA_RAIZ.contains(*ch)) {
+            return Err(Error::InvalidPath(format!("{rel:?}: the character {ch:?} cannot be substituted")));
+        }
+        let nombre = if nombre.contains('.') { nombre.to_string() } else { format!("{nombre}.tex") };
+        match por_parte.iter_mut().find(|(p, _)| p == parte) {
+            Some((_, v)) => v.push((nombre, copia)),
+            None => por_parte.push((parte, vec![(nombre, copia)])),
+        }
+    }
+    if !por_parte.is_empty() && !s.cargadores.is_empty() {
+        // the stack ends in `\lvBase`: what is left after a pop is never one braced group alone, which TeX would unbrace
+        l.push("\\let\\lvBase\\relax\\def\\lvParteActual{}\\def\\lvPila{\\lvBase}".into());
+        l.push("\\def\\lvEntra#1{\\xdef\\lvPila{{\\lvParteActual}\\lvPila}\\xdef\\lvParteActual{#1}\\ifcsname lvCopias@#1\\endcsname\\csname lvCopias@#1\\endcsname\\fi}".into());
+        l.push("\\def\\lvSale{\\ifcsname lvSinCopias@\\lvParteActual\\endcsname\\csname lvSinCopias@\\lvParteActual\\endcsname\\fi\\expandafter\\lvSaleDe\\lvPila\\lvFin}".into());
+        l.push("\\def\\lvSaleDe#1#2\\lvFin{\\xdef\\lvParteActual{#1}\\xdef\\lvPila{#2}}".into());
+        l.push("\\makeatletter".into());
+        for (parte, copias) in &por_parte {
+            let pon: String = copias.iter().map(|(n, c)| format!("\\declare@file@substitution{{{n}}}{{{c}}}")).collect();
+            let quita: String = copias.iter().map(|(n, _)| format!("\\undeclare@file@substitution{{{n}}}")).collect();
+            l.push(format!("\\expandafter\\def\\csname lvCopias@{parte}\\endcsname{{{pon}}}"));
+            l.push(format!("\\expandafter\\def\\csname lvSinCopias@{parte}\\endcsname{{{quita}}}"));
+        }
+        l.push("\\makeatother".into());
+        for (cmd, g) in &s.cargadores {
+            if !cmd.bytes().all(|c| c.is_ascii_alphabetic()) || g.arg >= g.arity || g.arity > 9 {
+                continue;
+            }
+            let args: String = (1..=g.arity).map(|i| format!("{{#{i}}}")).collect();
+            l.push(format!(
+                "\\AddToHook{{begindocument/before}}{{\\ifdefined\\lvMarca{cmd}\\else\\NewCommandCopy\\lvMarca{cmd}\\{cmd}\\renewcommand\\{cmd}[{n}]{{\\lvEntra{{#{k}}}\\lvMarca{cmd}{args}\\lvSale}}\\fi}}",
+                n = g.arity,
+                k = g.arg + 1
+            ));
+        }
+    }
     if s.fragmento {
         // `begindocument/end` corre al terminar `\begin{document}`: el fragmento es lo primero del cuerpo. Con `\includeonly{}` ninguna
         // parte entra, así que el PDF es sólo el fragmento (más lo que la raíz imprima fuera de las partes).
@@ -448,6 +494,8 @@ pub fn render_latexmkrc() -> String {
         "$out_dir = \".latexfrog/build/$p\";",
         "$aux_dir = \".latexfrog/build/$p\";",
         "$emulate_aux = 0;",
+        // A project's `$do_cd = 1` would run TeX in the driver's folder (`.latexfrog/drivers`), where the document is not found.
+        "$do_cd = 0;",
         "$ENV{TEXINPUTS} = \".latexfrog/drivers$sep\" . ($ENV{TEXINPUTS} // '');",
         "$ENV{INDEXSTYLE} = getcwd() . ($ENV{INDEXSTYLE} ? $sep . $ENV{INDEXSTYLE} : '');",
         // bibtex runs inside the build folder: `\bibliography{refs}` and a project `.bst` are found from the project's top
@@ -459,6 +507,57 @@ pub fn render_latexmkrc() -> String {
         "",
     ]
     .join("\n")
+}
+
+/// The rc that asks latexmk for the search paths the project's `latexmkrc` sets, and stops. Values go out in hex: latexmk switches
+/// the Windows console to the ANSI code page, and a path with `á` would not survive it.
+const RC_ENTORNO: &str = "foreach my $k (sort keys %ENV) { next unless $k =~ /(INPUTS|FONTS)$/; print STDOUT \"LVENV \", $k, \" \", unpack('H*', $ENV{$k}), \"\\n\"; }\nexit 0;\n";
+
+/// The search paths (`TEXINPUTS`, `BIBINPUTS`, `TTFONTS`, ...) the project's `latexmkrc` leaves in the environment, for the TeX runs
+/// that do not go through latexmk (the figure bake). A project that finds its class through `ensure_path('TEXINPUTS', 'style//')`
+/// does not compile without them. Empty without a `latexmkrc`; asked once per version of the rc (latexmk takes ~0.5 s to start).
+pub fn entorno_del_latexmkrc(root: &Path) -> Vec<(String, String)> {
+    type Cache = std::collections::HashMap<std::path::PathBuf, ((SystemTime, u64), Vec<(String, String)>)>;
+    static CACHE: Mutex<Option<Cache>> = Mutex::new(None);
+    let Some(rc) = ["latexmkrc", ".latexmkrc"].iter().map(|n| root.join(n)).find(|p| p.is_file()) else {
+        return vec![];
+    };
+    let Ok(meta) = std::fs::metadata(&rc) else { return vec![] };
+    let clave = (meta.modified().unwrap_or(SystemTime::UNIX_EPOCH), meta.len());
+    if let Some((c, v)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default).get(root) {
+        if *c == clave {
+            return v.clone();
+        }
+    }
+    let consulta = root.join(".latexfrog").join("lv-entorno.rc");
+    if write_if_changed(&consulta, RC_ENTORNO).is_err() {
+        return vec![];
+    }
+    let programa = std::env::var_os("LV_LATEXMK").unwrap_or_else(|| "latexmk".into());
+    let mut cmd = Command::new(programa);
+    cmd.args(["-r", ".latexfrog/lv-entorno.rc"]).current_dir(root).stdin(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let v = match cmd.output() {
+        Ok(salida) => parsear_entorno(&String::from_utf8_lossy(&salida.stdout)),
+        Err(_) => return vec![],
+    };
+    CACHE.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default).insert(root.to_path_buf(), (clave, v.clone()));
+    v
+}
+
+/// `LVENV <name> <hex>` lines. Bytes that are not UTF-8 are read as Latin-1, which is what the ANSI code page gives for `á`.
+fn parsear_entorno(salida: &str) -> Vec<(String, String)> {
+    salida
+        .lines()
+        .filter_map(|l| {
+            let mut p = l.trim_end().strip_prefix("LVENV ")?.splitn(2, ' ');
+            let (k, hex) = (p.next()?, p.next().unwrap_or(""));
+            let bytes = (0..hex.len() / 2).map(|i| u8::from_str_radix(hex.get(2 * i..2 * i + 2)?, 16).ok()).collect::<Option<Vec<u8>>>()?;
+            let v = String::from_utf8(bytes.clone()).unwrap_or_else(|_| bytes.iter().map(|&b| b as char).collect());
+            Some((k.to_string(), v))
+        })
+        .collect()
 }
 
 /// Escribe sólo si cambió: tocar el mtime de un archivo que latexmk lee lo hace recompilar.
@@ -484,7 +583,11 @@ pub fn latexmk_args_for(perfil: &str, engine: &str, shell_escape: bool) -> Resul
     Ok([motor]
         .into_iter()
         .chain(shell_escape.then_some("-shell-escape"))
-        .chain(["-synctex=1", "-interaction=nonstopmode", "-file-line-error", "-latexoption=-max-print-line=10000", "-r", ".latexfrog/latexmkrc"])
+        .chain(["-synctex=1", "-interaction=nonstopmode", "-file-line-error"])
+        // MiKTeX's lualatex stops on `-max-print-line` ("unrecognized option") before writing a log, and has no other way to
+        // widen it: its log wraps at 79 columns.
+        .chain((engine != "lualatex").then_some("-latexoption=-max-print-line=10000"))
+        .chain(["-r", ".latexfrog/latexmkrc"])
         .map(String::from)
         .chain([driver_rel(perfil)])
         .collect())
@@ -941,6 +1044,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_part_reads_its_copies_only_while_it_is_read() {
+        let s = DriverSpec {
+            perfil: "p".into(),
+            root_rel: "main.tex".into(),
+            cargadores: vec![("subfile".into(), crate::graph::Gate { arity: 1, arg: 0 })],
+            copias_en_partes: vec![
+                ("contents/G2/main".into(), "contents/G2/main.tex".into(), ".latexfrog/piezas/p/contents/G2/main.tex".into()),
+                ("contents/G2/main".into(), "contents/G2/exercise-list.tex".into(), ".latexfrog/piezas/p/contents/G2/exercise-list.tex".into()),
+            ],
+            ..Default::default()
+        };
+        let d = render_driver_spec(&s).unwrap();
+        assert!(d.contains("\\renewcommand\\subfile[1]{\\lvEntra{#1}\\lvMarcasubfile{#1}\\lvSale}"), "{d}");
+        // by the file's name alone, which is how the kernel knows it: declared on entering the part, taken back on leaving it
+        assert!(
+            d.contains("\\expandafter\\def\\csname lvCopias@contents/G2/main\\endcsname{\\declare@file@substitution{main.tex}{.latexfrog/piezas/p/contents/G2/main.tex}\\declare@file@substitution{exercise-list.tex}{.latexfrog/piezas/p/contents/G2/exercise-list.tex}}"),
+            "{d}"
+        );
+        assert!(d.contains("\\csname lvSinCopias@contents/G2/main\\endcsname{\\undeclare@file@substitution{main.tex}\\undeclare@file@substitution{exercise-list.tex}}"), "{d}");
+        // nothing of this without copies
+        let d = render_driver_spec(&DriverSpec { copias_en_partes: vec![], ..s.clone() }).unwrap();
+        assert!(!d.contains("lvEntra"), "{d}");
+        // a part's name that could break the driver is refused
+        let mal = DriverSpec { copias_en_partes: vec![("a}b".into(), "a.tex".into(), ".latexfrog/piezas/p/a.tex".into())], ..s };
+        assert!(render_driver_spec(&mal).is_err());
+    }
+
+    #[test]
     fn a_loader_part_left_out_is_skipped_by_wrapping_its_macro() {
         let s = DriverSpec {
             perfil: "p".into(),
@@ -1013,11 +1144,24 @@ mod tests {
     }
 
     #[test]
+    fn the_latexmkrc_environment_comes_back_in_hex_and_survives_the_ansi_code_page() {
+        // "C:/Ñ/style//;" in UTF-8, and "C:/á" as the ANSI code page writes it (0xE1).
+        let utf8: String = "C:/Ñ/style//;".bytes().map(|b| format!("{b:02x}")).collect();
+        let salida = format!("Rc files read:\nLVENV TEXINPUTS {utf8}\r\nLVENV TTFONTS 433a2fe1\nLVENV BIBINPUTS \nnoise\n");
+        assert_eq!(
+            parsear_entorno(&salida),
+            vec![("TEXINPUTS".into(), "C:/Ñ/style//;".into()), ("TTFONTS".into(), "C:/á".into()), ("BIBINPUTS".into(), String::new())]
+        );
+    }
+
+    #[test]
     fn el_rc_pone_la_salida_por_perfil_y_texinputs() {
         let rc = render_latexmkrc();
         assert!(rc.contains("$out_dir = \".latexfrog/build/$p\";"));
         assert!(rc.contains("$aux_dir = \".latexfrog/build/$p\";"));
         assert!(rc.contains("TEXINPUTS"));
+        // The driver lives in `.latexfrog/drivers`: a project's `$do_cd = 1` would run TeX there.
+        assert!(rc.contains("$do_cd = 0;"));
         // latexmk corre makeindex desde el directorio de salida: el estilo del proyecto se busca en la raíz.
         assert!(rc.contains("$ENV{INDEXSTYLE} = getcwd()"));
         assert!(rc.contains("$ENV{BIBINPUTS} = getcwd()"));
@@ -1030,6 +1174,10 @@ mod tests {
         assert!(a.contains(&"-latexoption=-max-print-line=10000".to_string()));
         assert!(!a.iter().any(|x| x.contains("$pdflatex") || x.starts_with("-pdflatex")));
         assert_eq!(a.last().unwrap(), ".latexfrog/drivers/lv-completo.tex");
+        // MiKTeX's lualatex does not start with it.
+        let l = latexmk_args_for("completo", "lualatex", true).unwrap();
+        assert!(!l.iter().any(|x| x.contains("max-print-line")), "{l:?}");
+        assert!(l.contains(&"-r".to_string()) && l.last().unwrap() == ".latexfrog/drivers/lv-completo.tex");
     }
 
     #[test]
@@ -1107,6 +1255,7 @@ mod tests {
             fragmento: false,
             omitir: vec![],
             sustituciones: vec![],
+            copias_en_partes: vec![],
         })
         .unwrap()
         .replace(&format!("{SALIDA_DE_PGF}\n"), "");

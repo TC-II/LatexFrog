@@ -19,6 +19,7 @@
 	"lv_profiles_engine": "Engine",
 	"lv_profiles_engine_hint": "pdflatex is the classic and the fastest. xelatex and lualatex can use installed fonts but are slower. It applies to the whole project.",
 	"lv_profiles_pieces": "Pieces, in book order",
+	"lv_profiles_with_chapter": "Printed by its chapter's file: it goes in and out with the chapter",
 	"lv_profiles_current": "The chapter I am in",
 	"lv_profiles_all": "All chapters",
 	"lv_profiles_how": "How",

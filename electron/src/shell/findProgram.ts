@@ -29,6 +29,21 @@ export function findProgram(name: string): string | null {
 	return null;
 }
 
+/**
+ * What a program that cannot run a .cmd launcher should start instead. npm's launcher for a native CLI
+ * is one line that runs an .exe next to it; that .exe is returned. Anything else comes back unchanged.
+ */
+export function nativeProgram(file: string, platform: NodeJS.Platform = process.platform): string {
+	if (platform !== 'win32' || !/\.(cmd|bat)$/i.test(file)) return file;
+	try {
+		const exe = /"%dp0%[\\/]([^"\r\n]+?\.exe)"/i.exec(fs.readFileSync(file, 'utf8'))?.[1];
+		const target = exe && path.join(path.dirname(file), exe);
+		return target && runnable(target) ? target : file;
+	} catch {
+		return file;
+	}
+}
+
 /** Windows looks for a bare program name in the working folder before PATH, and that folder is often a project */
 export const CWD_LOOKUP_OFF = 'NoDefaultCurrentDirectoryInExePath';
 

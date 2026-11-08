@@ -316,6 +316,11 @@ impl Synctex {
         } else {
             ruta.trim_start_matches("./").to_string()
         };
+        // a file read from a copy with the pieces a profile leaves out commented (`.latexfrog/piezas/<profile>/<file>`) is that file:
+        // its lines are commented in place, never taken out, so each keeps its number
+        if let Some(original) = rel.strip_prefix(".latexfrog/piezas/").and_then(|r| r.split_once('/')).map(|(_, f)| f) {
+            return (!original.is_empty() && !original.split('/').any(|c| c == "..")).then(|| original.to_string());
+        }
         if rel.starts_with(".latexfrog/") {
             return crate::formato::origen_del_resto(root, &rel);
         }
@@ -437,12 +442,24 @@ impl Synctex {
 
     /// PDF a código. `(page, x, y)` en bp desde arriba a la izquierda.
     pub fn inverse(&self, page: u32, px: f64, py: f64) -> Option<Inverse> {
+        self.inverse_en(page, px, py, &|_| true)
+    }
+
+    /// The tags of the project's own files: not a package, the class, a TikZ library or the driver.
+    pub fn tags_del_proyecto(&self, root: &Path) -> std::collections::HashSet<u16> {
+        // `_draft/` holds Live's own scaffolding (texd-compile.tex, texpile-hooks.tex), never the user's code
+        self.inputs.iter().map(|(t, _)| *t).filter(|t| self.rel_of_tag(root, *t).is_some_and(|r| !r.starts_with("_draft/"))).collect()
+    }
+
+    /// `inverse` among the boxes of the files `acepta` takes. A click on a TikZ picture drawn in place (Live does not externalize)
+    /// lands on boxes of `pgflibraryfadings.code.tex`; among the project's files it lands on the line that draws the picture.
+    pub fn inverse_en(&self, page: u32, px: f64, py: f64, acepta: &dyn Fn(u16) -> bool) -> Option<Inverse> {
         let lista = self.by_page.get(page as usize)?;
         let (pxs, pys) = (((px - self.off_x) / self.scale) as i64, ((py - self.off_y) / self.scale) as i64);
         let mut mejor: Option<(u32, i64, bool)> = None; // índice, métrica, adentro
         for &i in lista {
             let n = &self.nodes[i as usize];
-            if n.w <= 0 || n.h + n.d <= 0 {
+            if n.w <= 0 || n.h + n.d <= 0 || !acepta(n.tag) {
                 continue;
             }
             let (x0, x1) = (n.x as i64, n.x as i64 + n.w as i64);
@@ -470,7 +487,7 @@ impl Synctex {
         let mut mejor_dx = (true, i64::MAX);
         for j in (i + 1)..=caja.end {
             let c = &self.nodes[j as usize];
-            if matches!(c.kind, KERN | GLUE | MATH | HVOID) && c.line > 0 {
+            if matches!(c.kind, KERN | GLUE | MATH | HVOID) && c.line > 0 && acepta(c.tag) {
                 let dx = (self.en_borde_derecho(c), (c.x as i64 - pxs).abs());
                 if dx < mejor_dx {
                     mejor_dx = dx;
@@ -556,6 +573,15 @@ mod tests {
     }
 
     #[test]
+    fn a_copy_with_pieces_left_out_is_its_original_file() {
+        let texto = muestra().replace("Input:3:C:/Proyecto con espacios/Secciones/", "Input:3:C:/Proyecto con espacios/./.latexfrog/piezas/tapa/contents/G1/");
+        let s = Synctex::parse(texto.as_bytes());
+        assert_eq!(s.rel_of_tag(raiz(), 3).as_deref(), Some("contents/G1/Aproximación.tex"));
+        // and going from the original to the PDF finds the copy
+        assert_eq!(s.tag_of(raiz(), "contents/G1/Aproximación.tex"), Some(3));
+    }
+
+    #[test]
     fn el_forward_busca_en_las_hojas_y_devuelve_la_caja_de_linea() {
         let s = Synctex::parse(muestra().as_bytes());
         // La línea 3 sólo está en las hojas de la primera caja de línea; la caja misma dice 5.
@@ -578,6 +604,40 @@ mod tests {
         // La `h1,7` mide 0x0: se resuelve a la caja que la contiene (la vbox de la página).
         assert_eq!(f.rects.len(), 1);
         assert!(f.rects[0].w > 400.0 && f.rects[0].h > 500.0, "{:?}", f.rects[0]);
+    }
+
+    #[test]
+    fn a_click_on_a_picture_drawn_in_place_goes_to_the_project_line_not_into_the_tikz_library() {
+        // a line of the exercise (line 12) holding a picture whose boxes TikZ built in its library
+        let texto = [
+            "SyncTeX Version:1",
+            "Input:1:C:/P/ex.tex",
+            "Input:2:C:/MiKTeX/tex/generic/pgf/libraries/pgflibraryfadings.code.tex",
+            "Output:pdf",
+            "Magnification:1000",
+            "Unit:1",
+            "X Offset:0",
+            "Y Offset:0",
+            "Content:",
+            "{1",
+            "[1,1:0,0:30000000,40000000,0",
+            "(1,12:1000000,9000000:28000000,6000000,0",
+            "(2,15:5000000,8000000:3000000,2000000,0",
+            ")",
+            ")",
+            "]",
+            "}1",
+            "Postamble:",
+        ]
+        .join("\n");
+        let s = Synctex::parse(texto.as_bytes());
+        let bp = |sp: f64| sp / 65781.76;
+        let (x, y) = (bp(6_000_000.0), bp(7_000_000.0));
+        // inside both boxes: the library's is the smaller one
+        assert_eq!(s.inverse(1, x, y).unwrap().tag, 2);
+        let propios = s.tags_del_proyecto(Path::new("C:/P"));
+        let i = s.inverse_en(1, x, y, &|t| propios.contains(&t)).unwrap();
+        assert_eq!((s.rel_of_tag(Path::new("C:/P"), i.tag).as_deref(), i.line), (Some("ex.tex"), 12));
     }
 
     #[test]

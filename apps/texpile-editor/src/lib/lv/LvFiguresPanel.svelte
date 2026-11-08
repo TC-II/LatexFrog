@@ -8,7 +8,9 @@
 	import { FileImage } from '@lucide/svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { lvProject } from './lvEngine.svelte';
-	import { cleanBlock, figureTree, imageRows, megabytes, needsCompile, type Figure, type FigureNode, type FiguresStatus, type Heading } from './lvFigures';
+	import { cleanBlock, figureTree, imageRows, megabytes, needsCompile, type Figure, type FigureNode, type FiguresStatus, type Heading, type TreeItem } from './lvFigures';
+	import { partLabel } from './lvProfiles';
+	import { treeText } from './lvTreeStyle';
 
 	type Cleanup = { archivos: string[]; bytes: number; figuras: number };
 	type BakeEvent = { type: string; done?: number; total?: number; error?: string; cooked?: number; failed?: number; remaining?: number };
@@ -20,6 +22,8 @@
 
 	let status = $state<FiguresStatus | null>(null);
 	let headings = $state<Heading[]>([]);
+	/** Contents' list: the tree is the same one Contents shows, guides as groups at the top */
+	let items = $state<TreeItem[] | undefined>(undefined);
 	let cleanup = $state<Cleanup | null>(null);
 	let baking = $state<string | null>(null);
 	let checking = $state(false);
@@ -31,7 +35,7 @@
 	/** the row last opened: the arrow keys move from it */
 	let selected = $state<string | null>(null);
 
-	const tree = $derived(figureTree(headings, [...(status?.figuras ?? []), ...imageRows(status?.imagenes ?? [])]));
+	const tree = $derived(figureTree(headings, [...(status?.figuras ?? []), ...imageRows(status?.imagenes ?? [])], items, lvProject.partGroups));
 	const checked = $derived(status?.revisado ?? false);
 	const toCompile = $derived((status?.figuras ?? []).filter(needsCompile).length);
 	const block = $derived(cleanBlock(status?.figlist ?? null));
@@ -64,7 +68,11 @@
 	const load = async () => {
 		const [st, sym] = await Promise.all([lvProject.request<FiguresStatus>('figures-status'), lvProject.symbols().catch(() => null)]);
 		status = st;
-		if (sym) headings = sym.sections;
+		if (sym) {
+			headings = sym.sections;
+			// a part entry goes by the same name Contents gives it
+			items = sym.composition?.map((it): TreeItem => (it.kind === 'part' ? { ...it, label: partLabel(it.name, it.label ? { [it.name]: it.label } : undefined) } : it.kind === 'section' ? it : { kind: 'piece' }));
+		}
 	};
 
 	// again after each build and bake: a build's background listing is what finds an edited figure
@@ -174,7 +182,7 @@
 
 {#snippet node(n: FigureNode, depth: number)}
 	<details class="group" open={isOpen(n.key, depth > 0)} ontoggle={(e) => (opened[n.key] = e.currentTarget.open)} data-testid="lv-figure-group">
-		<summary class="flex cursor-pointer items-center gap-1.5 rounded py-0.5 pr-1 {n.heading.level <= 1 ? 'font-semibold' : ''}" title="{n.heading.file}:{n.heading.line}">
+		<summary class="flex cursor-pointer items-center gap-1.5 rounded py-0.5 pr-1 {treeText(depth)}" title={n.heading.level < 0 ? `${n.heading.title}\n${n.heading.file}` : `${n.heading.file}:${n.heading.line}`}>
 			<span class="shrink-0 text-xs opacity-60 transition-transform group-open:rotate-90" aria-hidden="true">▸</span>
 			<!-- `\section{}` has no title of its own: the same label Contents gives it -->
 			<span class="min-w-0 flex-1 truncate {n.heading.title ? '' : 'italic opacity-70'}">{n.heading.title || m.lv_outline_untitled()}</span>

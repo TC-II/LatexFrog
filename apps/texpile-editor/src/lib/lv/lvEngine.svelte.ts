@@ -7,6 +7,8 @@ import { pdfStore } from '$lib/stores/pdfStore';
 import { fileUrl, joinPath, relativeTo, revealItem } from '$lib/workspace/fileSystem';
 import { activeFilePath, mainFile, setMainFile } from '$lib/workspace/workspaceStore';
 import { clearFollowMark } from './lvSync';
+import { omitted, withGroups } from './lvProfiles';
+import { announceFilesArrived } from '$lib/editor/visual/fileAccess';
 import { toaster } from '$lib/modals/toaster-svelte';
 import { fileService } from '$lib/files/service/fileService';
 import { fileMode } from '$lib/workspace/fileMode.svelte';
@@ -14,7 +16,8 @@ import { collabGuest } from '$lib/collab/guestStore.svelte';
 import { latexLiveMode } from '$lib/workspace/projectConfigSync.svelte';
 
 export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; omit?: string[]; compileOn: string | null; output?: { dir: string; pattern: string; perPart?: boolean } | null };
-export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean };
+/** `imageDirs`: where the engine found the images the file (and what it brings in) inserts, relative to the root */
+export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean; imageDirs?: string[] };
 export type OutlineTab = 'contents' | 'figures';
 export type Typical = { ms: number; pasadas: number; n: number };
 export type Progress = { profile: string; startedAt: number; tool: string | null; pass: number; parts?: { done: number; total: number } };
@@ -23,9 +26,9 @@ export type ProjectView = {
 	rootFile: string | null;
 	config: { profiles: Profile[] } | null;
 	state: { activeProfile: string | null; selection: string[]; draftImages: boolean; currentPart?: string | null; idleMs: number; autoCompile: string };
-	parts: { name: string; file?: string | null }[];
+	parts: { name: string; label?: string; file?: string | null; group?: string; also?: string[] }[];
 	lockedBy: number | null;
-	piezas: { clave: string; nombre: string; lugar?: string }[];
+	piezas: { clave: string; nombre: string; lugar?: string; parte?: string }[];
 };
 export type Finding = { id: string; nivel: 'ok' | 'info' | 'aviso' | 'error'; titulo: string; detalle: string; arreglo: string | null; archivo: string | null; linea: number | null };
 export type DoctorReport = { hallazgos: Finding[]; ms: number; distribucion: string | null };
@@ -41,9 +44,9 @@ export type Problem = {
 export type Section = { level: number; title: string; file: string; line: number; label: string | null };
 /** what the document is made of, in document order: the same blocks a profile chooses from */
 export type CompositionItem =
-	| { kind: 'section'; index: number; part: string | null; piece?: string | null }
-	| { kind: 'part'; name: string; file: string; line: number }
-	| { kind: 'piece'; key: string; name: string; file: string; line: number };
+	| { kind: 'section'; index: number; part: string | null; piece?: string | null; opens?: string }
+	| { kind: 'part'; name: string; label?: string; file: string; line: number }
+	| { kind: 'piece'; key: string; name: string; file: string; line: number; part?: string | null };
 export type Symbols = { sections: Section[]; composition?: CompositionItem[] };
 export type Rect = { page: number; x: number; y: number; w: number; h: number };
 type SyncForward = { perfil: string; pdf: string; page: number; rects: Rect[]; line_used: number };
@@ -297,6 +300,13 @@ class LvProject {
 		this.typical = await this.request<Record<string, Typical>>('typical-times');
 	}
 
+	/** the folders, absolute, where the engine found the open file's images: the visual editor looks there after its own places */
+	imageDirs(): string[] {
+		const root = this.view?.root;
+		if (!root) return [];
+		return (this.fileInfo?.imageDirs ?? []).map((d) => (d ? joinPath(root, d) : root));
+	}
+
 	/** tells the engine which file is being worked on: a `current` profile builds that file's part */
 	async noteActiveFile() {
 		const root = this.view?.root.replace(/\\/g, '/');
@@ -306,7 +316,10 @@ class LvProject {
 			return;
 		}
 		const info = await this.request<FileInfo>('file-info', { file: path.slice(root.length + 1) }).catch(() => null);
+		const moreDirs = (info?.imageDirs ?? []).join('|') !== (this.fileInfo?.imageDirs ?? []).join('|');
 		this.fileInfo = info;
+		// an image the visual editor showed missing before the engine said where its folder is tries again
+		if (moreDirs) announceFilesArrived();
 		if (info?.partsChanged) await this.refresh();
 	}
 
@@ -324,19 +337,42 @@ class LvProject {
 		return this.activeProfile?.label ?? '';
 	}
 
+	/** what each part is called, by its `\includeonly` name: the title the engine read from its file (`partLabel` falls back to the path) */
+	get partLabels(): Record<string, string> {
+		return Object.fromEntries((this.view?.parts ?? []).flatMap((p) => (p.label ? [[p.name, p.label]] : [])));
+	}
+
 	/** whether the active profile leaves this block of the document out: a piece it omits, or a part it does not choose */
+	/** the part that holds each part that nests (an exercise's guide) */
+	get partGroups(): Record<string, string> {
+		return Object.fromEntries((this.view?.parts ?? []).flatMap((p) => (p.group ? [[p.name, p.group]] : [])));
+	}
+
+	/** the other parts that hold each part (a solutions book holds its guide's exercises too) */
+	get partAlso(): Record<string, string[]> {
+		return Object.fromEntries((this.view?.parts ?? []).flatMap((p) => (p.also?.length ? [[p.name, p.also]] : [])));
+	}
+
 	leftOut(item: CompositionItem): boolean {
 		const p = this.activeProfile;
 		if (!p) return false;
-		if (item.kind === 'piece') return (p.omit ?? []).includes(item.key);
-		if (item.kind === 'section' && item.piece && (p.omit ?? []).includes(item.piece)) return true;
-		const part = item.kind === 'part' ? item.name : item.part;
+		if (item.kind === 'piece' && omitted(item.key, p.omit ?? [])) return true;
+		if (item.kind === 'section' && item.piece && omitted(item.piece, p.omit ?? [])) return true;
+		// a piece a part prints (its cover) goes with the part
+		const part = item.kind === 'part' ? item.name : (item.part ?? null);
 		if (part === null) return false;
 		const st = this.view?.state;
-		if (p.parts === 'all') return false;
-		if (p.parts === 'selection') return !(st?.selection ?? []).includes(part);
-		if (p.parts === 'current') return !p.partList.includes(part) && st?.currentPart !== part;
-		return !p.partList.includes(part);
+		if (p.parts === 'all') return (p.omit ?? []).includes(`part:${part}`);
+		const chosen =
+			p.parts === 'selection' ? (st?.selection ?? []) : p.parts === 'current' ? [...p.partList, ...(st?.currentPart ? [st.currentPart] : [])] : p.partList;
+		const names = (this.view?.parts ?? []).map((x) => x.name);
+		// a guide's own piece (its cover, its credits) when the guide is in only for an exercise chosen in it (\`solo_marco\`)
+		if (item.kind === 'piece' && !chosen.includes(part)) {
+			const holds = (q: string) => this.partGroups[q] === part || (this.partAlso[q] ?? []).includes(part);
+			if (chosen.some(holds)) return true;
+		}
+		// an exercise of a chosen guide left out by name (`part:<name>`) is out, as the engine reads it
+		return !withGroups(chosen, this.partGroups, names, this.partAlso).includes(part) || (p.omit ?? []).includes(`part:${part}`);
 	}
 
 	private get activeProfile() {
@@ -488,6 +524,19 @@ class LvProject {
 		if (!v || !profile) return null;
 		const res = await this.request<SyncInverse | null>('synctex-inverse', { profile, page, x, y });
 		return res?.file && res.line >= 1 ? { file: joinPath(v.root, res.file), line: res.line } : null;
+	}
+
+	/** the same over Live's PDF (`_draft/draft.pdf`), so a click in Live lands on a project file as on a profile's PDF: never in a
+	 *  TikZ library a picture drawn in place was built in. `undefined` when the engine cannot answer (no SyncTeX yet) */
+	async syncInverseLive(page: number, x: number, y: number) {
+		const v = this.view;
+		if (!v) return undefined;
+		try {
+			const res = await this.request<SyncInverse | null>('synctex-inverse-pdf', { pdf: '_draft/draft.pdf', page, x, y });
+			return res?.file && res.line >= 1 ? { file: joinPath(v.root, res.file), line: res.line } : null;
+		} catch {
+			return undefined;
+		}
 	}
 
 	/** a saved file, relative to the root (it may leave it), with a button that shows it in its folder */

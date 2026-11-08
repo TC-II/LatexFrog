@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compileTarget, defaultProfiles, emptyProfile, outputName, parseConfig, profileId, relativeFolder, removeProfile, rows, selectionOf, setProfile, toParts, watermarkDefaults, watermarkPreviewText, type ConfigJson } from '$lib/lv/lvProfiles';
+import { compileTarget, defaultProfiles, emptyProfile, outputName, parseConfig, partLabel, profileId, relativeFolder, removeProfile, rows, selectionOf, setProfile, toParts, watermarkDefaults, withGroups, watermarkPreviewText, type ConfigJson } from '$lib/lv/lvProfiles';
 
 describe('profile config', () => {
 	it('keeps what it does not know and does not write defaults', () => {
@@ -44,6 +44,23 @@ describe('chapters of a profile', () => {
 		expect(rows(pieces, ['A']).map((r) => r.kind)).toEqual(['piece', 'current', 'all', 'chapter', 'piece']);
 		expect(rows(pieces, []).map((r) => r.kind)).toEqual(['piece', 'piece']);
 	});
+
+	it('puts the pieces a chapter prints under that chapter, as Contents does', () => {
+		const pieces = [
+			{ clave: 'block:makecover', nombre: 'makecover', lugar: 'dentro', parte: 'g/G1/main' },
+			{ clave: 'block:makecover#2', nombre: 'makecover', lugar: 'dentro', parte: 'g/G2/main' },
+			{ clave: 'block:makesolutions', nombre: 'makesolutions', lugar: 'dentro', parte: 'g/G1/main' }
+		];
+		const r = rows(pieces, ['g/G1/main', 'g/G2/main']).map((x) => (x.kind === 'piece' ? `${x.key}@${x.part}` : x.kind === 'chapter' ? x.part : x.kind));
+		expect(r).toEqual(['current', 'all', 'g/G1/main', 'block:makecover@g/G1/main', 'block:makesolutions@g/G1/main', 'g/G2/main', 'block:makecover#2@g/G2/main']);
+	});
+
+	it('names a part by its title, or by its path when it has none', () => {
+		expect(partLabel('contents/G1/main', { 'contents/G1/main': 'Análisis de parámetros' })).toBe('Análisis de parámetros');
+		expect(partLabel('contents/G1/main')).toBe('G1');
+		expect(partLabel('Secciones/Desnormalización')).toBe('Desnormalización');
+		expect(compileTarget('current', 'contents/G2/main', 0, { 'contents/G2/main': 'Reguladores' })).toEqual({ kind: 'current', part: 'Reguladores' });
+	});
 });
 
 describe('when and where', () => {
@@ -85,5 +102,24 @@ describe('when and where', () => {
 		expect(compileTarget('current', null, 0)).toEqual({ kind: 'none' });
 		expect(compileTarget('list', null, 2)).toEqual({ kind: 'count', count: 2 });
 		expect(compileTarget(undefined, null, 0)).toEqual({ kind: 'all' });
+	});
+});
+
+describe('nested parts', () => {
+	const groups = { e1: 'g1', e2: 'g1', e3: 'g2' };
+	const names = ['g1', 'e1', 'e2', 'g2', 'e3'];
+
+	it('an exercise brings its guide, and a guide brings its exercises', () => {
+		expect(withGroups(['e2'], groups, names)).toEqual(['g1', 'e2']);
+		expect(withGroups(['g2'], groups, names)).toEqual(['g2', 'e3']);
+		expect(withGroups([], groups, names)).toEqual([]);
+	});
+
+	it('rows put an exercise under its guide, and its pieces deeper', () => {
+		const pieces = [{ clave: 'block:makecover#1', nombre: 'makecover', lugar: 'dentro', parte: 'e1' }] as never[];
+		const r = rows(pieces, names, groups);
+		expect(r.find((x) => x.kind === 'chapter' && x.part === 'e1')).toEqual({ kind: 'chapter', part: 'e1', group: 'g1' });
+		expect(r.find((x) => x.kind === 'chapter' && x.part === 'g1')).toEqual({ kind: 'chapter', part: 'g1' });
+		expect(r.find((x) => x.kind === 'piece')).toMatchObject({ part: 'e1', nested: true });
 	});
 });

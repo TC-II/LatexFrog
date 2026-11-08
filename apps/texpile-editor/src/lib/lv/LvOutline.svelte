@@ -5,6 +5,9 @@
 	import { activeFilePath } from '$lib/workspace/workspaceStore';
 	import { m } from '$lib/paraglide/messages';
 	import { lvProject, type Symbols } from '$lib/lv/lvEngine.svelte';
+	import { partLabel } from '$lib/lv/lvProfiles';
+	import { outlineDepths } from '$lib/lv/lvOutlineTree';
+	import { treeMarker, treeText } from '$lib/lv/lvTreeStyle';
 	import { pdfStore } from '$lib/stores/pdfStore';
 
 	let { onOpenFileAt }: { onOpenFileAt: (file: string, line: number) => void } = $props();
@@ -96,14 +99,14 @@
 			{@const main = lvProject.view.rootFile}
 			<button
 				type="button"
-				class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left font-semibold {isActive(main) ? 'text-primary-ink' : ''}"
+				class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left {treeText(0)} {isActive(main) ? 'text-primary-ink' : ''}"
 				style="padding-left: 4px"
 				title={main}
 				data-testid="lv-outline-body"
 				data-outline-row
 				onclick={(e) => go(main, 1, 'body', e.currentTarget)}
 			>
-				<span class="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true"></span>
+				<span class="shrink-0 {treeMarker(0)}" aria-hidden="true"></span>
 				<span class="truncate">{m.lv_outline_body({ file: main.split('/').pop() ?? main })}</span>
 			</button>
 			<p class="p-2 text-xs opacity-60">{m.lv_outline_empty()}</p>
@@ -111,45 +114,55 @@
 			<p class="p-2 opacity-60">{m.lv_outline_empty()}</p>
 		{/if}
 	{:else}
-		{@const top = Math.min(...symbols.sections.map((x) => x.level))}
 		{@const items = symbols.composition ?? symbols.sections.map((_, index) => ({ kind: 'section' as const, index, part: null }))}
+		<!-- each row's depth: a guide at the top, an exercise and a worked example it loads side by side under it (lvOutlineTree) -->
+		{@const depths = outlineDepths(items, symbols.sections.map((x) => x.level), lvProject.partGroups)}
 		{#each items as it, n (n)}
 			{#if it.kind !== 'section'}
 				{@const out = lvProject.leftOut(it)}
 				{@const key = `${it.kind}:${it.file}:${it.line}`}
-				<!-- a block the profile can leave out that is not a heading: the title page, the table of contents, a part with no heading -->
+				{@const depth = depths[n]}
+				{@const name = it.kind === 'part' ? partLabel(it.name, it.label ? { [it.name]: it.label } : undefined) : it.name}
+				<!-- a part with no heading (a guide, named by its title) heads its block; a piece that is not a heading (the title page,
+				     the table of contents, a guide's cover) is in italics, with a square -->
 				<button
 					type="button"
-					class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left italic {selected === key ? 'preset-tonal' : ''} {out ? 'opacity-45' : ''}"
-					style="padding-left: 4px"
-					title={out ? `${it.file}:${it.line} — ${m.lv_outline_left_out({ profile: lvProject.shownProfileLabel })}` : `${it.file}:${it.line}`}
+					class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left {it.kind === 'piece' ? `italic ${treeText(Math.max(depth, 2))}` : treeText(depth)} {isActive(it.file) && it.kind === 'part' ? 'text-primary-ink' : ''} {selected === key ? 'preset-tonal' : ''} {out ? 'opacity-45' : ''}"
+					style="padding-left: {4 + depth * 14}px"
+					title={`${it.kind === 'part' ? `${name}\n` : ''}${it.file}:${it.line}${out ? ` — ${m.lv_outline_left_out({ profile: lvProject.shownProfileLabel })}` : ''}`}
 					data-left-out={out || undefined}
+					data-depth={depth}
 					data-outline-row
-					data-testid="lv-outline-piece"
+					data-testid={it.kind === 'part' ? 'lv-outline-part' : 'lv-outline-piece'}
 					onclick={(e) => go(it.file, it.line, key, e.currentTarget)}
 				>
-					<span class="size-1.5 shrink-0 rounded-sm border border-current" aria-hidden="true"></span>
-					<span class="truncate">{it.name}</span>
+					<span class="shrink-0 {treeMarker(depth, it.kind === 'piece')}" aria-hidden="true"></span>
+					<span class="truncate">{name}</span>
 				</button>
 			{:else}
 			{@const i = it.index}
 			{@const s = symbols.sections[i]}
 			{@const out = lvProject.leftOut(it)}
 			{@const parent = (symbols.sections[i + 1]?.level ?? -1) > s.level}
+			{@const depth = depths[n]}
+			<!-- a heading set where a part is called (`\exercise{slug}`) opens the part's file, where the exercise is written -->
+			{@const opens = 'opens' in it ? it.opens : undefined}
+			{@const target = opens ?? s.file}
 			<button
 				type="button"
-				class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left {s.level <= 1 ? 'font-semibold' : ''} {parent ? 'text-[0.95rem]' : ''} {isActive(s.file) ? 'text-primary-ink' : ''} {selected === `${s.file}:${s.line}:${i}` ? 'preset-tonal' : ''} {missing(s.file) || out ? 'opacity-45' : ''}"
-				style="padding-left: {4 + Math.max(0, s.level - 1) * 14}px"
+				class="hover:preset-tonal flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left {treeText(depth)} {isActive(target) ? 'text-primary-ink' : ''} {selected === `${s.file}:${s.line}:${i}` ? 'preset-tonal' : ''} {missing(s.file) || out ? 'opacity-45' : ''}"
+				style="padding-left: {4 + depth * 14}px"
+				data-depth={depth}
 				title={missing(s.file) ? `${s.file}:${s.line} — ${m.lv_outline_not_in_pdf()}` : out ? `${s.file}:${s.line} — ${m.lv_outline_left_out({ profile: lvProject.shownProfileLabel })}` : `${s.file}:${s.line}`}
 				data-left-out={out || undefined}
 				data-not-in-pdf={missing(s.file) || undefined}
 				data-parent={parent || undefined}
 				data-outline-row
 				aria-current={selected === `${s.file}:${s.line}:${i}` || undefined}
-				onclick={(e) => go(s.file, s.line, `${s.file}:${s.line}:${i}`, e.currentTarget)}
+				onclick={(e) => go(target, opens ? 1 : s.line, `${s.file}:${s.line}:${i}`, e.currentTarget)}
 			>
-				<!-- a heading with headings under it: a dot, so the tree reads at a glance; solid at the top level, hollow below it -->
-				<span class="size-1.5 shrink-0 rounded-full {parent ? (s.level === top ? 'bg-current' : 'border border-current') : 'bg-transparent'}" aria-hidden="true"></span>
+				<!-- every heading has its depth's dot, so siblings look alike whether or not they have headings under them -->
+				<span class="shrink-0 {treeMarker(depth)}" aria-hidden="true"></span>
 				<span class="truncate">{s.title || m.lv_outline_untitled()}</span>
 			</button>
 			{/if}

@@ -26,6 +26,8 @@ export type GraphicSearchOpts = {
 	loadedPath: string | null;
 	/** the source to read \graphicspath out of */
 	source: string;
+	/** absolute folders to try last, from what knows the whole project (LatexFrog's engine: a class's \graphicspath) */
+	extraDirs?: string[];
 };
 
 /**
@@ -42,6 +44,7 @@ export function graphicSearchDirs(opts: GraphicSearchOpts): string[] {
 	for (const d of searchDirsIn(codeOnly(opts.source))) {
 		for (const parent of [base, opts.root]) if (parent) dirs.push(joinPath(parent, d));
 	}
+	dirs.push(...(opts.extraDirs ?? []));
 	return [...new Set(dirs.filter((d): d is string => !!d))];
 }
 

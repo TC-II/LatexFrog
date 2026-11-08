@@ -1,0 +1,4 @@
+# The class and its package are in style/: TeX finds them there.
+use Cwd qw(getcwd);
+$pdf_mode = 4;   # LuaLaTeX
+ensure_path('TEXINPUTS', getcwd() . '/style//');

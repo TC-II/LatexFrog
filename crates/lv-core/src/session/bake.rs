@@ -200,9 +200,8 @@ impl Session {
                 &propio
             }
         };
-        let todas = ix.part_names();
         // Un error acá (un perfil de exportación, partes elegidas sin partes) lo dice el build.
-        let del_perfil: Vec<String> = Self::includeonly_de(&d, perfil, pc, &todas).ok()?.unwrap_or_default();
+        let del_perfil: Vec<String> = Self::includeonly_de(&d, perfil, pc, ix).ok()?.unwrap_or_default();
         let slugs = self.slug_a_archivo(&fcfg, ix);
         let parte_de = |n: &str| -> Option<Option<String>> {
             let (_, slug, _) = figcache::partir_nombre(figures::nombre_corto(n))?;
@@ -261,7 +260,19 @@ impl Session {
     /// El `includeonly` de un perfil (el mismo criterio que `plan`). Un perfil de **todas** las partes lleva la lista completa (no
     /// `None`): una raíz con su propio `\includeonly` (`cap_actual.tex` del libro) lo recortaría, y el último gana (S6). `None` sólo si
     /// el proyecto no tiene partes.
-    pub(super) fn includeonly_de(d: &Datos, perfil: &str, pc: &ProfileCfg, nombres: &[String]) -> Result<Option<Vec<String>>> {
+    ///
+    /// A part inside a group (an exercise inside a guide) brings its group, and a chosen group all its parts (`with_groups`); then
+    /// the parts the profile leaves out (`omit: part:<name>`) go: a guide whose exercises are all out compiles its frame alone.
+    pub(super) fn includeonly_de(d: &Datos, perfil: &str, pc: &ProfileCfg, ix: &ProjectIndex) -> Result<Option<Vec<String>>> {
+        let nombres = &ix.part_names();
+        Ok(Self::sin_grupos(d, perfil, pc, nombres)?.map(|sel| {
+            let mut v = ix.with_groups(&sel);
+            v.retain(|p| !pc.omit.contains(&crate::piezas::Pieza::Parte(p.clone()).clave()));
+            v
+        }))
+    }
+
+    pub(super) fn sin_grupos(d: &Datos, perfil: &str, pc: &ProfileCfg, nombres: &[String]) -> Result<Option<Vec<String>>> {
         match pc.parts {
             PartsSel::All => Ok((!nombres.is_empty()).then(|| nombres.to_vec())),
             PartsSel::Selection => {
@@ -306,7 +317,7 @@ impl Session {
         let includeonly = match fase {
             FaseBake::Perfil(p) => {
                 let pc = cfg.profiles.get(p).ok_or_else(|| otro(format!("no profile {p:?}")))?;
-                Self::includeonly_de(&d, p, pc, &todas)?
+                Self::includeonly_de(&d, p, pc, &ix)?
             }
             FaseBake::Todo => (!todas.is_empty()).then(|| todas.clone()),
         };
@@ -334,8 +345,9 @@ impl Session {
             fragmento: false,
             omitir: vec![],
             sustituciones: vec![],
+            copias_en_partes: vec![],
         })?;
-        let opciones = Opciones { root: self.root.clone(), engine: cfg.engine.clone(), dir: fcfg.dir.clone(), jobs: fcfg.jobs };
+        let opciones = Opciones { root: self.root.clone(), engine: cfg.engine.clone(), dir: fcfg.dir.clone(), jobs: fcfg.jobs, entorno: crate::build::entorno_del_latexmkrc(&self.root) };
         let huella = if completa { self.huella_actual(&ix, &fcfg) } else { None };
         let datos = self.datos_de_figuras(&cfg, &ix);
         Ok(PlanBake { driver, dirs: ix.include_dirs(&cfg.parts.commands), opciones, root_rel: rf, completa, partes, partes_con_figuras, huella, datos })

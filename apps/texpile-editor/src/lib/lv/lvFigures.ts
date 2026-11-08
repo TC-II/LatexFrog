@@ -1,6 +1,8 @@
 // The Figures panel's logic: placing the figures in the document's headings and telling why Clean is off. No Svelte and no engine,
 // so it can be tested.
 
+import { outlineDepths } from './lvOutlineTree';
+
 /** `aldia` its PDF is the code's, `pendiente` the code changed, `falta` never compiled, `fallo` failed, `sinrevisar` new since the last check */
 export type FigureState = 'aldia' | 'pendiente' | 'falta' | 'fallo' | 'sinrevisar';
 export type Figure = {
@@ -64,12 +66,35 @@ function headingAbove(headings: Heading[], file: string | null | undefined, line
 	return found;
 }
 
+/** Contents' list (the engine's composition), as far as the tree needs it: a part with an entry of its own (a guide, named by its
+ * title) and the headings, each with the part it is in. Pieces have no figures of their own and are not needed. */
+export type TreeItem = { kind: 'section'; index: number; part: string | null; opens?: string } |{ kind: 'part'; name: string; label: string; file: string; line: number } | { kind: 'piece' };
+
 /**
- * The figures under the headings of Contents. A figure goes under the heading above its code; when the file with its code has no
- * heading above it (a figure file that a chapter inputs), under the heading above the line that brings it in. Headings with no
- * figure inside are left out; figures above every heading and compiled figures the code no longer has go in groups of their own.
+ * The figures in the same tree Contents shows. A part with an entry of its own (a guide: no heading heads it) is a group at the top,
+ * and its headings nest inside it and nowhere else: a guide that has only exercises does not end up under the previous guide's last
+ * `\part`. A figure goes under the heading above its code (a part's entry counts as a heading at the top of its file); when the file
+ * with its code has none (a figure file a chapter inputs), under the heading above the line that brings it in. Groups with no figure
+ * inside are left out; figures above every heading and compiled figures the code no longer has go in groups of their own. Without
+ * `items` the headings alone make the tree.
  */
-export function figureTree(headings: Heading[], figures: Figure[]): FigureTree {
+export function figureTree(sections: Heading[], figures: Figure[], items?: TreeItem[], groups: Record<string, string> = {}): FigureTree {
+	// the tree's rows in document order: a part entry is a heading above every level, at line 0 of its own file
+	// a heading that a part's call line makes (`\exercise{slug}` titles the exercise) also heads the file that line opens, as Contents
+	// opens it on a click: the exercise's figures go under it, not above every heading
+	type Row = { heading: Heading; key: string; part: string | null; entry: boolean; opens?: string; depth: number };
+	const list = items ?? sections.map((_, index): TreeItem => ({ kind: 'section', index, part: null }));
+	// the same depths Contents draws: an exercise and a worked example a guide loads are siblings under it
+	const depths = outlineDepths(list, sections.map((s) => s.level), groups);
+	const rows = list.flatMap((it, n): Row[] => {
+		if (it.kind === 'part') return [{ heading: { level: -1, title: it.label, file: it.file, line: 0 }, key: `part:${it.name}`, part: it.name, entry: true, depth: depths[n] }];
+		if (it.kind !== 'section' || !sections[it.index]) return [];
+		const h = sections[it.index];
+		return [{ heading: h, key: `${h.file}:${h.line}:${it.index}`, part: it.part, entry: false, opens: it.opens, depth: depths[n] }];
+	});
+	const opened = (file: string | null | undefined) => (file ? rows.findIndex((r) => r.opens === file) : -1);
+	const entries = new Set(rows.filter((r) => r.entry).map((r) => r.part));
+	const headings = rows.map((r) => r.heading);
 	const under = new Map<number, Figure[]>();
 	const beforeHeadings: Figure[] = [];
 	const notInCode: Figure[] = [];
@@ -79,6 +104,7 @@ export function figureTree(headings: Heading[], figures: Figure[]): FigureTree {
 			continue;
 		}
 		let at = headingAbove(headings, f.codigo, f.linea);
+		if (at < 0) at = opened(f.codigo);
 		if (at < 0) at = headingAbove(headings, f.archivo, f.dondeLinea);
 		if (at < 0) beforeHeadings.push(f);
 		else under.set(at, [...(under.get(at) ?? []), f]);
@@ -90,12 +116,16 @@ export function figureTree(headings: Heading[], figures: Figure[]): FigureTree {
 		list.sort((a, b) => at(a) - at(b));
 	}
 	const root: FigureNode[] = [];
-	const stack: FigureNode[] = [];
-	headings.forEach((heading, i) => {
-		const node: FigureNode = { key: `${heading.file}:${heading.line}:${i}`, heading, figures: under.get(i) ?? [], children: [], total: 0, changed: 0, failed: 0 };
-		while (stack.length && stack[stack.length - 1].heading.level >= heading.level) stack.pop();
-		(stack.length ? stack[stack.length - 1].children : root).push(node);
-		stack.push(node);
+	const stack: { node: FigureNode; depth: number; entry: boolean }[] = [];
+	rows.forEach(({ heading, key, part, entry, depth }, i) => {
+		const node: FigureNode = { key, heading, figures: under.get(i) ?? [], children: [], total: 0, changed: 0, failed: 0 };
+		// a heading outside every part entry (the bibliography's, after the last guide) is not inside the last guide; an exercise's is
+		// inside its guide's
+		const inEntry = part !== null && (entries.has(part) || entries.has(groups[part]));
+		if (!entry && !inEntry && stack[0]?.entry) stack.length = 0;
+		while (stack.length && stack[stack.length - 1].depth >= depth) stack.pop();
+		(stack.length ? stack[stack.length - 1].node.children : root).push(node);
+		stack.push({ node, depth, entry });
 	});
 	const count = (n: FigureNode): boolean => {
 		n.children = n.children.filter(count);

@@ -123,6 +123,10 @@ pub struct Propuesta {
     pub raiz: String,
     pub candidatas: Vec<Candidata>,
     pub partes: Vec<String>,
+    /// What the app calls each part (`etiquetas::de_parte`), by its name in `partes`.
+    pub etiquetas: std::collections::BTreeMap<String, String>,
+    /// The part that holds each part that nests (an exercise's guide), by its name in `partes`.
+    pub grupos: std::collections::BTreeMap<String, String>,
     /// Las piezas del documento que un perfil puede sacar (carátula, índice, bibliografía...), en el orden del libro.
     pub piezas: Vec<crate::piezas::PiezaInfo>,
     pub parts_commands: Vec<String>,
@@ -174,7 +178,8 @@ fn listar_archivos(root: &Path) -> Vec<Archivo> {
                 continue;
             }
             let lower = name.to_lowercase();
-            if !(lower.ends_with(".tex") || lower.ends_with(".sty")) || e.metadata().map_or(true, |m| m.len() > MAXIMO_DE_BYTES) {
+            // a project's own class is read like its packages: its macros and packages are the project's
+            if !(lower.ends_with(".tex") || lower.ends_with(".sty") || lower.ends_with(".cls")) || e.metadata().map_or(true, |m| m.len() > MAXIMO_DE_BYTES) {
                 continue;
             }
             let Ok(bytes) = std::fs::read(&path) else { continue };
@@ -596,13 +601,37 @@ fn publicar_de_latexmkrc(root: &Path) -> Option<String> {
     (d.starts_with("../") || d.starts_with("..\\")).then_some(d)
 }
 
-fn motor_de(archivos: &[Archivo], raiz: &str) -> String {
+/// The engine, from what says it most directly: the root's magic comment, then the project's `latexmkrc` (`$pdf_mode`, or the
+/// command it sets), then the packages: Lua code needs lualatex, and `fontspec` or `unicode-math` (in a document, a package or
+/// the project's class) need a Unicode engine.
+fn motor_de(root: &Path, archivos: &[Archivo], raiz: &str) -> String {
     static R: OnceLock<Regex> = OnceLock::new();
+    static MODO: OnceLock<Regex> = OnceLock::new();
+    static PROGRAMA: OnceLock<Regex> = OnceLock::new();
+    static UNICODE: OnceLock<Regex> = OnceLock::new();
+    static LUA: OnceLock<Regex> = OnceLock::new();
     let r = re(&R, r"(?im)^%\s*!te?x\s+(?:ts-)?program\s*=\s*(pdflatex|xelatex|lualatex)");
     if let Some(c) = archivos.iter().find(|a| a.rel == raiz).and_then(|a| r.captures(&a.crudo)) {
         return c[1].to_lowercase();
     }
-    if archivos.iter().any(|a| a.texto.contains("\\usepackage{fontspec}") || a.texto.contains("\\usepackage{unicode-math}")) {
+    let rc = std::fs::read_to_string(root.join("latexmkrc")).or_else(|_| std::fs::read_to_string(root.join(".latexmkrc"))).unwrap_or_default();
+    let rc: String = rc.lines().map(|l| l.split('#').next().unwrap_or("")).collect::<Vec<_>>().join("\n");
+    match re(&MODO, r"\$pdf_mode\s*=\s*(\d)").captures(&rc).map(|c| c[1].to_string()).as_deref() {
+        Some("4") => return "lualatex".into(),
+        Some("5") => return "xelatex".into(),
+        Some("1") if !rc.contains("$pdflatex") => return "pdflatex".into(),
+        _ => {}
+    }
+    if let Some(c) = re(&PROGRAMA, r"\$pdflatex\s*=\s*['\x22]\s*(lualatex|xelatex|pdflatex)").captures(&rc) {
+        return c[1].to_string();
+    }
+    let paquete = |nombres: &str| format!(r"\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{{[^}}]*\b(?:{nombres})\b");
+    let lua = re(&LUA, &format!(r"{}|\\directlua\b|\\begin\{{luacode", paquete("luacode|luatexbase|luaotfload|lua-ul|luamplib|lualatex-math")));
+    if archivos.iter().any(|a| lua.is_match(&a.texto)) {
+        return "lualatex".into();
+    }
+    let unicode = re(&UNICODE, &paquete("fontspec|unicode-math"));
+    if archivos.iter().any(|a| unicode.is_match(&a.texto)) {
         return "xelatex".into();
     }
     "pdflatex".into()
@@ -677,7 +706,7 @@ pub fn detectar(root: &Path, raiz: Option<&str>, actual: Option<&ProjectConfig>,
     };
     let cfg = ProjectConfig {
         root: raiz.clone(),
-        engine: motor_de(&archivos, &raiz),
+        engine: motor_de(root, &archivos, &raiz),
         parts: PartsCfg { commands: parts_commands.clone() },
         flags: flags_cfg,
         figure_cache,
@@ -704,6 +733,8 @@ pub fn detectar(root: &Path, raiz: Option<&str>, actual: Option<&ProjectConfig>,
         texto,
         raiz,
         candidatas: cands,
+        etiquetas: ix.parts.iter().map(|p| (p.name.clone(), p.label.clone())).collect(),
+        grupos: ix.parts.iter().filter_map(|p| Some((p.name.clone(), p.group.clone()?))).collect(),
         partes,
         parts_commands,
         flags,
@@ -869,5 +900,16 @@ mod tests {
         assert_eq!(detectar(d.path(), None, None, &BTreeMap::new()).unwrap().config["engine"], "lualatex");
         let d = proyecto(&[("main.tex", "\\documentclass{article}\n\\usepackage{fontspec}\n\\begin{document}x\\end{document}\n")]);
         assert_eq!(detectar(d.path(), None, None, &BTreeMap::new()).unwrap().config["engine"], "xelatex");
+    }
+
+    #[test]
+    fn the_engine_comes_from_the_latexmkrc_or_from_the_project_class() {
+        let motor = |archivos: &[(&str, &str)]| detectar(proyecto(archivos).path(), None, None, &BTreeMap::new()).unwrap().config["engine"].clone();
+        let doc = "\\documentclass{guide}\n\\begin{document}x\\end{document}\n";
+        assert_eq!(motor(&[("main.tex", doc), ("latexmkrc", "$pdf_mode = 4;   # LuaLaTeX\n")]), "lualatex");
+        assert_eq!(motor(&[("main.tex", doc), ("latexmkrc", "$pdf_mode = 1;\n$pdflatex = 'xelatex %O %S';\n")]), "xelatex");
+        assert_eq!(motor(&[("main.tex", doc), ("style/guide.cls", "\\LoadClass{article}\n\\RequirePackage[no-math]{fontspec}\n")]), "xelatex");
+        assert_eq!(motor(&[("main.tex", doc), ("style/guide.cls", "\\RequirePackage{fontspec}\n\\RequirePackage{luacode}\n")]), "lualatex");
+        assert_eq!(motor(&[("main.tex", doc)]), "pdflatex");
     }
 }

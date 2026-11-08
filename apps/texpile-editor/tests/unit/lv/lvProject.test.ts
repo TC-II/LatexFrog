@@ -48,6 +48,60 @@ describe('figures', () => {
 		expect(tree.nodes[0].children[0].figures.map((f) => f.imagen ?? f.nombre)).toEqual(['first', 'img/photo.png', 'wire']);
 	});
 
+	it('an image in a file a part loads goes under the heading its call line makes, the file Contents opens', () => {
+		// `\exercise{superposition}` titles "Ejercicio 1.1" in the list and opens exercises/superposition.tex, which has no heading
+		const sections: Heading[] = [{ level: 1, title: 'Ejercicio 1.1', file: 'G1/list.tex', line: 4 }];
+		const items = [
+			{ kind: 'part' as const, name: 'G1/main', label: 'Guía 1', file: 'G1/main.tex', line: 7 },
+			{ kind: 'section' as const, index: 0, part: 'G1/exercises/superposition', opens: 'G1/exercises/superposition.tex' }
+		];
+		const images = imageRows([{ imagen: 'superposition.pdf', codigo: 'G1/exercises/superposition.tex', linea: 10, archivo: 'G1/exercises/superposition.tex', dondeLinea: 10, caption: null }]);
+		const tree = figureTree(sections, images, items, { 'G1/exercises/superposition': 'G1/main' });
+		expect(tree.beforeHeadings).toEqual([]);
+		expect(tree.nodes[0].children.map((n) => [n.heading.title, n.figures.map((f) => f.imagen)])).toEqual([['Ejercicio 1.1', ['superposition.pdf']]]);
+	});
+
+	it('groups by guide as Contents does: a guide with only exercises does not fall under the previous guide', () => {
+		// G1 has two `\part`s with exercises; G2 only exercises (level 2), which by levels alone would nest under G1's last part
+		const sections: Heading[] = [
+			{ level: 0, title: 'Modelado', file: 'G1/list.tex', line: 3 },
+			{ level: 2, title: 'topologies', file: 'G1/list.tex', line: 4 },
+			{ level: 0, title: 'Compensación', file: 'G1/list.tex', line: 11 },
+			{ level: 2, title: 'slew-rate', file: 'G1/list.tex', line: 12 },
+			{ level: 2, title: 'zener', file: 'G2/list.tex', line: 3 },
+			{ level: 1, title: 'Bibliography', file: 'main.tex', line: 20 }
+		];
+		const items = [
+			{ kind: 'part' as const, name: 'G1/main', label: 'Análisis', file: 'G1/main.tex', line: 7 },
+			{ kind: 'section' as const, index: 0, part: 'G1/main' },
+			{ kind: 'section' as const, index: 1, part: 'G1/main' },
+			{ kind: 'section' as const, index: 2, part: 'G1/main' },
+			{ kind: 'section' as const, index: 3, part: 'G1/main' },
+			{ kind: 'part' as const, name: 'G2/main', label: 'Reguladores', file: 'G2/main.tex', line: 8 },
+			{ kind: 'section' as const, index: 4, part: 'G2/main' },
+			{ kind: 'section' as const, index: 5, part: null }
+		];
+		const tree = figureTree(
+			sections,
+			[
+				figure('a', 'aldia', { codigo: 'G1/ex/topologies.tex', linea: 2, archivo: 'G1/list.tex', dondeLinea: 4 }),
+				figure('b', 'aldia', { codigo: 'G1/ex/slew.tex', linea: 2, archivo: 'G1/list.tex', dondeLinea: 12 }),
+				figure('c', 'aldia', { codigo: 'G2/ex/zener.tex', linea: 2, archivo: 'G2/list.tex', dondeLinea: 3 }),
+				figure('in-guide-file', 'aldia', { codigo: 'G2/main.tex', linea: 5 }),
+				figure('bib', 'aldia', { codigo: 'main.tex', linea: 21 })
+			],
+			items
+		);
+		expect(tree.nodes.map((n) => [n.heading.title, n.total])).toEqual([
+			['Análisis', 2],
+			['Reguladores', 2],
+			['Bibliography', 1]
+		]);
+		expect(tree.nodes[0].children.map((n) => n.heading.title)).toEqual(['Modelado', 'Compensación']);
+		expect(tree.nodes[1].figures.map((f) => f.nombre)).toEqual(['in-guide-file']);
+		expect(tree.nodes[1].children.map((n) => [n.heading.title, n.figures.map((f) => f.nombre)])).toEqual([['zener', ['c']]]);
+	});
+
 	it('only a complete list of today and of this root allows cleaning', () => {
 		const list = { fechaMs: 0, total: 1, completa: true, delSelloDeHoy: true, vale: true };
 		expect(cleanBlock(list)).toBeNull();

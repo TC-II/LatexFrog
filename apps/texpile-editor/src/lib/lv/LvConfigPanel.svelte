@@ -19,7 +19,7 @@
 		setFigures,
 		setFlag,
 		setPartCommands,
-		shortName,
+		partLabel,
 		useDetected,
 		type ConfigJson,
 		type ConfigSection,
@@ -36,6 +36,8 @@
 		texto: string;
 		piezas: Piece[];
 		partes: string[];
+		etiquetas?: Record<string, string>;
+		grupos?: Record<string, string>;
 		partsCommands: string[];
 		flags: DetectedFlag[];
 		figuras: { motivo: string; avisos: string[] };
@@ -70,6 +72,9 @@
 	const config = $derived(parseConfig(text));
 	const pieces = $derived(proposal?.piezas ?? lvProject.view?.piezas ?? []);
 	const parts = $derived(proposal?.partes ?? lvProject.view?.parts.map((p) => p.name) ?? []);
+	/** what each part is called: the same names Contents shows */
+	const labels = $derived(proposal?.etiquetas ?? lvProject.partLabels);
+	const groups = $derived(proposal?.grupos ?? lvProject.partGroups);
 	const change = (next: ConfigJson) => edit(configText(next));
 	const list = (value: string) => value.split(',').map((x) => x.trim()).filter(Boolean);
 	const detected = $derived(proposal ? parseConfig(proposal.texto) : null);
@@ -226,7 +231,7 @@
 			</div>
 		</div>
 		{#if config}
-			<LvProfileEditor {config} {pieces} {parts} bind:selected={editing} root={lvProject.view?.root ?? lvProject.folderRoot ?? ''} onChange={change} />
+			<LvProfileEditor {config} {pieces} {parts} {labels} {groups} also={lvProject.partAlso} bind:selected={editing} root={lvProject.view?.root ?? lvProject.folderRoot ?? ''} onChange={change} />
 		{/if}
 		{#snippet section(title: string, help: string, key: ConfigSection | null, body: Snippet)}
 			<section class="flex flex-col gap-1 rounded border border-surface-300-700 p-2" data-testid="lv-config-section">
@@ -266,7 +271,7 @@
 						{@render section(m.lv_config_root(), m.lv_config_root_help(), 'root', rootBody)}
 
 						{#snippet partsBody()}
-							<p>{proposal?.partes.length ? m.lv_config_parts_found({ count: proposal.partes.length, names: proposal.partes.slice(0, 6).map(shortName).join(', ') }) : m.lv_config_parts_none()}</p>
+							<p>{proposal?.partes.length ? m.lv_config_parts_found({ count: proposal.partes.length, names: proposal.partes.slice(0, 6).map((p) => partLabel(p, labels)).join(', ') }) : m.lv_config_parts_none()}</p>
 							<label class="flex items-center gap-2"><span class={LABEL}>{m.lv_config_parts_commands()}</span><input class={INPUT} value={config ? partCommands(config).join(', ') : ''} onchange={(e) => update((c) => setPartCommands(c, list(e.currentTarget.value)))} /></label>
 							{#if (proposal?.partsCommands.length ?? 0) > 1}<p class="text-xs opacity-70">{m.lv_config_parts_wrapper({ commands: proposal?.partsCommands.slice(1).map((c) => '\\' + c).join(', ') ?? '' })}</p>{/if}
 						{/snippet}

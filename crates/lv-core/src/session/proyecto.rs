@@ -164,11 +164,12 @@ impl Session {
             fragmento: false,
             omitir: vec![],
             sustituciones: vec![],
+            copias_en_partes: vec![],
         })?;
         crate::build::write_if_changed(&self.root.join(cocinero::driver_cocina_rel()), &driver)?;
         aux::ensure_include_dirs(&self.root, PERFIL_COCINA, &ix.include_dirs(&cfg.parts.commands))?;
         aux::ensure_cache_dirs(&self.root, PERFIL_COCINA, &f.dir)?;
-        let opciones = Opciones { root: self.root.clone(), engine: cfg.engine.clone(), dir: f.dir.clone(), jobs: f.jobs };
+        let opciones = Opciones { root: self.root.clone(), engine: cfg.engine.clone(), dir: f.dir.clone(), jobs: f.jobs, entorno: crate::build::entorno_del_latexmkrc(&self.root) };
         let job = Arc::new(JobSistema::new().ok_or_else(|| otro("could not create the listing's Job Object"))?);
         let t0 = std::time::Instant::now();
         let nombres = self.cocinero.listar(&opciones, &job, &AtomicBool::new(false))?;

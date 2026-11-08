@@ -484,7 +484,8 @@ fn ordenar_secciones(ix: &ProjectIndex, todas: Vec<Section>) -> Vec<Section> {
             .collect();
         let (mut i, mut j) = (0, 0);
         while i < propias.len() || j < hijos.len() {
-            if j < hijos.len() && (i >= propias.len() || hijos[j].0 <= propias[i].line) {
+            // a heading and a file on the same line: the heading first (`\exercise{slug}` heads the file it loads)
+            if j < hijos.len() && (i >= propias.len() || hijos[j].0 < propias[i].line) {
                 expandir(ix, &hijos[j].1, por_archivo, vistos, out);
                 j += 1;
             } else {
@@ -574,13 +575,18 @@ impl Symbols {
 
         // Macros that typeset a heading by hand (`\metaEjercicio{Title}{...}`) or wrap a sectioning command: their calls go
         // to the outline too, so a document without `\section` still has one.
+        // The project's own classes and packages first: the document's definitions override theirs, as in TeX.
         let mut macros = Macros::default();
-        for rel in &orden {
+        for rel in ix.packages.iter().chain(&orden) {
             if let Some(t) = leer(root, rel) {
                 macros.read(&t);
             }
         }
         let headings = macros.headings();
+        // Macros that set a label from an argument (`\exercise{slug}` → `ex:slug`): each call defines that label.
+        let etiquetadores = macros.label_makers();
+        // the numbers the last build gave each label, read only when a heading needs one
+        let mut numeros: Option<HashMap<String, String>> = None;
         // the sections that come from a hand-drawn title, by index in `s.sections`
         let mut dibujados: Vec<usize> = Vec::new();
 
@@ -692,10 +698,32 @@ impl Symbols {
                     _ => {}
                 }
             }
+            if !etiquetadores.is_empty() {
+                for (name, args, line) in llamadas(&texto, &|n| etiquetadores.get(n).map(|e| e.0 + 1)) {
+                    let (arg, plantilla) = &etiquetadores[&name];
+                    let valor = args[*arg].trim();
+                    if valor.is_empty() || valor.contains('#') || valor.contains('\\') {
+                        continue;
+                    }
+                    let contexto = recortar(&titulo_legible(sin_comentario(lineas.get(line as usize - 1).copied().unwrap_or(""))), 110);
+                    s.labels.push(Label { name: plantilla.replace("{}", valor), file: rel.clone(), line, context: contexto });
+                }
+            }
             if !headings.is_empty() {
                 for (name, args, line) in llamadas(&texto, &|n| headings.get(n).map(|h| h.arg + 1)) {
                     let h = headings[&name];
-                    let title = recortar(&titulo_legible(&args[h.arg]), 120);
+                    let mut title = recortar(&titulo_legible(&args[h.arg]), 120);
+                    // A macro that loads a file by its name and sets a label from it (`\exercise{slug}`: `\section{}`, `ex:slug`)
+                    // prints a number, not the name: "Ejercicio 1.1", read from the last build (`\exercisename`, `\newlabel`).
+                    if let Some((arg, plantilla)) = etiquetadores.get(&name).filter(|(a, _)| *a == h.arg) {
+                        let numeros = numeros.get_or_insert_with(|| numeros_compilados(root));
+                        if let Some(n) = numeros.get(&plantilla.replace("{}", args[*arg].trim())) {
+                            title = match macros.plain_text(&format!("{name}name")) {
+                                Some(palabra) => format!("{palabra} {n}"),
+                                None => format!("{n} {title}"),
+                            };
+                        }
+                    }
                     if !title.is_empty() && !args[h.arg].contains('#') {
                         if h.drawn {
                             dibujados.push(s.sections.len());
@@ -777,6 +805,47 @@ impl Symbols {
         }
         self.lint.extend(nuevos);
     }
+}
+
+/// The number each label got in the builds of every profile (`\newlabel{ex:slug}{{1.1}...}` in their `.aux`), the newest build
+/// last so its numbers win. A build of one exercise numbers it as the whole document does (the driver keeps the counters), and
+/// it only knows its own labels: the others come from older builds.
+pub fn numeros_compilados(root: &Path) -> HashMap<String, String> {
+    let mut auxes: Vec<(std::time::SystemTime, std::path::PathBuf)> = Vec::new();
+    let mut pendientes = vec![root.join(".latexfrog").join("build")];
+    while let Some(dir) = pendientes.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for e in rd.flatten() {
+            let p = e.path();
+            let Ok(md) = e.metadata() else { continue };
+            if md.is_dir() {
+                pendientes.push(p);
+            } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("aux")) {
+                auxes.push((md.modified().unwrap_or(std::time::UNIX_EPOCH), p));
+            }
+        }
+    }
+    auxes.sort();
+    let mut out = HashMap::new();
+    for (_, p) in auxes {
+        let Ok(b) = std::fs::read(&p) else { continue };
+        out.extend(numeros_del_aux(&String::from_utf8_lossy(&b)));
+    }
+    out
+}
+
+/// `\newlabel{name}{{number}...}` lines, by name. A number that is not plain text (`\relax`, a command) is left out.
+fn numeros_del_aux(texto: &str) -> Vec<(String, String)> {
+    texto
+        .lines()
+        .filter_map(|l| {
+            let r = l.strip_prefix("\\newlabel{")?;
+            let (nombre, r) = r.split_once('}')?;
+            let r = r.strip_prefix("{{")?;
+            let (n, _) = r.split_once('}')?;
+            (!n.is_empty() && !n.contains(['\\', '{']) && !nombre.contains('{')).then(|| (nombre.to_string(), n.to_string()))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -962,5 +1031,46 @@ mod tests {
         let s = simbolos(&d, "main.tex");
         assert_eq!(s.labels[0].line, 5);
         assert_eq!(s.sections[0].line, 8);
+    }
+
+    /// One course of two guides, each a `\subfile` whose exercises come in through a macro of the project's class.
+    fn curso() -> tempfile::TempDir {
+        proyecto(&[
+            ("main.tex", "\\documentclass{guide}\n\\begin{document}\n\\subfile{G1/main}\n\\subfile{G2/main}\n\\end{document}\n"),
+            ("style/guide.cls", "\\NewDocumentCommand\\exercise{m}{\\clearpage\\section{}\\label{ex:#1}\\input{exercises/#1}}\n"),
+            ("G1/main.tex", "\\documentclass[../main.tex]{subfiles}\n\\begin{document}\n\\exercise{one}\n\\exercise{two}\n\\end{document}\n"),
+            ("G1/exercises/one.tex", "See Exercise~\\ref{ex:three}.\n"),
+            ("G1/exercises/two.tex", "\\subsection*{Hint}\n"),
+            ("G2/main.tex", "\\documentclass[../main.tex]{subfiles}\n\\begin{document}\n\\exercise{three}\n\\end{document}\n"),
+            ("G2/exercises/three.tex", "x\n"),
+        ])
+    }
+
+    #[test]
+    fn a_loader_that_opens_an_untitled_section_heads_its_file_and_sets_its_label() {
+        let d = curso();
+        let s = simbolos(&d, "main.tex");
+        let t: Vec<(&str, u8)> = s.sections.iter().map(|x| (x.title.as_str(), x.level)).collect();
+        assert_eq!(t, [("one", 2), ("two", 2), ("Hint", 3), ("three", 2)]);
+        let labels: Vec<&str> = s.labels.iter().map(|l| l.name.as_str()).collect();
+        assert_eq!(labels, ["ex:one", "ex:two", "ex:three"]);
+        assert!(!s.lint.iter().any(|p| p.message.contains("ex:three")), "the label a macro sets is not missing: {:?}", s.lint);
+    }
+
+    #[test]
+    fn parts_whose_headings_are_all_alike_keep_an_entry_of_their_own() {
+        use crate::composicion::{build, Item};
+        let d = curso();
+        let ix = ProjectIndex::build(d.path(), "main.tex", &["include".to_string()]);
+        let s = Symbols::build(d.path(), &ix);
+        let items: Vec<String> = build(&ix, &s.sections, &[])
+            .into_iter()
+            .map(|i| match i {
+                Item::Part { name, .. } => format!("part {name}"),
+                Item::Section { index, .. } => s.sections[index].title.clone(),
+                Item::Piece { key, .. } => key,
+            })
+            .collect();
+        assert_eq!(items, ["part G1/main", "one", "two", "Hint", "part G2/main", "three"]);
     }
 }

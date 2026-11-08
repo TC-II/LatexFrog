@@ -51,6 +51,28 @@ pub struct StartSpec<'a> {
     pub stdin: bool,
 }
 
+/// The variables a live run gets: the request's, and the search paths the project's `latexmkrc` sets, as a build gets them through
+/// latexmk (a class found through `ensure_path('TEXINPUTS', 'style//')`). The project is the nearest folder up from `cwd` with a
+/// `.latexfrog`: Live runs in the root, bibtex in the output folder. Where both set a path, the request's comes first.
+fn entorno(cwd: &Path, pedido: &[(String, String)]) -> Vec<(String, String)> {
+    let raiz = cwd.ancestors().find(|d| d.join(".latexfrog").is_dir());
+    let proyecto = raiz.map(crate::build::entorno_del_latexmkrc).unwrap_or_default();
+    juntar(pedido, &proyecto)
+}
+
+fn juntar(pedido: &[(String, String)], proyecto: &[(String, String)]) -> Vec<(String, String)> {
+    let sep = if cfg!(windows) { ';' } else { ':' };
+    let mut out: Vec<(String, String)> = pedido.to_vec();
+    for (k, v) in proyecto.iter().filter(|(_, v)| !v.is_empty()) {
+        match out.iter_mut().find(|(o, _)| o == k) {
+            Some((_, actual)) if actual.is_empty() => *actual = v.clone(),
+            Some((_, actual)) => *actual = format!("{}{sep}{v}", actual.trim_end_matches(sep)),
+            None => out.push((k.clone(), v.clone())),
+        }
+    }
+    out
+}
+
 impl Live {
     pub fn new(sink: LiveSink) -> Arc<Live> {
         Arc::new(Live { sink, procs: Mutex::new(HashMap::new()), next: Mutex::new(1) })
@@ -69,10 +91,12 @@ impl Live {
             .stdin(if spec.stdin { Stdio::piped() } else { Stdio::null() })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        for (k, v) in &spec.env {
+        for (k, _) in &spec.env {
             if !ENV.contains(&k.as_str()) {
                 return Err(format!("not a live variable: {k}"));
             }
+        }
+        for (k, v) in entorno(spec.cwd, &spec.env) {
             cmd.env(k, v);
         }
         #[cfg(windows)]
@@ -211,5 +235,20 @@ mod tests {
         let live = Live::new(Arc::new(|_| {}));
         let spec = StartSpec { tool: "sh", args: vec![], cwd: Path::new("."), env: vec![], stdin: false };
         assert!(live.start(spec).is_err());
+    }
+
+    #[test]
+    fn a_live_run_gets_the_search_paths_the_projects_latexmkrc_sets() {
+        let s = if cfg!(windows) { ";" } else { ":" };
+        let kv = |v: &[(&str, &str)]| v.iter().map(|(k, x)| (k.to_string(), x.to_string())).collect::<Vec<_>>();
+        let pedido = kv(&[("PATH", "bin"), ("TEXINPUTS", &format!("live{s}"))]);
+        let proyecto = kv(&[("TEXINPUTS", &format!("C:/p/style//{s}")), ("TTFONTS", "C:/p/style/fonts//"), ("BIBINPUTS", "")]);
+        // the class's folder after the request's own, and the fonts' folder the request does not name
+        assert_eq!(
+            juntar(&pedido, &proyecto),
+            kv(&[("PATH", "bin"), ("TEXINPUTS", &format!("live{s}C:/p/style//{s}")), ("TTFONTS", "C:/p/style/fonts//")])
+        );
+        // no project, nothing added
+        assert_eq!(juntar(&pedido, &[]), pedido);
     }
 }

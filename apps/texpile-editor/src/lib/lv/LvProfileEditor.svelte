@@ -6,6 +6,7 @@
 	import { pickFolder } from '$lib/workspace/fileSystem';
 	import { m } from '$lib/paraglide/messages';
 	import LvFrog from './LvFrog.svelte';
+	import { allState, partState, pieceIn, toggleAll, togglePart, togglePiece, type Choice, type Tree } from './lvSelectionTree';
 	import LvWatermark from './LvWatermark.svelte';
 	import {
 		DEFAULT_OUTPUT,
@@ -19,6 +20,7 @@
 		rows,
 		selectionOf,
 		setProfile,
+		partLabel,
 		shortName,
 		toParts,
 		type ConfigJson,
@@ -31,10 +33,13 @@
 		config,
 		pieces,
 		parts,
+		labels = {},
+		groups = {},
+		also = {},
 		root,
 		onChange,
 		selected = $bindable('')
-	}: { config: ConfigJson; pieces: Piece[]; parts: string[]; root: string; onChange: (next: ConfigJson) => void; selected?: string } = $props();
+	}: { config: ConfigJson; pieces: Piece[]; parts: string[]; labels?: Record<string, string>; groups?: Record<string, string>; also?: Record<string, string[]>; root: string; onChange: (next: ConfigJson) => void; selected?: string } = $props();
 
 	const ids = $derived(Object.keys(config.profiles ?? {}));
 	let chosen = $state('');
@@ -49,6 +54,13 @@
 	const profile = $derived<ProfileJson>(config.profiles?.[id] ?? {});
 	const selection = $derived(selectionOf(profile));
 	const omit = $derived(profile.omit ?? []);
+	const tree = $derived<Tree>({ parts, groups, also, pieces });
+	const choice = $derived<Choice>({ ...selection, omit });
+	const apply = (next: Choice) => change({ ...toParts(next), omit: next.omit });
+	/** a half-ticked box: some of what it stands for is compiled */
+	const half = (on: boolean) => (el: HTMLInputElement) => {
+		el.indeterminate = on;
+	};
 	const output = $derived(profile.output ?? outputs[id] ?? DEFAULT_OUTPUT);
 	const INPUT = 'rounded border border-surface-300-700 bg-transparent px-1 py-0.5';
 	const CARD = 'flex flex-col gap-1 rounded border border-surface-300-700 p-2';
@@ -133,25 +145,34 @@
 				<!-- fills the card as tall as the settings beside it (basis 0: the list itself never makes the row taller) -->
 				<div class="min-h-72 flex-1 basis-0 overflow-y-auto pb-1">
 
-					{#each rows(pieces, parts) as row (row.kind === 'piece' ? row.key : row.kind === 'chapter' ? row.part : row.kind)}
-						<label class="flex items-center gap-2 py-0.5 {row.kind === 'chapter' ? 'pl-4' : ''} {row.kind === 'chapter' && selection.all ? 'opacity-50' : ''}">
+					{#each rows(pieces, parts, groups) as row (row.kind === 'piece' ? row.key : row.kind === 'chapter' ? row.part : row.kind)}
+						<!-- one tree: a box is ticked when what it stands for is compiled, half ticked when only some of it is -->
+						{@const inner = row.kind === 'piece' && row.part !== undefined}
+						{@const nested = (row.kind === 'chapter' && !!row.group) || (row.kind === 'piece' && !!row.nested)}
+						{@const state = row.kind === 'chapter' ? partState(choice, tree, row.part) : row.kind === 'all' ? allState(choice, tree) : null}
+						<label
+							class="flex items-center gap-2 py-0.5 {row.kind === 'chapter' ? (nested ? 'pl-9 text-xs' : 'pl-4') : ''} {inner ? (nested ? 'pl-14 text-xs' : 'pl-9 text-xs') : ''}"
+							title={row.kind === 'chapter' ? row.part : undefined}
+						>
 							{#if row.kind === 'piece'}
-								<input type="checkbox" checked={!omit.includes(row.key)} onchange={(e) => change({ omit: e.currentTarget.checked ? omit.filter((x) => x !== row.key) : [...omit, row.key] })} />
-								{row.name}
+								{@const piece = pieces.find((p) => p.clave === row.key)}
+								{#if piece && row.fixed}
+									<!-- it goes in and out with its chapter: the driver cannot leave it out (an environment, or an `include`d chapter) -->
+									<input type="checkbox" checked={pieceIn(choice, tree, piece)} disabled title={m.lv_profiles_with_chapter()} />
+									<span class="opacity-60" title={m.lv_profiles_with_chapter()}>{row.name}</span>
+								{:else if piece}
+									<input type="checkbox" checked={pieceIn(choice, tree, piece)} onchange={() => apply(togglePiece(choice, tree, piece))} />
+									{row.name}
+								{/if}
 							{:else if row.kind === 'current'}
 								<input type="checkbox" checked={selection.current && !selection.all} disabled={selection.all} onchange={(e) => change(toParts({ ...selection, current: e.currentTarget.checked }))} />
 								<strong>{m.lv_profiles_current()}</strong>
 							{:else if row.kind === 'all'}
-								<input type="checkbox" data-testid="lv-profile-all" checked={selection.all} onchange={(e) => change(toParts({ ...selection, all: e.currentTarget.checked }))} />
+								<input type="checkbox" data-testid="lv-profile-all" checked={state === 'on'} {@attach half(state === 'mixed')} onchange={() => apply(toggleAll(choice, tree))} />
 								<strong>{m.lv_profiles_all()}</strong>
 							{:else}
-								<input
-									type="checkbox"
-									checked={selection.all || selection.list.includes(row.part)}
-									disabled={selection.all}
-									onchange={(e) => change(toParts({ ...selection, list: e.currentTarget.checked ? [...selection.list, row.part] : selection.list.filter((x) => x !== row.part) }))}
-								/>
-								{shortName(row.part)}
+								<input type="checkbox" checked={state === 'on'} {@attach half(state === 'mixed')} onchange={() => apply(togglePart(choice, tree, row.part))} />
+								<span class="min-w-0 truncate">{partLabel(row.part, labels)}</span>
 							{/if}
 						</label>
 					{/each}

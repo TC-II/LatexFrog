@@ -21,6 +21,8 @@ pub enum Pieza {
     /// command or environment name, with `#2`, `#3`... for later ones of the same name. It is left out by commenting its lines in
     /// a copy of the file (`copias`).
     Bloque(String),
+    /// A part inside a chosen group left out (an exercise of a chosen guide): it leaves the profile's parts, not the driver.
+    Parte(String),
 }
 
 impl Pieza {
@@ -31,6 +33,7 @@ impl Pieza {
             Pieza::Index => "index".into(),
             Pieza::Pdf(a) => format!("pdf:{a}"),
             Pieza::Bloque(n) => format!("block:{n}"),
+            Pieza::Parte(n) => format!("part:{n}"),
         }
     }
 
@@ -41,8 +44,9 @@ impl Pieza {
             "index" => Some(Pieza::Index),
             _ if c.starts_with("block:") => c
                 .strip_prefix("block:")
-                .filter(|n| !n.is_empty() && n.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '#' | '*' | '@')))
+                .filter(|n| !n.is_empty() && n.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '#' | '*' | '@' | '/' | '-' | '_' | '.')))
                 .map(|n| Pieza::Bloque(n.into())),
+            _ if c.starts_with("part:") => c.strip_prefix("part:").filter(|n| !n.is_empty() && !n.contains(['{', '}', '\\', '%', ','])).map(|n| Pieza::Parte(n.into())),
             _ => c.strip_prefix("pdf:").filter(|a| !a.is_empty() && !a.contains(['{', '}', '\\', '%'])).map(|a| Pieza::Pdf(a.into())),
         }
     }
@@ -59,8 +63,132 @@ pub struct PiezaInfo {
     /// su `\cleardoublepage` y sus secciones, no sólo el `\printbibliography`.
     pub desde: u32,
     pub hasta: u32,
-    /// Dónde está respecto de las partes: antes de la primera (`antes`), después de la última (`despues`) o entre ellas.
+    /// Dónde está respecto de las partes: antes de la primera (`antes`), después de la última (`despues`), entre ellas, o
+    /// adentro de una (`dentro`, y `parte` dice cuál).
     pub lugar: String,
+    /// The part whose file prints it (a guide's cover), by its `\includeonly` name; `None` in the frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parte: Option<String>,
+    /// For a piece inside a part, set (empty) when the driver can leave it out: its part is read through a macro the driver wraps,
+    /// so a copy of its file is read in its place while that part is read (`copias_en_partes`). `None` when it cannot: a part an
+    /// `\include` brings. (The name is the app's.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub firma: Option<String>,
+}
+
+/// The text with the given lines (from 1) commented out (`% lv: `), keeping its line ends; a line that opens or closes a
+/// conditional or the document stays as it is.
+fn comentar(texto: &str, lineas: &std::collections::BTreeSet<u32>) -> String {
+    let eol = if texto.contains("\r\n") { "\r\n" } else { "\n" };
+    texto
+        .split(eol)
+        .enumerate()
+        .map(|(n, l)| if lineas.contains(&(n as u32 + 1)) && !es_borde(l) { format!("% lv: {l}") } else { l.to_string() })
+        .collect::<Vec<_>>()
+        .join(eol)
+}
+
+/// The sectioning commands, from the outermost: a heading's level is its place here.
+const SECCIONES: &[&str] = &["part", "chapter", "section", "subsection", "subsubsection", "paragraph"];
+
+/// The level of the heading a whole line is (`\part*{Ejercicios}`), if it is one.
+fn nivel_de_titulo(l: &str) -> Option<usize> {
+    let l = sin_comentario(l).trim();
+    let r = l.strip_prefix('\\')?;
+    let (i, c) = SECCIONES.iter().enumerate().find(|(_, c)| r.starts_with(**c))?;
+    let resto = &r[c.len()..];
+    resto.starts_with(['*', '{', '[']).then_some(i)
+}
+
+/// The guides in the build only because a part inside them was chosen (the chapter I am in is an exercise): they come for their
+/// setup, and none of their own pieces print. A guide chosen itself, or whole, keeps them as the profile says.
+pub fn solo_marco(ix: &ProjectIndex, elegidas: &[String], compiladas: &[String]) -> Vec<String> {
+    ix.parts
+        .iter()
+        .filter(|g| compiladas.contains(&g.name) && !elegidas.contains(&g.name))
+        .filter(|g| ix.parts.iter().any(|q| elegidas.contains(&q.name) && (q.group.as_deref() == Some(g.name.as_str()) || q.also.contains(&g.name))))
+        .map(|g| g.name.clone())
+        .collect()
+}
+
+/// Whether a profile leaves out the piece `clave`. A guide's pieces are named after their guide (`block:makecover@g1/main`);
+/// a key without a guide (`block:makecover`, or `block:makecover#2` from before guides had their own) leaves that piece out of
+/// every guide, which is what a profile of the chapter I am in needs.
+pub fn omitida(clave: &str, omitir: &[String]) -> bool {
+    let base = |k: &str| k.split(['#', '@']).next().unwrap_or(k).to_string();
+    omitir.iter().any(|o| o == clave || (o.starts_with("block:") && !o.contains('@') && clave.contains('@') && base(o) == base(clave)))
+}
+
+/// The copies of the files of each part the profile changes, as `(part, file, text)`. In each, the lines of the pieces inside that
+/// part it leaves out (a guide's cover, its credits) are commented, and so is a heading left with nothing compiled under it
+/// (`\part*{Ejercicios}` once every exercise below it is out). `compiladas` is the parts the profile compiles (`None`: all).
+///
+/// The driver reads a copy in place of its file only while its part is read (`build`, `\lvEntra`): the kernel's file substitution
+/// knows a file by its name without its folder, and the root and every guide are `main.tex`. Read under the original's name, a
+/// subfile still finds its own files (`\input{exercise-list}`, its figures) in its own folder. Lines are commented, never taken
+/// out, so each line keeps its number.
+pub fn copias_en_partes(root: &Path, ix: &ProjectIndex, piezas: &[PiezaInfo], omitir: &[String], compiladas: Option<&[String]>, solo_marco: &[String]) -> Vec<(String, String, String)> {
+    use std::collections::BTreeSet;
+    let de_otras: BTreeSet<&str> = ix.parts.iter().filter_map(|p| p.file.as_deref()).collect();
+    let mut out = Vec::new();
+    for (i, p) in ix.parts.iter().enumerate().filter(|(_, p)| p.gate.is_some()) {
+        let Some(propio) = p.file.as_deref() else { continue };
+        // a part the profile does not compile is never read
+        if compiladas.is_some_and(|c| !c.contains(&p.name)) {
+            continue;
+        }
+        // its own file and the files it inputs that are not parts of their own (a guide's exercise list)
+        let mut archivos: Vec<&str> = vec![propio];
+        archivos.extend(ix.files.keys().map(String::as_str).filter(|f| *f != propio && !de_otras.contains(f) && ix.part_of(f) == Some(i)));
+        for rel in archivos {
+            let mut sale: BTreeSet<u32> = piezas
+                .iter()
+                .filter(|x| x.parte.as_deref() == Some(p.name.as_str()) && x.archivo == rel && x.firma.is_some() && omitida(&x.clave, omitir))
+                .flat_map(|x| x.desde..=x.hasta)
+                .collect();
+            let Ok(texto) = std::fs::read_to_string(root.join(rel)) else { continue };
+            if solo_marco.contains(&p.name) {
+                // a guide that is here only for an exercise chosen in it: its headings ("Ejercicios") are not what was chosen
+                sale.extend(texto.lines().enumerate().filter(|(_, l)| nivel_de_titulo(l).is_some()).map(|(n, _)| n as u32 + 1));
+            }
+            if let Some(dentro) = compiladas {
+                // the lines that load a part the profile leaves out
+                let fuera: BTreeSet<u32> = ix.parts.iter().filter(|q| q.source == rel && !dentro.contains(&q.name)).map(|q| q.line).collect();
+                if !fuera.is_empty() {
+                    sale.extend(titulos_vacios(&texto.lines().collect::<Vec<_>>(), &fuera, &sale));
+                }
+            }
+            if !sale.is_empty() {
+                out.push((p.name.clone(), rel.to_string(), comentar(&texto, &sale)));
+            }
+        }
+    }
+    out
+}
+
+/// The headings (lines from 1) with nothing left under them: everything down to the next heading of the same level or above is
+/// blank, a comment, a commented line (`sale`), the load of a part left out (`fuera`) or a heading itself empty, and at least one
+/// part left out is there. A heading that is empty in the source too is not touched.
+fn titulos_vacios(lineas: &[&str], fuera: &std::collections::BTreeSet<u32>, sale: &std::collections::BTreeSet<u32>) -> Vec<u32> {
+    let titulos: Vec<(usize, usize)> = lineas.iter().enumerate().filter_map(|(n, l)| Some((n, nivel_de_titulo(l)?))).collect();
+    let fin = lineas.iter().position(|l| sin_comentario(l).contains("\\end{document}")).unwrap_or(lineas.len());
+    let mut vacios: Vec<usize> = Vec::new();
+    for (k, &(n, nivel)) in titulos.iter().enumerate().rev() {
+        let hasta = titulos[k + 1..].iter().find(|(_, v)| *v <= nivel).map_or(fin, |(m, _)| *m);
+        let mut alguna = false;
+        let vacio = (n + 1..hasta).all(|j| {
+            let num = j as u32 + 1;
+            if fuera.contains(&num) || vacios.contains(&j) {
+                alguna = true;
+                return true;
+            }
+            sale.contains(&num) || sin_comentario(lineas[j]).trim().is_empty()
+        });
+        if vacio && alguna {
+            vacios.push(n);
+        }
+    }
+    vacios.into_iter().map(|n| n as u32 + 1).collect()
 }
 
 /// Una línea que no se puede comentar sin romper el documento: abre, cambia o cierra un condicional, o es el fin del documento.
@@ -107,24 +235,15 @@ fn bloque(lineas: &[&str], i: usize, prohibidas: &[usize]) -> (usize, usize) {
 /// `(archivo, contenido)`.
 pub fn copias(root: &Path, piezas: &[PiezaInfo], omitir: &[String]) -> Vec<(String, String)> {
     let mut por_archivo: std::collections::BTreeMap<&str, Vec<&PiezaInfo>> = std::collections::BTreeMap::new();
-    for p in piezas.iter().filter(|p| omitir.contains(&p.clave)) {
+    // A piece inside a part is left out by its part's copy (`copias_en_partes`), read only while that part is read.
+    for p in piezas.iter().filter(|p| omitir.contains(&p.clave) && p.parte.is_none()) {
         por_archivo.entry(p.archivo.as_str()).or_default().push(p);
     }
     let mut out = Vec::new();
     for (rel, ps) in por_archivo {
         let Ok(texto) = std::fs::read_to_string(root.join(rel)) else { continue };
-        let eol = if texto.contains("\r\n") { "\r\n" } else { "\n" };
-        let lineas: Vec<&str> = texto.split(eol).collect();
-        let sale: Vec<String> = lineas
-            .iter()
-            .enumerate()
-            .map(|(n, l)| {
-                let num = n as u32 + 1;
-                let dentro = ps.iter().any(|p| num >= p.desde && num <= p.hasta);
-                if dentro && !es_borde(l) { format!("% lv: {l}") } else { (*l).to_string() }
-            })
-            .collect();
-        out.push((rel.to_string(), sale.join(eol)));
+        let lineas = ps.iter().flat_map(|p| p.desde..=p.hasta).collect();
+        out.push((rel.to_string(), comentar(&texto, &lineas)));
     }
     out
 }
@@ -180,7 +299,7 @@ pub fn detectar(root: &Path, ix: &ProjectIndex) -> Vec<PiezaInfo> {
             let mut push = |p: Pieza, nombre: String| {
                 let (desde, hasta) = if matches!(p, Pieza::Bibliography | Pieza::Index) { (b_desde, b_hasta) } else { (linea, linea) };
                 if !out.iter().any(|x| x.clave == p.clave()) {
-                    out.push(PiezaInfo { clave: p.clave(), nombre, archivo: rel.clone(), linea, desde, hasta, lugar: lugar.into() });
+                    out.push(PiezaInfo { clave: p.clave(), nombre, archivo: rel.clone(), linea, desde, hasta, lugar: lugar.into(), parte: None, firma: None });
                 }
             };
             if l.contains("\\tableofcontents") {
@@ -238,41 +357,62 @@ const SOLO_AJUSTAN: &[&str] = &[
 /// The blocks the document body prints outside the parts, one piece each: a top-level call such as
 /// `\soloEnPDFCompleto{\caratulaTributo{...}}` (named after the innermost command of the leading chain, `caratulaTributo`), or an
 /// environment such as `titlepage`. Only whole lines: a block that shares a line with something else is not offered.
+///
+/// Inside a part's own file, around what it loads, a block is a call to a project macro that prints something of its own
+/// (`\makecover`, `\makesolutions`; `Macros::prints`) or an environment (a guide's `credits`); loose commands are not pieces.
 fn bloques(root: &Path, ix: &ProjectIndex, out: &mut Vec<PiezaInfo>) {
     let mut m = crate::macros::Macros::default();
-    for rel in ix.files.keys() {
+    // the project's classes first, as TeX reads them: `\makecover` is defined in the guide's class
+    for rel in ix.packages.iter().chain(ix.files.keys()) {
         if let Ok(t) = std::fs::read_to_string(root.join(rel)) {
             m.read(&t);
         }
     }
     let cargadores = m.loaders();
+    // a macro that sets a title heads what follows: it is a heading of the outline, not a piece
+    let titulos = m.headings();
     let preambulo = crate::formato::archivos_del_preambulo(ix);
     let de_partes: std::collections::BTreeSet<&str> =
         ix.parts.iter().flat_map(|p| p.file.iter().chain(p.others.iter())).map(String::as_str).collect();
     // the frame: the root and the files that call the parts (`libro_cuerpo.tex`); a content file outside any part is not one
     let marco: std::collections::BTreeSet<&str> = ix.parts.iter().map(|p| p.source.as_str()).collect();
-    let mut archivos: Vec<&String> = ix
+    let mut archivos: Vec<(&String, Option<&str>)> = ix
         .files
         .keys()
-        .filter(|f| *f == &ix.root_file || (marco.contains(f.as_str()) && !preambulo.contains(f.as_str()) && !de_partes.contains(f.as_str())))
+        // a guide's exercise list calls parts (its exercises) but is inside a part itself: content, not frame
+        .filter(|f| *f == &ix.root_file || (marco.contains(f.as_str()) && !preambulo.contains(f.as_str()) && !de_partes.contains(f.as_str()) && ix.part_of(f).is_none()))
+        .map(|f| (f, None))
         .collect();
-    archivos.sort_by_key(|f| (*f != &ix.root_file, (*f).clone()));
+    archivos.sort_by_key(|(f, _)| (*f != &ix.root_file, (*f).clone()));
+    // then each part's own file, in the parts' order
+    for p in &ix.parts {
+        if let Some(f) = p.file.as_ref().filter(|f| ix.files.contains_key(*f) && !archivos.iter().any(|(a, _)| a == f)) {
+            archivos.push((f, Some(p.name.as_str())));
+        }
+    }
     let mut vistos: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for rel in archivos {
+    for (rel, parte) in archivos {
         let Ok(texto) = std::fs::read_to_string(root.join(rel)) else { continue };
         let lineas: Vec<&str> = texto.lines().collect();
         // lines that load files or parts: not blocks
         let cargan: std::collections::BTreeSet<u32> =
             ix.files.get(rel).into_iter().flatten().filter(|e| e.kind.estructural()).map(|e| e.line).collect();
+        // A part's pieces frame the parts it holds (a guide's cover before its exercise list, its credits). A part that holds
+        // none (an exercise, even one that `\input`s its plots) is all content: a list or a figure in it is not a piece.
+        let (primera, ultima) = (cargan.first().copied().unwrap_or(0), cargan.last().copied().unwrap_or(0));
+        let sostiene = |p: &str| ix.parts.iter().any(|q| q.group.as_deref() == Some(p) || q.also.iter().any(|a| a == p));
+        if parte.is_some_and(|p| cargan.is_empty() || !sostiene(p)) {
+            continue;
+        }
         let lineas_de_partes: Vec<u32> = ix.parts.iter().filter(|p| &p.source == rel).map(|p| p.line).collect();
         // the root's preamble is not the body
-        let mut n = if rel == &ix.root_file {
-            match lineas.iter().position(|l| sin_comentario(l).contains("\\begin{document}")) {
-                Some(i) => i + 1,
-                None => continue,
-            }
-        } else {
-            0
+        // and neither is a subfile's (an `\include`d chapter has none)
+        let cuerpo = lineas.iter().position(|l| sin_comentario(l).contains("\\begin{document}")).map(|i| i + 1);
+        let mut n = match (cuerpo, rel == &ix.root_file || parte.is_some()) {
+            (Some(i), true) => i,
+            (None, _) if parte.is_some() => 0,
+            (_, false) => 0,
+            (None, true) => continue,
         };
         while n < lineas.len() {
             let l = sin_comentario(lineas[n]).trim();
@@ -290,19 +430,46 @@ fn bloques(root: &Path, ix: &ProjectIndex, out: &mut Vec<PiezaInfo>) {
             let carga = (linea..=fin as u32 + 1).any(|x| cargan.contains(&x));
             let cruza = (n..=fin).skip(1).any(|j| es_borde(lineas[j]));
             let imprime = nombre.as_deref().is_some_and(|c| {
-                !NO_PIEZA.contains(&c) && !c.ends_with("true") && !c.ends_with("false") && !m.only_sets(c, SOLO_AJUSTAN) && !cargadores.contains_key(c)
+                !NO_PIEZA.contains(&c)
+                    && !c.ends_with("true")
+                    && !c.ends_with("false")
+                    && !m.only_sets(c, SOLO_AJUSTAN)
+                    && !cargadores.contains_key(c)
+                    && (parte.is_none() || l.starts_with("\\begin{") || (m.prints(c) && !titulos.contains_key(c)))
             });
-            if let (Some(c), true, false, false) = (nombre, imprime, carga, cruza) {
-                let k = vistos.entry(c.clone()).or_insert(0);
+            let enmarca = parte.is_none() || linea < primera || linea > ultima;
+            if let (Some(c), true, false, false, true) = (nombre, imprime, carga, cruza, enmarca) {
+                // inside a part, its key names the part: it stays the same when another guide gains or loses one.
+                // A second block of the same name gets `#2`, counted within its part (two lists in one exercise).
+                let k = vistos.entry(match parte {
+                    Some(p) => format!("{c}@{p}"),
+                    None => c.clone(),
+                });
+                let k = k.or_insert(0);
                 *k += 1;
-                let id = if *k == 1 { c.clone() } else { format!("{c}#{k}") };
-                let lugar = match (lineas_de_partes.first(), lineas_de_partes.last()) {
-                    (Some(&a), _) if linea < a => "antes",
-                    (_, Some(&z)) if linea > z => "despues",
-                    (Some(_), _) => "entre",
+                let n = if *k == 1 { c.clone() } else { format!("{c}#{k}") };
+                let id = match parte {
+                    Some(p) => format!("{n}@{p}"),
+                    None => n,
+                };
+                let lugar = match (parte, lineas_de_partes.first(), lineas_de_partes.last()) {
+                    (Some(_), _, _) => "dentro",
+                    (_, Some(&a), _) if linea < a => "antes",
+                    (_, _, Some(&z)) if linea > z => "despues",
+                    (_, Some(_), _) => "entre",
                     _ => "",
                 };
-                out.push(PiezaInfo { clave: Pieza::Bloque(id).clave(), nombre: c, archivo: rel.clone(), linea, desde: linea, hasta: fin as u32 + 1, lugar: lugar.into() });
+                out.push(PiezaInfo {
+                    clave: Pieza::Bloque(id).clave(),
+                    archivo: rel.clone(),
+                    linea,
+                    desde: linea,
+                    hasta: fin as u32 + 1,
+                    lugar: lugar.into(),
+                    parte: parte.map(String::from),
+                    firma: parte.filter(|p| ix.parts.iter().any(|q| q.name == *p && q.gate.is_some())).map(|_| String::new()),
+                    nombre: c,
+                });
             }
             n = fin + 1;
         }
@@ -390,7 +557,7 @@ pub fn lineas_del_driver(omitir: &[Pieza]) -> Vec<String> {
             }
             Pieza::Index => cuerpo.push("\\ifdefined\\printindex\\RenewDocumentCommand\\printindex{o}{}\\fi".into()),
             // its lines are commented in a copy of its file: nothing to redefine
-            Pieza::Bloque(_) => {}
+            Pieza::Bloque(_) | Pieza::Parte(_) => {}
             Pieza::Pdf(a) => cuerpo.push(format!("\\expandafter\\def\\csname lvsinpdf@\\detokenize{{{a}}}\\endcsname{{}}")),
         }
     }
@@ -471,6 +638,89 @@ mod tests {
         assert_eq!(c.len(), 1);
         assert!(c[0].1.contains("% lv: \\onlyFull{\\cover{\n% lv:   title = {X},\n% lv: }}\n\\begin{titlepage}"), "{}", c[0].1);
         assert_eq!(Pieza::de_clave("block:cover#2"), Some(Pieza::Bloque("cover#2".into())));
+    }
+
+    #[test]
+    fn a_guide_is_read_from_a_copy_without_the_pieces_left_out_and_without_its_empty_headings() {
+        let d = tempfile::tempdir().unwrap();
+        let w = |r: &str, t: &str| {
+            let p = d.path().join(r);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, t).unwrap();
+        };
+        w(
+            "main.tex",
+            "\\documentclass{article}\n\\usepackage{subfiles}\n\\newcommand{\\exercise}[1]{\\section{}\\input{ex/#1}}\n\\newcommand{\\makecover}{\\begin{titlepage}Cover\\end{titlepage}}\n\\begin{document}\n\\subfile{g1/main}\n\\end{document}\n",
+        );
+        w(
+            "g1/main.tex",
+            "\\documentclass[../main.tex]{subfiles}\r\n\\begin{document}\r\n\\makecover\r\n\\begin{credits}\r\nWho.\r\n\\end{credits}\r\n\\input{list}\r\n\\end{document}\r\n",
+        );
+        w("g1/list.tex", "\\part*{Intro}\n\\exercise{a}\n\n\\part*{Ejercicios}\n\\exercise{b}\n\\exercise{c}\n");
+        for e in ["a", "b", "c"] {
+            w(&format!("g1/ex/{e}.tex"), "Text.\n");
+        }
+        let ix = ProjectIndex::build(d.path(), "main.tex", &["include".to_string(), "subfile".to_string()]);
+        let p = detectar(d.path(), &ix);
+        let got: Vec<(&str, u32, u32, bool)> = p.iter().map(|x| (x.clave.as_str(), x.desde, x.hasta, x.firma.is_some())).collect();
+        // an environment around what the guide loads is a piece too, and both can be left out
+        assert_eq!(got, [("block:makecover@g1/main", 3, 3, true), ("block:credits@g1/main", 4, 6, true)]);
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        // the cover left out, the guide with only b and c: the cover's line is commented, and so is the heading left over a only
+        let c = copias_en_partes(d.path(), &ix, &p, &s(&["block:makecover@g1/main"]), Some(&s(&["g1/main", "b", "c"])), &[]);
+        let por: Vec<(&str, &str)> = c.iter().map(|(parte, rel, _)| (parte.as_str(), rel.as_str())).collect();
+        assert_eq!(por, [("g1/main", "g1/main.tex"), ("g1/main", "g1/list.tex")]);
+        // line ends kept, every line in its place
+        assert_eq!(c[0].2, "\\documentclass[../main.tex]{subfiles}\r\n\\begin{document}\r\n% lv: \\makecover\r\n\\begin{credits}\r\nWho.\r\n\\end{credits}\r\n\\input{list}\r\n\\end{document}\r\n");
+        assert_eq!(c[1].2, "% lv: \\part*{Intro}\n\\exercise{a}\n\n\\part*{Ejercicios}\n\\exercise{b}\n\\exercise{c}\n");
+        // only the cover: nothing of the list is left, so neither heading is
+        let c = copias_en_partes(d.path(), &ix, &p, &s(&["block:credits@g1/main"]), Some(&s(&["g1/main"])), &[]);
+        assert!(c[0].2.contains("\\makecover\r\n% lv: \\begin{credits}\r\n% lv: Who.\r\n% lv: \\end{credits}"), "{}", c[0].2);
+        assert!(c[1].2.starts_with("% lv: \\part*{Intro}\n\\exercise{a}\n\n% lv: \\part*{Ejercicios}\n"), "{}", c[1].2);
+        // everything compiled and nothing left out: no copies
+        assert!(copias_en_partes(d.path(), &ix, &p, &[], Some(&s(&["g1/main", "a", "b", "c"])), &[]).is_empty());
+        assert!(copias_en_partes(d.path(), &ix, &p, &[], None, &[]).is_empty());
+        // only exercise b chosen: the guide comes for its setup, so its headings go too, even the one over b
+        let c = copias_en_partes(d.path(), &ix, &p, &[], Some(&s(&["g1/main", "b"])), &s(&["g1/main"]));
+        let lista = c.iter().find(|(_, rel, _)| rel == "g1/list.tex").map(|(_, _, t)| t.as_str());
+        assert_eq!(lista, Some("% lv: \\part*{Intro}\n\\exercise{a}\n\n% lv: \\part*{Ejercicios}\n\\exercise{b}\n\\exercise{c}\n"));
+        // one exercise chosen (the chapter I am in): its guide comes for its setup, without its pieces; the guide chosen keeps them
+        assert_eq!(solo_marco(&ix, &s(&["b"]), &s(&["g1/main", "b"])), s(&["g1/main"]));
+        assert!(solo_marco(&ix, &s(&["g1/main"]), &s(&["g1/main", "a", "b", "c"])).is_empty());
+    }
+
+    #[test]
+    fn a_key_without_a_guide_leaves_that_piece_out_of_every_guide() {
+        let o = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert!(omitida("block:makecover@g1/main", &o(&["block:makecover@g1/main"])));
+        assert!(!omitida("block:makecover@g2/main", &o(&["block:makecover@g1/main"])));
+        // the chapter I am in: every guide's cover, also under the numbered names saved before guides had their own
+        assert!(omitida("block:makecover@g2/main", &o(&["block:makecover"])));
+        assert!(omitida("block:makecover@g2/main", &o(&["block:makecover#3"])));
+        assert!(!omitida("block:makecovers@g2/main", &o(&["block:makecover"])));
+        assert!(!omitida("block:credits@g2/main", &o(&["block:makecover"])));
+    }
+
+    #[test]
+    fn two_blocks_of_one_name_in_a_part_have_their_own_keys() {
+        let d = tempfile::tempdir().unwrap();
+        let w = |r: &str, t: &str| {
+            let p = d.path().join(r);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, t).unwrap();
+        };
+        // a setup that starts a page prints nothing: leaving it out would lose the guide's number and its figures' folder
+        w("main.tex", "\\documentclass{article}\n\\usepackage{subfiles}\n\\newcommand{\\exercise}[1]{\\section{}\\input{ex/#1}}\n\\newcommand{\\guidesetup}[1]{\\clearpage\\graphicspath{{figures/}}}\n\\begin{document}\n\\subfile{g1/main}\n\\end{document}\n");
+        w("g1/main.tex", "\\documentclass[../main.tex]{subfiles}\n\\begin{document}\n\\guidesetup{number = 1}\n\\begin{itemize}\n\\item A\n\\end{itemize}\n\\input{list}\n\\begin{itemize}\n\\item B\n\\end{itemize}\n\\end{document}\n");
+        w("g1/list.tex", "\\exercise{a}\n");
+        // an exercise that loads its plot holds no parts: its lists are its text, not pieces
+        w("g1/ex/a.tex", "\\begin{itemize}\n\\item Q\n\\end{itemize}\n\\input{plot}\n\\begin{itemize}\n\\item R\n\\end{itemize}\n");
+        w("g1/ex/plot.tex", "x\n");
+        let ix = ProjectIndex::build(d.path(), "main.tex", &["include".to_string(), "subfile".to_string()]);
+        let claves: Vec<String> = detectar(d.path(), &ix).into_iter().map(|x| x.clave).collect();
+        // the interface keys its list by them, and leaving one out must not leave out the other
+        assert_eq!(claves, ["block:itemize@g1/main", "block:itemize#2@g1/main"]);
+        assert!(claves.iter().all(|c| Pieza::de_clave(c).is_some()));
     }
 
     #[test]

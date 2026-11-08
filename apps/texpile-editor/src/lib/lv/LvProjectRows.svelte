@@ -1,10 +1,12 @@
 <script lang="ts">
-	// The Compile menu's way into the project dialogs. A plain folder gets the one row that turns it into an engine project.
+	// The Compile menu's way into the project dialogs, and when the project compiles. A plain folder gets the one row that turns it
+	// into an engine project.
 	import { FolderCog } from '@lucide/svelte';
 	import { menuItemClass, separatorClass } from '$lib/menus/menuStyles';
 	import { m } from '$lib/paraglide/messages';
 	import { workspaceRoot } from '$lib/workspace/workspaceStore';
 	import { lvProject } from './lvEngine.svelte';
+	import LvCompileWhen from './LvCompileWhen.svelte';
 	import LvFrog from './LvFrog.svelte';
 	import { openConfigPanel } from './lvPanels';
 
@@ -30,4 +32,5 @@
 		<LvFrog />
 	</button>
 	<div class={separatorClass}></div>
+	<LvCompileWhen {onPick} />
 {/if}

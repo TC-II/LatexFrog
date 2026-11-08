@@ -2,6 +2,7 @@
 // settings.json; a request from a window never names a program
 import * as path from 'node:path';
 import { splitCommandLine } from '../agentCommand';
+import { nativeProgram } from '../../shell/findProgram';
 
 export type PanelAgent = 'codex' | 'claude' | 'opencode' | 'copilot' | 'gemini' | 'custom';
 export type PresetPanelAgent = Exclude<PanelAgent, 'custom'>;
@@ -64,6 +65,7 @@ export function agentLaunch(choice: unknown, custom: unknown, cx: LaunchContext)
 		ok: true,
 		program: cx.execPath,
 		args: [path.join(cx.adapterDir, preset.adapter)],
-		env: { ELECTRON_RUN_AS_NODE: '1', [preset.cliEnv!]: cli }
+		// the adapter starts the CLI itself, with no shell, so a .cmd launcher has to be swapped for its .exe
+		env: { ELECTRON_RUN_AS_NODE: '1', [preset.cliEnv!]: nativeProgram(cli) }
 	};
 }

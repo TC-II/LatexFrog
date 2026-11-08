@@ -163,7 +163,8 @@ fn xparse_params(spec: &str) -> Vec<bool> {
 impl Macros {
     /// Reads the definitions in `text` (a whole `.tex` file). Later files override earlier ones.
     pub fn read(&mut self, text: &str) {
-        if !text.contains("command") && !text.contains("def") {
+        // `\newcommand`, `\def`, and xparse's `\NewDocumentCommand` (capital C)
+        if !text.contains("command") && !text.contains("Command") && !text.contains("def") {
             return;
         }
         let clean: String = text.lines().map(sin_comentario).collect::<Vec<_>>().join("\n");
@@ -257,7 +258,40 @@ impl Macros {
         !cs.is_empty() && cs.iter().all(|(c, _)| setters.contains(c) || c.ends_with("true") || c.ends_with("false"))
     }
 
+    /// Whether `name`, a project macro, prints something of its own: its definition, or a project macro it calls (a few levels
+    /// down), opens a `titlepage` or a picture, sets a heading or puts in a graphic. `\makecover` does (`titlepage`),
+    /// `\makesolutions` does (`\section*`); `\guidesetup` starts a page, stores keys and resets counters, and prints nothing.
+    pub fn prints(&self, name: &str) -> bool {
+        self.prints_at(name, 0)
+    }
+
+    fn prints_at(&self, name: &str, depth: usize) -> bool {
+        let Some(d) = self.defs.get(name) else { return false };
+        calls(&d.body).iter().any(|(c, args)| match *c {
+            "begin" => args.first().is_some_and(|e| matches!(e.as_str(), "titlepage" | "tikzpicture" | "circuitikz" | "figure" | "table" | "multicols" | "center")),
+            // a page break is not content: `\guidesetup` starts a page and then only stores keys (the guide's number, its figures'
+            // folder), and leaving it out would break everything after it
+            "maketitle" | "part" | "chapter" | "section" | "subsection" | "includegraphics" | "includepdf"
+            | "tableofcontents" | "listoffigures" | "listoftables" => true,
+            otro => depth < 3 && otro != name && self.prints_at(otro, depth + 1),
+        })
+    }
+
     /// How many parameters `name` takes, when none of them is optional: the driver can then wrap the macro with the same signature.
+    /// What a macro with no parameters stands for when it is plain text (`\newcommand\exercisename{Ejercicio}`).
+    pub fn plain_text(&self, name: &str) -> Option<String> {
+        let d = self.defs.get(name)?;
+        let t = d.body.trim();
+        (d.optional.is_empty() && !t.is_empty() && !t.contains(['\\', '#', '{', '}', '%'])).then(|| t.to_string())
+    }
+
+    /// The argument specification that takes a call's arguments and does nothing with them (`+o+m` for `[2][]`): a call to
+    /// leave out is swallowed whole.
+    pub fn arg_spec(&self, name: &str) -> Option<String> {
+        let d = self.defs.get(name)?;
+        Some(d.optional.iter().map(|o| if *o { "+o" } else { "+m" }).collect())
+    }
+
     pub fn mandatory_arity(&self, name: &str) -> Option<usize> {
         let d = self.defs.get(name)?;
         (!d.optional.iter().any(|o| *o)).then_some(d.optional.len())
@@ -265,10 +299,20 @@ impl Macros {
 
     /// Every loader, by name, with the paths it builds.
     pub fn loaders(&self) -> BTreeMap<String, Vec<PathTemplate>> {
-        let mut memo: HashMap<String, Vec<PathTemplate>> = HashMap::new();
+        let kind = |c: &str| match c {
+            "input" => Some(LoadKind::Input),
+            "include" => Some(LoadKind::Include),
+            "subfile" => Some(LoadKind::Subfile),
+            _ => None,
+        };
+        let mut memo = HashMap::new();
         let mut out = BTreeMap::new();
         for name in self.defs.keys() {
-            let t = self.templates(name, 0, &mut memo);
+            let t: Vec<PathTemplate> = self
+                .templates(name, &|c| matches!(c, "input" | "include" | "subfile"), 0, &mut memo)
+                .into_iter()
+                .filter_map(|(base, arg, path)| Some(PathTemplate { kind: kind(&base)?, arg, path }))
+                .collect();
             if !t.is_empty() {
                 out.insert(name.clone(), t);
             }
@@ -276,46 +320,73 @@ impl Macros {
         out
     }
 
-    fn templates(&self, name: &str, depth: usize, memo: &mut HashMap<String, Vec<PathTemplate>>) -> Vec<PathTemplate> {
+    /// Macros that set a label built from an argument (`\exercise{slug}` does `\label{ex:#1}`), by name: the call's mandatory
+    /// argument number and the label with `{}` in its place. A call to one defines that label, as a `\label` would.
+    pub fn label_makers(&self) -> BTreeMap<String, (usize, String)> {
+        let mut memo = HashMap::new();
+        let mut out = BTreeMap::new();
+        for name in self.defs.keys() {
+            if let Some((_, arg, label)) = self.templates(name, &|c| c == "label", 0, &mut memo).into_iter().next() {
+                out.insert(name.clone(), (arg, label));
+            }
+        }
+        out
+    }
+
+    /// The text a macro passes to one of the `base` commands, built from one of its mandatory arguments and followed through
+    /// other macros: (that command, the call's argument number, the text with `{}` for the argument).
+    fn templates(&self, name: &str, base: &dyn Fn(&str) -> bool, depth: usize, memo: &mut HashMap<String, Vec<(String, usize, String)>>) -> Vec<(String, usize, String)> {
         if let Some(t) = memo.get(name) {
             return t.clone();
         }
         let Some(def) = self.defs.get(name) else { return Vec::new() };
         // A cycle or a deep chain resolves to nothing rather than recursing forever.
         memo.insert(name.to_string(), Vec::new());
-        let mut out: Vec<PathTemplate> = Vec::new();
+        let mut out: Vec<(String, usize, String)> = Vec::new();
         for (callee, args) in calls(&def.body) {
-            let found: Vec<PathTemplate> = match callee {
-                "input" | "include" | "subfile" => {
-                    let kind = match callee {
-                        "input" => LoadKind::Input,
-                        "include" => LoadKind::Include,
-                        _ => LoadKind::Subfile,
-                    };
-                    args.first()
-                        .and_then(|a| one_parameter(a))
-                        .and_then(|(p, path)| Some(PathTemplate { kind, arg: Self::mandatory_index(def, p)?, path }))
-                        .into_iter()
-                        .collect()
-                }
-                _ if callee != name && depth < MAX_DEPTH && self.defs.contains_key(callee) => self
-                    .templates(callee, depth + 1, memo)
+            let found: Vec<(String, usize, String)> = if base(callee) {
+                args.first()
+                    .and_then(|a| one_parameter(a))
+                    .and_then(|(p, path)| Some((callee.to_string(), Self::mandatory_index(def, p)?, path)))
                     .into_iter()
-                    .filter_map(|inner| {
-                        let (p, outer) = one_parameter(args.get(inner.arg)?)?;
-                        Some(PathTemplate { kind: inner.kind, arg: Self::mandatory_index(def, p)?, path: inner.path.replace("{}", &outer) })
+                    .collect()
+            } else if callee != name && depth < MAX_DEPTH && self.defs.contains_key(callee) {
+                self.templates(callee, base, depth + 1, memo)
+                    .into_iter()
+                    .filter_map(|(c, arg, inner)| {
+                        let (p, outer) = one_parameter(args.get(arg)?)?;
+                        Some((c, Self::mandatory_index(def, p)?, inner.replace("{}", &outer)))
                     })
-                    .collect(),
-                _ => Vec::new(),
+                    .collect()
+            } else {
+                Vec::new()
             };
             for t in found {
-                if !out.iter().any(|o| o.arg == t.arg && o.path == t.path) {
+                if !out.iter().any(|o| o.1 == t.1 && o.2 == t.2) {
                     out.push(t);
                 }
             }
         }
         memo.insert(name.to_string(), out.clone());
         out
+    }
+
+    /// The sectioning level a macro opens without taking the title from its arguments (`\section{}`, `\section*{Ejercicio}`),
+    /// directly or through the macros it calls: the shallowest one.
+    fn opens_section(&self, name: &str, depth: usize, seen: &mut Vec<String>) -> Option<u8> {
+        if depth > MAX_DEPTH || seen.iter().any(|s| s == name) {
+            return None;
+        }
+        seen.push(name.to_string());
+        let def = self.defs.get(name)?;
+        calls(&def.body)
+            .into_iter()
+            .filter_map(|(callee, args)| match SECTIONING.iter().position(|s| *s == callee) {
+                Some(level) => (!args.first().is_some_and(|a| a.contains('#'))).then_some(level as u8),
+                None if callee != name && self.defs.contains_key(callee) => self.opens_section(callee, depth + 1, seen),
+                None => None,
+            })
+            .min()
     }
 
     /// Every heading macro, by name.
@@ -341,6 +412,16 @@ impl Macros {
                 if let Some(arg) = Self::mandatory_index(def, p) {
                     out.insert(name.clone(), Heading { arg, level, drawn });
                 }
+            }
+        }
+        // A loader that opens a section whose title it does not take from an argument (`\exercise{slug}`: `\section{}` and
+        // `\input{exercises/#1}`) heads what it loads: its call is a heading at that level, named by the file it loads.
+        for (name, ts) in self.loaders() {
+            if out.contains_key(&name) {
+                continue;
+            }
+            if let Some(level) = self.opens_section(&name, 0, &mut Vec::new()) {
+                out.insert(name, Heading { arg: ts[0].arg, level, drawn: false });
             }
         }
         out
@@ -454,5 +535,27 @@ mod tests {
         assert_eq!(h["metaEjercicio"], Heading { arg: 0, level: 2, drawn: true });
         assert_eq!(h["Tema"], Heading { arg: 0, level: 2, drawn: false });
         assert!(!h.contains_key("resaltar"), "inline bold is not a heading");
+    }
+
+    #[test]
+    fn a_loader_that_opens_a_section_is_a_heading_named_by_its_file_and_sets_a_label() {
+        let m = macros(concat!(
+            "\\makeatletter\n",
+            "\\NewDocumentCommand\\exercise{m}{\\ex@break\\section{}\\ex@label{#1}\\input{exercises/#1}}\n",
+            "\\newcommand\\ex@break{\\clearpage}\n",
+            "\\newcommand\\ex@label[1]{\\label{ex:#1}}\n",
+            "\\newcommand\\worked[1]{\\par\\input{examples/#1}}\n",
+            "\\makeatother\n",
+        ));
+        let h = m.headings();
+        assert_eq!(h["exercise"], Heading { arg: 0, level: 2, drawn: false });
+        assert!(!h.contains_key("worked"), "a loader that opens no section is not a heading");
+        assert_eq!(m.label_makers()["exercise"], (0, "ex:{}".to_string()));
+    }
+
+    #[test]
+    fn a_file_with_only_xparse_definitions_is_read() {
+        let m = macros("\\NewDocumentCommand\\exercise{m}{\\input{exercises/#1}}\n");
+        assert_eq!(m.loaders()["exercise"], [PathTemplate { kind: LoadKind::Input, arg: 0, path: "exercises/{}".into() }]);
     }
 }

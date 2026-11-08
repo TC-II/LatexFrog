@@ -71,6 +71,16 @@ pub struct DatoDeTikz {
 pub struct Part {
     /// Lo que va en `\includeonly`.
     pub name: String,
+    /// What the app calls it, in Contents and in the profiles alike (`etiquetas::de_parte`): its title when the file gives one.
+    pub label: String,
+    /// The part this one is inside, when parts nest one level: an exercise a guide's file loads (`\exercise{slug}`) is a part of
+    /// its own inside the guide's `\subfile` part. Choosing it brings its guide in; choosing the guide brings all of it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    /// The other parts it is inside: a solutions book that loads its guide's exercise list holds the same exercises.
+    /// Choosing one of them brings the exercise in, as choosing its guide does.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<String>,
     /// Su archivo, si existe.
     pub file: Option<String>,
     pub command: String,
@@ -115,6 +125,9 @@ pub struct ProjectIndex {
     parents: BTreeMap<String, Vec<String>>,
     /// Lo que las figuras leen desde adentro de un `tikzpicture` (ver `DatoDeTikz`), sin repetidos y en orden.
     pub datos_de_tikz: Vec<DatoDeTikz>,
+    /// The project's own classes and packages the document loads (`style/tc2-guide.cls`), in the order they are found. They
+    /// are not part of the document, but the macros they define say what the document's commands load and print.
+    pub packages: Vec<String>,
     pub scan_ms: u64,
 }
 
@@ -144,7 +157,7 @@ struct Crudo {
 
 fn cantidad_de_argumentos(c: &str) -> usize {
     match c {
-        "import" | "subimport" => 2,
+        "import" | "subimport" | "inputfrom" | "includefrom" | "subinputfrom" | "subincludefrom" => 2,
         _ => 1,
     }
 }
@@ -282,13 +295,118 @@ fn datos_de_plot(limpio: &str) -> Vec<(String, u32, bool)> {
 
 // --- resolución de rutas -----------------------------------------------------------------------------------------------
 
+/// A path relative to the project's top, with `/`: `.` and `..` are folded (`contents/G1/../common/x` is `contents/common/x`),
+/// and a path that leaves the project, is absolute or names a drive is not followed.
 fn normalizar(raw: &str) -> Option<String> {
     let s = raw.trim().trim_matches('"').trim().replace('\\', "/");
-    let s = s.strip_prefix("./").unwrap_or(&s).to_string();
-    if s.is_empty() || s.starts_with('/') || s.contains(':') || s.split('/').any(|c| c == "..") {
+    if s.is_empty() || s.starts_with('/') || s.contains(':') {
         return None;
     }
-    Some(s)
+    let mut partes: Vec<&str> = Vec::new();
+    for c in s.split('/') {
+        match c {
+            "" | "." => {}
+            ".." => {
+                partes.pop()?;
+            }
+            _ => partes.push(c),
+        }
+    }
+    (!partes.is_empty()).then(|| partes.join("/"))
+}
+
+/// The folder of a path relative to the project's top (empty at the top).
+fn carpeta_de(rel: &str) -> &str {
+    rel.rsplit_once('/').map_or("", |(d, _)| d)
+}
+
+/// `rel` read from `base` (a folder relative to the project's top; empty for the top).
+fn desde(base: &str, rel: &str) -> String {
+    if base.is_empty() {
+        rel.to_string()
+    } else {
+        format!("{base}/{rel}")
+    }
+}
+
+/// Folders a project's own classes and packages are not looked for in: build output and tools.
+const SIN_PAQUETES: [&str; 7] = [".git", ".latexfrog", ".texpile", "node_modules", "target", "output", "_draft"];
+
+/// The project's own `.cls` and `.sty` files by name (`tc2-guide.cls`), wherever they are: TeX finds them through `TEXINPUTS`
+/// (`style//` in a `latexmkrc`, or a folder Overleaf searches), which the index does not read, so a name that is unique in the
+/// project is taken as that file. A name found twice keeps the shallowest one.
+fn paquetes_del_proyecto(root: &Path) -> HashMap<String, String> {
+    fn rec(root: &Path, rel: &str, nivel: u32, out: &mut HashMap<String, String>, cuenta: &mut usize) {
+        let Ok(rd) = std::fs::read_dir(root.join(rel)) else { return };
+        let mut hijos: Vec<_> = rd.flatten().collect();
+        hijos.sort_by_key(|e| e.file_name());
+        let mut carpetas = Vec::new();
+        for e in hijos {
+            *cuenta += 1;
+            if *cuenta > 20_000 {
+                return;
+            }
+            let nombre = e.file_name().to_string_lossy().to_string();
+            let hijo = desde(rel, &nombre);
+            let Ok(t) = e.file_type() else { continue };
+            if t.is_dir() {
+                if !nombre.starts_with('.') && !SIN_PAQUETES.contains(&nombre.as_str()) && nivel < 6 {
+                    carpetas.push(hijo);
+                }
+                continue;
+            }
+            let lower = nombre.to_lowercase();
+            if lower.ends_with(".cls") || lower.ends_with(".sty") {
+                out.entry(lower).or_insert(hijo);
+            }
+        }
+        // the files of a folder before those of its subfolders: the shallowest of a repeated name wins
+        for c in carpetas {
+            rec(root, &c, nivel + 1, out, cuenta);
+        }
+    }
+    let mut out = HashMap::new();
+    rec(root, "", 0, &mut out, &mut 0);
+    out
+}
+
+/// The classes and packages a text loads by name: `\documentclass`, `\usepackage`, `\RequirePackage`, `\LoadClass` and their
+/// `WithOptions` forms, each with its extension (`tc2-guide.cls`, `tc2-plots.sty`).
+fn paquetes_cargados(texto: &str) -> Vec<String> {
+    let aridad = |n: &str| {
+        matches!(n, "documentclass" | "usepackage" | "RequirePackage" | "RequirePackageWithOptions" | "LoadClass" | "LoadClassWithOptions").then_some(1)
+    };
+    let mut out = Vec::new();
+    for (cmd, args, _) in llamadas(texto, &aridad) {
+        let ext = if matches!(cmd.as_str(), "documentclass" | "LoadClass" | "LoadClassWithOptions") { "cls" } else { "sty" };
+        for n in args[0].split(',').map(str::trim).filter(|n| !n.is_empty() && !n.contains('#') && !n.contains('\\')) {
+            out.push(format!("{}.{ext}", n.to_lowercase()));
+        }
+    }
+    out
+}
+
+/// Every graphics folder a text names with `\graphicspath{{a/}{b/}}`, without the trailing `/`. Read anywhere, a macro body
+/// included: a class that sets it per chapter (`\graphicspath{{figures/}}` in a setup macro) still says where images are.
+fn carpetas_de_imagenes(texto: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for (_, args, _) in llamadas(texto, &|n| (n == "graphicspath").then_some(1)) {
+        let b = args[0].as_bytes();
+        let mut i = 0;
+        while i < b.len() {
+            match argumento(b, &args[0], i) {
+                Some((d, sig)) => {
+                    let d = d.trim().trim_matches('"').trim_end_matches('/').to_string();
+                    if !d.contains('#') && !d.contains('\\') {
+                        out.push(d);
+                    }
+                    i = sig;
+                }
+                None => i += 1,
+            }
+        }
+    }
+    out
 }
 
 fn existe(root: &Path, rel: &str) -> bool {
@@ -306,6 +424,17 @@ fn resolver_imagen(root: &Path, raw: &str) -> Option<String> {
     std::iter::once(base.clone())
         .chain(["pdf", "png", "jpg", "jpeg", "eps", "svg"].iter().map(|e| format!("{base}.{e}")))
         .find(|c| existe(root, c))
+}
+
+/// An image as graphicx looks for it: from the folder the file is read in (`base`), then from the project's top, and then in
+/// every `\graphicspath` folder, each one from `base` first.
+fn resolver_imagen_en(root: &Path, raw: &str, base: &str, carpetas: &[String]) -> Option<String> {
+    let mut intentos = vec![desde(base, raw), raw.to_string()];
+    for c in carpetas {
+        intentos.push(desde(base, &desde(c, raw)));
+        intentos.push(desde(c, raw));
+    }
+    intentos.iter().find_map(|i| resolver_imagen(root, i))
 }
 
 fn resolver_bib(root: &Path, raw: &str) -> Option<String> {
@@ -340,6 +469,16 @@ struct Contexto<'a> {
     loaders: &'a Loaders,
     /// Loaders whose parameters are all mandatory, with how many: their calls in the body can be parts.
     aridades: &'a BTreeMap<String, usize>,
+    /// The `\graphicspath` folders named anywhere in the project's files and packages.
+    imagenes: &'a [String],
+}
+
+/// What a walk learns that the next one reads with: the loader macros and the graphics folders.
+#[derive(Default, PartialEq)]
+struct Aprendido {
+    loaders: Loaders,
+    aridades: BTreeMap<String, usize>,
+    imagenes: Vec<String>,
 }
 
 impl ProjectIndex {
@@ -348,39 +487,111 @@ impl ProjectIndex {
     pub fn build(root: &Path, root_file: &str, commands: &[String]) -> ProjectIndex {
         let t0 = Instant::now();
         // User macros that load files (`\Ejercicio{slug}` → `\input{ejercicios/slug}`) are only known after reading their
-        // definitions, which are in files the graph reaches: walk, read the definitions, and walk again while that finds more.
-        let mut loaders = Loaders::new();
-        let mut aridades = BTreeMap::new();
-        let mut ix = Self::walk(root, root_file, commands, &loaders, &aridades);
+        // definitions, which are in files the graph reaches or in the project's own classes and packages they load: walk, read
+        // the definitions, and walk again while that finds more.
+        let propios = paquetes_del_proyecto(root);
+        let mut aprendido = Aprendido::default();
+        let mut ix = Self::walk(root, root_file, commands, &aprendido);
+        // the project's macros that set a title (`\metaEjercicio{Título}{...}`): they name the part that opens with one
+        let mut titulos: Vec<(String, usize)> = Vec::new();
+        // loaders that set a label from their argument, with that label (`{}` for the argument) and the word their heading prints
+        // (`\exercisename`): a part with no title of its own goes by its number in the last build, as the document prints it
+        let mut numerados: HashMap<String, (String, Option<String>)> = HashMap::new();
         for _ in 0..3 {
+            ix.packages = Self::paquetes_de(root, &ix, &propios);
             let mut m = Macros::default();
-            for rel in ix.files.keys() {
+            let mut imagenes: Vec<String> = Vec::new();
+            // the packages first: a definition in the document overrides one in its class, as it does in TeX
+            for rel in ix.packages.iter().chain(ix.files.keys()) {
                 if let Some(t) = leer_texto(&root.join(rel)) {
                     m.read(&t);
+                    for c in carpetas_de_imagenes(&t) {
+                        if !imagenes.contains(&c) {
+                            imagenes.push(c);
+                        }
+                    }
                 }
             }
-            let found: Loaders = m
+            let loaders: Loaders = m
                 .loaders()
                 .into_iter()
                 // a call in a document is a name of letters; a part command that includes its argument as is (`\Capitulo`) already works
                 .filter(|(n, ts)| n.bytes().all(|c| c.is_ascii_alphabetic()) && !(commands.contains(n) && ts.iter().all(|t| t.path == "{}")))
                 .collect();
-            if found == loaders {
+            let aridades = loaders.keys().filter_map(|n| Some((n.clone(), m.mandatory_arity(n)?))).collect();
+            // a loader that opens a section takes the title from its file's name: that is the path, not a title
+            titulos = m.headings().into_iter().filter(|(n, _)| !loaders.contains_key(n)).map(|(n, h)| (n, h.arg)).collect();
+            numerados = m
+                .label_makers()
+                .into_iter()
+                .filter(|(n, _)| loaders.contains_key(n))
+                .map(|(n, (_, plantilla))| {
+                    let palabra = m.plain_text(&format!("{n}name"));
+                    (n, (plantilla, palabra))
+                })
+                .collect();
+            let found = Aprendido { loaders, aridades, imagenes };
+            if found == aprendido {
                 break;
             }
-            aridades = found.keys().filter_map(|n| Some((n.clone(), m.mandatory_arity(n)?))).collect();
-            loaders = found;
-            ix = Self::walk(root, root_file, commands, &loaders, &aridades);
+            aprendido = found;
+            ix = Self::walk(root, root_file, commands, &aprendido);
         }
+        ix.packages = Self::paquetes_de(root, &ix, &propios);
+        let mut numeros: Option<HashMap<String, String>> = None;
+        for p in ix.parts.iter_mut() {
+            p.label = crate::etiquetas::de_parte(root, p, &titulos);
+            if let Some((plantilla, palabra)) = numerados.get(&p.command).filter(|_| p.label == crate::etiquetas::de_ruta(&p.name)) {
+                let numeros = numeros.get_or_insert_with(|| crate::symbols::numeros_compilados(root));
+                if let Some(n) = numeros.get(&plantilla.replace("{}", &p.name)) {
+                    p.label = match palabra {
+                        Some(w) => format!("{w} {n}"),
+                        None => format!("{n} {}", p.label),
+                    };
+                }
+            }
+        }
+        // in document order: a guide's exercises are found after the guides beside it, and right after their guide is where
+        // Contents and the profiles show them
+        let claves: Vec<Vec<u32>> = ix.parts.iter().map(|p| [ix.position(&p.source), vec![p.line]].concat()).collect();
+        let mut orden: Vec<usize> = (0..ix.parts.len()).collect();
+        orden.sort_by(|&a, &b| claves[a].cmp(&claves[b]));
+        let mut viejas: Vec<Option<Part>> = std::mem::take(&mut ix.parts).into_iter().map(Some).collect();
+        ix.parts = orden.into_iter().filter_map(|i| viejas[i].take()).collect();
         ix.scan_ms = t0.elapsed().as_millis() as u64;
         ix
     }
 
-    fn walk(root: &Path, root_file: &str, commands: &[String], loaders: &Loaders, aridades: &BTreeMap<String, usize>) -> ProjectIndex {
+    /// The project's own classes and packages that the walked files load, and those they load in turn.
+    fn paquetes_de(root: &Path, ix: &ProjectIndex, propios: &HashMap<String, String>) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let mut cola: Vec<String> = ix.files.keys().cloned().collect();
+        while let Some(rel) = cola.pop() {
+            let Some(t) = leer_texto(&root.join(&rel)) else { continue };
+            for nombre in paquetes_cargados(&t) {
+                if let Some(p) = propios.get(&nombre) {
+                    if !out.contains(p) {
+                        out.push(p.clone());
+                        cola.push(p.clone());
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn walk(root: &Path, root_file: &str, commands: &[String], aprendido: &Aprendido) -> ProjectIndex {
+        let (loaders, aridades) = (&aprendido.loaders, &aprendido.aridades);
         let mut ix = ProjectIndex { root_file: root_file.to_string(), ..Default::default() };
         // `begin` y `end` sólo se miran para llevar la cuenta de los `tikzpicture` abiertos.
         let mut interesantes: HashMap<&str, usize> =
-            ["input", "include", "subfile", "import", "subimport", "includegraphics", "bibliography", "addbibresource", "begin", "end"].into_iter().map(|c| (c, cantidad_de_argumentos(c))).collect();
+            [
+                "input", "include", "subfile", "import", "subimport", "inputfrom", "includefrom", "subinputfrom", "subincludefrom", "includegraphics", "bibliography",
+                "addbibresource", "begin", "end",
+            ]
+            .into_iter()
+            .map(|c| (c, cantidad_de_argumentos(c)))
+            .collect();
         interesantes.extend(commands.iter().map(|c| (c.as_str(), 1)));
         for (name, ts) in loaders {
             let n = ts.iter().map(|t| t.arg + 1).max().unwrap_or(1);
@@ -388,9 +599,10 @@ impl ProjectIndex {
             *e = (*e).max(n);
         }
         let cmds: HashSet<&str> = commands.iter().map(String::as_str).collect();
-        let ctx = Contexto { interesantes, cmds, loaders, aridades };
+        let ctx = Contexto { interesantes, cmds, loaders, aridades, imagenes: &aprendido.imagenes };
         let mut visitados = HashSet::new();
-        ix.visitar(root, root_file, false, false, None, "", &ctx, &mut visitados);
+        // TeX runs in the root file's folder: what it reads is found from there first
+        ix.visitar(root, root_file, false, None, false, None, carpeta_de(root_file), &ctx, &mut visitados);
         ix.datos_de_tikz.sort();
         ix.datos_de_tikz.dedup();
         ix
@@ -403,8 +615,26 @@ impl ProjectIndex {
     /// file is read from the imported folder first.
     /// `cuerpo`: this file is read after `\begin{document}`.
     #[allow(clippy::too_many_arguments)]
-    fn visitar(&mut self, root: &Path, rel: &str, en_parte: bool, cuerpo: bool, dentro: Option<(&str, bool)>, base: &str, ctx: &Contexto, vistos: &mut HashSet<String>) {
+    /// `grupo`: the `\subfile` part this file is in, while no part inside it has been entered: its loader calls are parts too.
+    fn visitar(
+        &mut self,
+        root: &Path,
+        rel: &str,
+        en_parte: bool,
+        grupo: Option<&str>,
+        cuerpo: bool,
+        dentro: Option<(&str, bool)>,
+        base: &str,
+        ctx: &Contexto,
+        vistos: &mut HashSet<String>,
+    ) {
         if !vistos.insert(rel.to_string()) {
+            // a guide that loads a list another guide already read (a solutions book and its guide): the list's parts are in it too
+            if let Some(g) = grupo.filter(|_| en_parte) {
+                for p in self.parts.iter_mut().filter(|p| p.source == rel && p.group.as_deref().is_some_and(|x| x != g) && !p.also.iter().any(|a| a == g)) {
+                    p.also.push(g.to_string());
+                }
+            }
             return;
         }
         self.reachable.insert(rel.to_string());
@@ -438,7 +668,7 @@ impl ProjectIndex {
                 // the preamble, which `formato` fingerprints); before `\begin{document}` it is an `\input`.
                 // A call in the body that only `\input`s is a part of its own, named by its argument, so a profile can choose it.
                 let gate = match ctx.aridades.get(c.comando.as_str()) {
-                    Some(&arity) if cuerpo_aqui && !en_parte && !ctx.cmds.contains(c.comando.as_str()) && ts.iter().all(|t| t.kind == LoadKind::Input) => {
+                    Some(&arity) if cuerpo_aqui && (!en_parte || grupo.is_some()) && !ctx.cmds.contains(c.comando.as_str()) && ts.iter().all(|t| t.kind == LoadKind::Input) => {
                         Some(Gate { arity, arg: ts[0].arg })
                     }
                     _ => None,
@@ -473,7 +703,7 @@ impl ProjectIndex {
                     let files: Vec<String> = aristas[desde..].iter().filter_map(|e| e.target.clone()).collect();
                     if !files.is_empty() && !self.parts.iter().any(|p| p.name == name) {
                         de_cargador.extend(desde..aristas.len());
-                        self.parts.push(Part { name, file: Some(files[0].clone()), command: c.comando.clone(), source: rel.to_string(), line: c.linea, gate, others: files[1..].to_vec() });
+                        self.parts.push(Part { name, label: String::new(), group: grupo.filter(|_| en_parte).map(String::from), file: Some(files[0].clone()), command: c.comando.clone(), source: rel.to_string(), line: c.linea, gate, others: files[1..].to_vec(), also: vec![] });
                     }
                 }
                 continue;
@@ -482,19 +712,21 @@ impl ProjectIndex {
                 "includegraphics" => (EdgeKind::Graphics, c.args),
                 "bibliography" => (EdgeKind::Bib, c.args[0].split(',').map(|s| s.trim().to_string()).collect()),
                 "addbibresource" => (EdgeKind::Bib, c.args),
-                "import" => (EdgeKind::Import, vec![format!("{}/{}", c.args[0].trim().trim_end_matches('/'), c.args[1].trim())]),
-                // `\subimport` is relative to the file it is written in
-                "subimport" => {
-                    let aqui = rel.rsplit_once('/').map_or("", |(d, _)| d);
-                    let dir = c.args[0].trim().trim_end_matches('/');
-                    let dir = if aqui.is_empty() { dir.to_string() } else if dir.is_empty() { aqui.to_string() } else { format!("{aqui}/{dir}") };
-                    (EdgeKind::Import, vec![if dir.is_empty() { c.args[1].trim().to_string() } else { format!("{dir}/{}", c.args[1].trim()) }])
+                // the import package: `\import{dir/}{file}` from the folder TeX runs in, `\subimport` from the file it is written in
+                "import" | "inputfrom" | "includefrom" => (EdgeKind::Import, vec![desde(c.args[0].trim().trim_end_matches('/'), c.args[1].trim())]),
+                "subimport" | "subinputfrom" | "subincludefrom" => {
+                    let dir = desde(carpeta_de(rel), c.args[0].trim().trim_end_matches('/'));
+                    (EdgeKind::Import, vec![desde(dir.trim_end_matches('/'), c.args[1].trim())])
                 }
                 "input" => (EdgeKind::Input, c.args),
                 "include" => (EdgeKind::Include, c.args),
                 "subfile" => (EdgeKind::Subfile, c.args),
                 _ => (EdgeKind::Part, c.args),
             };
+            // A `\subfile` in the body, outside any part, brings a whole document of its own (a chapter, one guide of a
+            // course): it is a part even when `parts.commands` does not name it. `\includeonly` does not reach it, so the driver
+            // gates it like a loader macro (`Gate`), and its name is the argument as written, which is what the gate compares.
+            let subdocumento = c.comando == "subfile" && cuerpo_aqui && !en_parte;
             for raw in args {
                 // `\input{#1}` y compañía: parámetros de macro, no archivos.
                 if raw.is_empty() || raw.contains('#') || raw.contains('\\') {
@@ -502,12 +734,27 @@ impl ProjectIndex {
                 }
                 let raw = raw.trim().trim_matches('"').to_string();
                 let target = match kind {
-                    EdgeKind::Graphics => resolver_imagen(root, &raw),
-                    EdgeKind::Bib => resolver_bib(root, &raw),
-                    // inside an imported file, its folder first and then the project's top
-                    _ if !base.is_empty() && !matches!(kind, EdgeKind::Import) => resolver_tex(root, &format!("{base}/{raw}")).or_else(|| resolver_tex(root, &raw)),
+                    EdgeKind::Graphics => resolver_imagen_en(root, &raw, base, ctx.imagenes),
+                    EdgeKind::Bib => resolver_bib(root, &desde(base, &raw)).or_else(|| resolver_bib(root, &raw)),
+                    // inside an imported file or a subfile, its folder first and then the project's top
+                    _ if !base.is_empty() && !matches!(kind, EdgeKind::Import) => resolver_tex(root, &desde(base, &raw)).or_else(|| resolver_tex(root, &raw)),
                     _ => resolver_tex(root, &raw),
                 };
+                if subdocumento && target.is_some() && !self.parts.iter().any(|p| p.name == raw) {
+                    de_cargador.insert(aristas.len());
+                    self.parts.push(Part {
+                        name: raw.clone(),
+                        label: String::new(),
+                        group: None,
+                        file: target.clone(),
+                        command: c.comando.clone(),
+                        source: rel.to_string(),
+                        line: c.linea,
+                        gate: Some(Gate { arity: 1, arg: 0 }),
+                        others: vec![],
+                        also: vec![],
+                    });
+                }
                 aristas.push(Edge { kind, command: c.comando.clone(), raw, target, line: c.linea, en_tikz, en_figure });
                 en_cuerpo.push(cuerpo_aqui);
             }
@@ -538,16 +785,24 @@ impl ProjectIndex {
                 if let Some(name) = nombre_de_parte(&e.raw) {
                     // La misma parte dos veces (por ejemplo en un `\if`) cuenta una.
                     if !self.parts.iter().any(|p| p.name == name) {
-                        self.parts.push(Part { name, file: e.target.clone(), command: e.command.clone(), source: rel.to_string(), line: e.line, gate: None, others: vec![] });
+                        self.parts.push(Part { name, label: String::new(), group: None, file: e.target.clone(), command: e.command.clone(), source: rel.to_string(), line: e.line, gate: None, others: vec![], also: vec![] });
                     }
                 }
             }
             if let (true, Some(t)) = (e.kind.estructural(), &e.target) {
                 if t.to_lowercase().ends_with(".tex") {
                     let desde = if e.en_tikz { Some((dentro.map_or(rel, |d| d.0), e.en_figure)) } else { None };
-                    // an imported file sets its folder for what it inputs; anything else passes the current one on
-                    let carpeta = if e.kind == EdgeKind::Import { t.rsplit_once('/').map_or("", |(d, _)| d).to_string() } else { base.to_string() };
-                    self.visitar(root, t, en_parte || es_parte, cuerpo_e, desde, &carpeta, ctx, vistos);
+                    // an imported file or a subfile (subfiles reads it with `\import`) sets its folder for what it inputs; anything
+                    // else passes the current one on
+                    let carpeta = if matches!(e.kind, EdgeKind::Import | EdgeKind::Subfile) || (e.kind == EdgeKind::Part && e.command == "subfile") {
+                        carpeta_de(t).to_string()
+                    } else {
+                        base.to_string()
+                    };
+                    // a guide (a `\subfile` part) is the group of the parts its files load; inside one of those, no more nesting
+                    let sub = es_parte && e.command == "subfile";
+                    let grupo_e = if sub { Some(e.raw.as_str()) } else if es_parte { None } else { grupo };
+                    self.visitar(root, t, en_parte || es_parte, grupo_e, cuerpo_e, desde, &carpeta, ctx, vistos);
                 }
             }
         }
@@ -593,12 +848,61 @@ impl ProjectIndex {
         out
     }
 
+    /// The parts a choice compiles, in document order, with their groups made whole: a chosen exercise brings its guide (the guide
+    /// prints its cover and calls the exercise), and a chosen guide brings every exercise in it.
+    pub fn with_groups(&self, chosen: &[String]) -> Vec<String> {
+        let elegida = |n: &str| chosen.iter().any(|c| c == n);
+        self.parts
+            .iter()
+            .filter(|p| {
+                elegida(&p.name)
+                    || p.group.iter().chain(&p.also).any(|g| elegida(g))
+                    || self.parts.iter().any(|q| q.group.as_deref() == Some(p.name.as_str()) && elegida(&q.name))
+            })
+            .map(|p| p.name.clone())
+            .collect()
+    }
+
     pub fn part_names(&self) -> Vec<String> {
         self.parts.iter().map(|p| p.name.clone()).collect()
     }
 
     /// Índice de la parte a la que pertenece `rel`: ella misma si lo es, o la parte que la trae (recursivo, la más
     /// cercana). `None` para lo que no es de ninguna parte (el preámbulo, `libro_cuerpo.tex`, una portada).
+    /// The folders where the engine found the images that `rel` inserts, and those of the files it brings in (not into another
+    /// part), in the order they come, without repeats. An editor that shows `rel` looks for its images there too: a guide's class
+    /// sets `\graphicspath{{figures/}}` relative to the guide's folder, which nothing in the open file says.
+    pub fn image_dirs(&self, rel: &str) -> Vec<String> {
+        let parte = self.part_of(rel);
+        let mut out: Vec<String> = Vec::new();
+        let mut cola = vec![rel.to_string()];
+        let mut vistos = HashSet::new();
+        while let Some(f) = cola.pop() {
+            if !vistos.insert(f.clone()) {
+                continue;
+            }
+            let Some(edges) = self.files.get(&f) else { continue };
+            for e in edges {
+                let Some(t) = e.target.as_deref() else { continue };
+                if e.kind == EdgeKind::Graphics {
+                    let dir = t.rsplit_once('/').map_or("", |(d, _)| d).to_string();
+                    if !out.contains(&dir) {
+                        out.push(dir);
+                    }
+                }
+            }
+            // depth first, in document order: the files it brings, unless they are another part
+            for e in edges.iter().rev().filter(|e| e.kind.estructural()) {
+                if let Some(t) = e.target.as_deref() {
+                    if parte.is_none() || self.part_of(t) == parte {
+                        cola.push(t.to_string());
+                    }
+                }
+            }
+        }
+        out
+    }
+
     pub fn part_of(&self, rel: &str) -> Option<usize> {
         let mut cola = vec![rel.to_string()];
         let mut vistos = HashSet::new();
@@ -691,6 +995,78 @@ mod tests {
         assert_eq!(ix.affects("sol/a.tex", Some(&[])), Affects::OtherPart("a".into()));
         let pre = crate::formato::archivos_del_preambulo(&ix);
         assert!(pre.contains("sty/early.tex") && !pre.contains("ex/a.tex"));
+    }
+
+    #[test]
+    fn exercises_a_guide_loads_are_parts_inside_the_guide_named_by_their_title_macro() {
+        let d = tempfile::tempdir().unwrap();
+        let w = |rel: &str, t: &str| {
+            let p = d.path().join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, t).unwrap();
+        };
+        w(
+            "main.tex",
+            "\\documentclass{article}\n\\usepackage{subfiles}\n\\newcommand\\exercisename{Ejercicio}\n\\newcommand{\\exercise}[1]{\\section{}\\label{ex:#1}\\input{ex/#1}}\n\\newcommand{\\meta}[2]{\\gdef\\t{#1}{\\Large\\textbf{#1}}}\n\\begin{document}\n\\subfile{g1/main}\n\\subfile{g2/main}\n\\end{document}\n",
+        );
+        w("g1/main.tex", "\\documentclass[../main.tex]{subfiles}\n\\begin{document}\n\\setup{title = {Primera gu\\'ia}}\n\\exercise{a}\n\\exercise{b}\n\\end{document}\n");
+        w("g2/main.tex", "\\documentclass[../main.tex]{subfiles}\n\\begin{document}\n\\exercise{c}\n\\end{document}\n");
+        w("g1/ex/a.tex", "\\meta{Ejercicio con t\\'itulo}{Rev 1}\nTexto.\n");
+        w("g1/ex/b.tex", "Sin t\\'itulo.\n");
+        w("g2/ex/c.tex", "Otro.\n");
+        // the last build numbered b: it goes by "Ejercicio 1.2", as printed; c was never built and keeps its file's name
+        w(".latexfrog/build/default/lv-default.aux", "\\relax\n\\newlabel{ex:b}{{1.2}{3}{}{section.2}{}}\n\\newlabel{odd}{{\\relax 1}{1}}\n");
+        let ix = ProjectIndex::build(d.path(), "main.tex", &cmds(&["include", "subfile"]));
+        let partes: Vec<_> = ix.parts.iter().map(|p| (p.name.as_str(), p.group.as_deref(), p.label.as_str())).collect();
+        assert_eq!(
+            partes,
+            [
+                ("g1/main", None, "Primera gu\u{ed}a"),
+                ("a", Some("g1/main"), "Ejercicio con t\u{ed}tulo"),
+                ("b", Some("g1/main"), "Ejercicio 1.2"),
+                ("g2/main", None, "g2"),
+                ("c", Some("g2/main"), "c"),
+            ]
+        );
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        // an exercise brings its guide's frame; a guide brings all its exercises
+        assert_eq!(ix.with_groups(&s(&["b"])), s(&["g1/main", "b"]));
+        assert_eq!(ix.with_groups(&s(&["g2/main"])), s(&["g2/main", "c"]));
+        // Contents says the same, and going to the exercise opens its own file, not the guide that calls it
+        let sym = crate::symbols::Symbols::build(d.path(), &ix);
+        let comp = crate::composicion::build(&ix, &sym.sections, &[]);
+        let b = comp.iter().find_map(|it| match it {
+            crate::composicion::Item::Section { index, opens, .. } if sym.sections[*index].title == "Ejercicio 1.2" => Some(opens.clone()),
+            _ => None,
+        });
+        assert_eq!(b, Some(Some("g1/ex/b.tex".to_string())));
+    }
+
+    #[test]
+    fn a_solutions_book_that_loads_its_guides_list_holds_the_same_exercises() {
+        let d = tempfile::tempdir().unwrap();
+        let w = |rel: &str, t: &str| {
+            let p = d.path().join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, t).unwrap();
+        };
+        w(
+            "main.tex",
+            "\\documentclass{article}\n\\usepackage{subfiles}\n\\newcommand{\\exercise}[1]{\\section{}\\input{ex/#1}}\n\\begin{document}\n\\subfile{g3/main}\n\\subfile{g3/solutions}\n\\end{document}\n",
+        );
+        w("g3/main.tex", "\\documentclass[../main.tex]{subfiles}\n\\begin{document}\n\\input{list}\n\\end{document}\n");
+        w("g3/solutions.tex", "\\documentclass[../main.tex]{subfiles}\n\\begin{document}\n\\input{list}\n\\end{document}\n");
+        w("g3/list.tex", "\\exercise{a}\n\\exercise{b}\n");
+        w("g3/ex/a.tex", "A.\n");
+        w("g3/ex/b.tex", "B.\n");
+        let ix = ProjectIndex::build(d.path(), "main.tex", &cmds(&["include", "subfile"]));
+        let partes: Vec<_> = ix.parts.iter().map(|p| (p.name.as_str(), p.group.as_deref(), p.also.clone())).collect();
+        let sol = vec!["g3/solutions".to_string()];
+        assert_eq!(partes, [("g3/main", None, vec![]), ("a", Some("g3/main"), sol.clone()), ("b", Some("g3/main"), sol), ("g3/solutions", None, vec![])]);
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        // the solutions book alone prints every exercise's solution: its exercises come with it, its guide does not
+        assert_eq!(ix.with_groups(&s(&["g3/solutions"])), s(&["a", "b", "g3/solutions"]));
+        assert_eq!(ix.with_groups(&s(&["g3/main"])), s(&["g3/main", "a", "b"]));
     }
 
     fn cmds(c: &[&str]) -> Vec<String> {
@@ -905,5 +1281,53 @@ mod tests {
         std::fs::write(d.path().join("b.tex"), "x").unwrap();
         let ix = ProjectIndex::build(d.path(), "a.tex", &cmds(&["include"]));
         assert_eq!(ix.part_names(), ["b"]);
+    }
+
+    #[test]
+    fn a_subfile_reads_from_its_folder_is_a_gated_part_and_its_class_macros_load_files() {
+        let d = proyecto(&[
+            ("main.tex", "\\documentclass{guide}\n\\begin{document}\n\\subfile{contents/G1/main}\n\\end{document}\n"),
+            ("style/guide.cls", "\\LoadClass{article}\n\\RequirePackage{extras}\n\\NewDocumentCommand\\exercise{m}{\\section{}\\input{exercises/#1}}\n"),
+            ("style/sub/extras.sty", "\\newcommand\\example[1]{\\input{examples/#1}}\n"),
+            ("contents/G1/main.tex", "\\documentclass[../../main.tex]{subfiles}\n\\begin{document}\n\\input{list}\n\\input{../shared/notes}\n\\end{document}\n"),
+            ("contents/G1/list.tex", "\\exercise{one}\n\\example{two}\n"),
+            ("contents/G1/exercises/one.tex", "x\n"),
+            ("contents/G1/examples/two.tex", "x\n"),
+            ("contents/shared/notes.tex", "y\n"),
+        ]);
+        let ix = ProjectIndex::build(d.path(), "main.tex", &cmds(&["include"]));
+        let mut paquetes = ix.packages.clone();
+        paquetes.sort();
+        assert_eq!(paquetes, ["style/guide.cls", "style/sub/extras.sty"]);
+        for f in ["contents/G1/list.tex", "contents/G1/exercises/one.tex", "contents/G1/examples/two.tex", "contents/shared/notes.tex"] {
+            assert!(ix.reachable.contains(f), "{f} is not reached");
+        }
+        // the guide is the part, and each exercise or example its class loads is a part inside it; what the guide loads
+        // otherwise belongs to the guide
+        assert_eq!(ix.part_names(), ["contents/G1/main", "one", "two"]);
+        assert!(ix.parts[1..].iter().all(|p| p.group.as_deref() == Some("contents/G1/main")));
+        assert_eq!(ix.part_of("contents/G1/exercises/one.tex"), Some(1));
+        assert_eq!(ix.part_of("contents/shared/notes.tex"), Some(0));
+    }
+
+    #[test]
+    fn dot_dot_folds_inside_the_project_and_stops_outside_it() {
+        assert_eq!(normalizar("a/b/../c").as_deref(), Some("a/c"));
+        assert_eq!(normalizar("./a/./b").as_deref(), Some("a/b"));
+        assert_eq!(normalizar("../a"), None);
+        assert_eq!(normalizar("a/../.."), None);
+    }
+
+    #[test]
+    fn images_are_found_from_the_file_folder_and_every_graphicspath() {
+        let d = proyecto(&[
+            ("main.tex", "\\documentclass{article}\n\\newcommand\\setup{\\graphicspath{{figures/}{../common/}}}\n\\begin{document}\n\\subfile{ch/one}\n\\end{document}\n"),
+            ("ch/one.tex", "\\includegraphics{a}\n\\includegraphics{b}\n"),
+            ("ch/figures/a.png", "x"),
+            ("common/b.pdf", "x"),
+        ]);
+        let ix = ProjectIndex::build(d.path(), "main.tex", &cmds(&["include"]));
+        let targets: Vec<Option<String>> = ix.files["ch/one.tex"].iter().map(|e| e.target.clone()).collect();
+        assert_eq!(targets, [Some("ch/figures/a.png".to_string()), Some("common/b.pdf".to_string())]);
     }
 }

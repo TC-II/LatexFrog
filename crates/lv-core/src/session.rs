@@ -58,6 +58,11 @@ pub struct PartView {
     pub name: String,
     pub file: Option<String>,
     pub command: String,
+    /// the name it goes by in the app (`etiquetas`)
+    pub label: String,
+    /// the part that holds it (an exercise's guide), when parts nest
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -133,6 +138,9 @@ pub struct FileInfo {
     pub profile_auto: bool,
     /// Las partes del proyecto cambiaron desde la última vez (por ejemplo, se agregó un `\Capitulo`).
     pub parts_changed: bool,
+    /// Where the engine found the images this file and the files it brings in insert, relative to the root
+    /// (`ProjectIndex::image_dirs`): the visual editor looks there too.
+    pub image_dirs: Vec<String>,
 }
 
 /// Del cursor al PDF: en qué perfil, qué PDF, y las cajas de línea (en bp desde arriba a la izquierda).
@@ -423,7 +431,7 @@ impl Session {
                 .index
                 .as_ref()
                 .map(|ix| {
-                    ix.parts.iter().map(|p| PartView { name: p.name.clone(), file: p.file.clone(), command: p.command.clone() }).collect()
+                    ix.parts.iter().map(|p| PartView { name: p.name.clone(), file: p.file.clone(), command: p.command.clone(), label: p.label.clone(), group: p.group.clone() }).collect()
                 })
                 .unwrap_or_default(),
             index_ms: d.index.as_ref().map(|i| i.scan_ms).unwrap_or(0),
@@ -548,6 +556,7 @@ impl Session {
             };
             (ix.part_of(rel).map(|i| ix.parts[i].name.clone()), afecta, perfil.map_or(true, |p| p.auto_compile))
         };
+        let image_dirs = ix.image_dirs(rel);
         d.index = Some(ix);
         // El capítulo donde se está trabajando: lo compila un perfil `parts: "current"`. Un archivo que no es de ninguna parte (el
         // preámbulo) no lo cambia.
@@ -560,7 +569,7 @@ impl Session {
             self.recalcular(&mut d);
         }
         drop(d);
-        Ok(FileInfo { part, affects: affects.into(), profile_auto, parts_changed })
+        Ok(FileInfo { part, affects: affects.into(), profile_auto, parts_changed, image_dirs })
     }
 
     // --- compilar -------------------------------------------------------------------------------------------------------
@@ -585,10 +594,17 @@ impl Session {
             if let Some(mala) = partes.iter().find(|p| !nombres.contains(p)) {
                 return Err(otro(format!("{mala:?} is not a part of the project")));
             }
-            Some(partes.clone())
+            // one exercise exported on its own still needs its guide
+            Some(ix.with_groups(partes))
         } else {
             // Todas las partes van con la lista completa (no `None`): un `\includeonly` propio de la raíz no lo recorta (S6).
-            Self::includeonly_de(&d, perfil, &pc, &nombres)?
+            Self::includeonly_de(&d, perfil, &pc, &ix)?
+        };
+        // The parts chosen by name, before their guides come in with them: the chapter I am in, an exercise to export.
+        let elegidas = match &extra.partes {
+            Some(p) => Some(p.clone()),
+            None if pc.parts == PartsSel::All => None,
+            None => Self::sin_grupos(&d, perfil, &pc, &nombres)?,
         };
         // Un perfil que deja partes afuera es parcial aunque no lo diga: el documento decide con esos flags lo que cambia en una
         // compilación reducida (el pie, la tapa), y sin ellos las variables de esa compilación no hacen nada.
@@ -619,15 +635,28 @@ impl Session {
         }
         // Las piezas que el perfil saca: copias de los archivos que las tienen, con su bloque comentado, en `.latexfrog/piezas/<perfil>/`.
         let mut copias: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
-        if !pc.omit.is_empty() {
-            let piezas = crate::piezas::detectar(&self.root, &ix);
-            copias.extend(crate::piezas::copias(&self.root, &piezas, &pc.omit));
+        // A guide in the build only because an exercise in it was chosen comes for its setup (its number, its figures' folder), not
+        // for its cover, credits or considerations: one exercise compiles as that exercise.
+        let solo_marco = elegidas.as_deref().map(|e| crate::piezas::solo_marco(&ix, e, includeonly.as_deref().unwrap_or(&[]))).unwrap_or_default();
+        let piezas = if pc.omit.is_empty() && solo_marco.is_empty() { Vec::new() } else { crate::piezas::detectar(&self.root, &ix) };
+        for p in piezas.iter().filter(|p| p.firma.is_some() && p.parte.as_ref().is_some_and(|g| solo_marco.contains(g))) {
+            if !pc.omit.contains(&p.clave) {
+                pc.omit.push(p.clave.clone());
+            }
         }
+        copias.extend(crate::piezas::copias(&self.root, &piezas, &pc.omit));
         let mut sustituciones = Vec::new();
         for (rel, contenido) in copias {
             let copia = format!(".latexfrog/piezas/{perfil}/{rel}");
             crate::build::write_if_changed(&self.root.join(&copia), &contenido)?;
             sustituciones.push((rel, copia));
+        }
+        // and the files of a part with pieces left out or headings left empty: their copies are read only while that part is
+        let mut copias_en_partes = Vec::new();
+        for (parte, rel, contenido) in crate::piezas::copias_en_partes(&self.root, &ix, &piezas, &pc.omit, includeonly.as_deref(), &solo_marco) {
+            let copia = format!(".latexfrog/piezas/{perfil}/{rel}");
+            crate::build::write_if_changed(&self.root.join(&copia), &contenido)?;
+            copias_en_partes.push((parte, rel, copia));
         }
         let driver = render_driver_spec(&DriverSpec {
             perfil: perfil.to_string(),
@@ -644,6 +673,7 @@ impl Session {
             fragmento: extra.fragmento.is_some(),
             omitir: pc.omit.iter().filter_map(|o| crate::piezas::Pieza::de_clave(o)).collect(),
             sustituciones,
+            copias_en_partes,
         })?;
         let dirs = ix.include_dirs(&cfg.parts.commands);
         let datos_de_figuras = (pc.externalize && figcache::FigureCfg::de(&cfg).modo != figcache::Modo::Off).then(|| self.datos_de_figuras(&cfg, &ix));
@@ -673,8 +703,9 @@ impl Session {
         let d = self.lock()?;
         let cfg = d.config.as_ref().ok_or_else(|| otro("no configuration"))?;
         let pc = cfg.profiles.get(perfil).ok_or_else(|| otro(format!("no profile {perfil:?}")))?;
-        let nombres = d.index.as_ref().map(|i| i.part_names()).unwrap_or_default();
-        Ok(Self::includeonly_de(&d, perfil, pc, &nombres)?.unwrap_or(nombres))
+        let vacio = ProjectIndex::default();
+        let ix = d.index.as_ref().unwrap_or(&vacio);
+        Ok(Self::includeonly_de(&d, perfil, pc, ix)?.unwrap_or_else(|| ix.part_names()))
     }
 
     /// ¿El interruptor de borrador de esta máquina (`State.draft_images`) vale para este perfil? **No** para lo que se entrega: la
@@ -1236,7 +1267,25 @@ impl Session {
             return Err(otro(format!("no profile {perfil:?}")));
         }
         let sx = self.cargar_synctex(perfil)?;
-        Ok(sx.inverse(page, x, y).map(|i| SyncInverse { file: sx.rel_of_tag(&self.root, i.tag), line: i.line, inside: i.inside }))
+        Ok(self.inverse_en_proyecto(&sx, page, x, y))
+    }
+
+    /// The same over another PDF of the project: Live's (`_draft/draft.pdf`), whose SyncTeX lies beside it.
+    pub fn synctex_inverse_pdf(&self, pdf: &str, page: u32, x: f64, y: f64) -> Result<Option<SyncInverse>> {
+        let rel = pdf.replace('\\', "/");
+        if rel.starts_with('/') || rel.contains(':') || rel.split('/').any(|c| c == "..") || !rel.ends_with(".pdf") {
+            return Err(otro(format!("not a PDF of the project: {pdf:?}")));
+        }
+        let ruta = self.root.join(format!("{}.synctex.gz", rel.trim_end_matches(".pdf")));
+        let sx = Synctex::load(&ruta).map_err(|e| Error::Io(format!("{}: {e}", ruta.display())))?;
+        Ok(self.inverse_en_proyecto(&sx, page, x, y))
+    }
+
+    /// Only the project's own files count: a click on a picture drawn in place goes to the line that draws it, not into a TikZ library.
+    fn inverse_en_proyecto(&self, sx: &Synctex, page: u32, x: f64, y: f64) -> Option<SyncInverse> {
+        let propios = sx.tags_del_proyecto(&self.root);
+        let i = sx.inverse_en(page, x, y, &|t| propios.contains(&t)).or_else(|| sx.inverse(page, x, y))?;
+        Some(SyncInverse { file: sx.rel_of_tag(&self.root, i.tag), line: i.line, inside: i.inside })
     }
 
     // --- publicar ---------------------------------------------------------------------------------------------------------

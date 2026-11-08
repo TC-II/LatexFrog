@@ -36,6 +36,7 @@ import { flattenPaths } from '$lib/workspace/refUpdate';
 import { setGraphicResolver } from '$lib/languages/latex/intellisense/hover';
 import { graphicCandidateUrls, graphicSearchDirs } from '$lib/editor/visual/graphicsCandidates';
 import { setEditorFileAccess, setEditorGraphicDirs } from '$lib/editor/visual/fileAccess';
+import { lvProject } from '$lib/lv/lvEngine.svelte';
 import { insertCitationFromZotero, zoteroAvailable, type ZoteroInsertDeps } from '$lib/zotero/insertFromZotero';
 import { doiLookupAvailable } from '$lib/cite/citeByDoi';
 import { citeByDoi as citeByDoiDialog } from '$lib/cite/citeByDoiState.svelte';
@@ -382,7 +383,7 @@ export class WorkspaceIntegrations {
 		$effect(() => {
 			setEditorFileAccess((p) => fileService.fileUrl(p));
 			function searchOpts() {
-				return { root: workspaceRoot.current, loadedPath: doc.path, source: doc.texSource };
+				return { root: workspaceRoot.current, loadedPath: doc.path, source: doc.texSource, extraDirs: lvProject.imageDirs() };
 			}
 			setGraphicResolver((rel) => graphicCandidateUrls(rel, { ...searchOpts(), fileUrl: (p) => fileService.fileUrl(p) }));
 			// the rendered image node resolves through the same directories, so a figure cannot
