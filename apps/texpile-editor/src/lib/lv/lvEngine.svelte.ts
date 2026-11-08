@@ -320,7 +320,10 @@ class LvProject {
 		this.fileInfo = info;
 		// an image the visual editor showed missing before the engine said where its folder is tries again
 		if (moreDirs) announceFilesArrived();
-		if (info?.partsChanged) await this.refresh();
+		// the engine moved to another chapter: a `current` profile now builds that one, so Live's driver is written again and
+		// Live recompiles; the outline's left-out rows follow too
+		const movedPart = !!info?.part && info.part !== this.view?.state.currentPart;
+		if (info?.partsChanged || movedPart) await this.refresh();
 	}
 
 	async compile() {
