@@ -1262,6 +1262,7 @@
 	"draft_status_patched": "Atualizado em {ms} ms",
 	"draft_status_warm_ready": "Pronto",
 	"draft_status_compiling": "Compilando projeto…",
+	"draft_loading_other": "Carregando o novo documento…",
 	"draft_status_compiling_export": "Compilando documento para exportação…",
 	"draft_status_compiled": "Compilado em {secs} s",
 	"draft_status_recompiled": "Recompilado ({reason}) em {secs} s",

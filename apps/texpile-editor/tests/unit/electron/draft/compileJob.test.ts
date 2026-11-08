@@ -8,7 +8,7 @@ const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'texpile-comp
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 
 it('defines the pdfTeX-only primitives that templates use unguarded, only when absent', () => {
-	for (const name of ['pdfoutput', 'pdfgentounicode', 'pdfglyphtounicode']) {
+	for (const name of ['pdfoutput', 'pdfgentounicode', 'pdfglyphtounicode', 'pdfcompresslevel', 'pdfobjcompresslevel', 'pdfminorversion', 'pdfdecimaldigits']) {
 		expect(PDF_SHIM).toContain(`\\ifdefined\\${name}\\else`);
 	}
 });

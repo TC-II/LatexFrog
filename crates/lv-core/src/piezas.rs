@@ -248,6 +248,52 @@ pub fn copias(root: &Path, piezas: &[PiezaInfo], omitir: &[String]) -> Vec<(Stri
     out
 }
 
+/// Opening minus closing braces of a line without its comment (`\{` and `\}` are characters, not groups).
+fn llaves(l: &str) -> i64 {
+    let b = l.as_bytes();
+    let mut d = 0;
+    for i in 0..b.len() {
+        let escapada = i > 0 && b[i - 1] == b'\\' && !(i > 1 && b[i - 2] == b'\\');
+        match b[i] {
+            b'{' if !escapada => d += 1,
+            b'}' if !escapada => d -= 1,
+            _ => {}
+        }
+    }
+    d
+}
+
+/// Whether commenting these lines keeps the file's braces and environments balanced.
+fn balanceado(lineas: &[&str]) -> bool {
+    let mut d = 0i64;
+    let mut pila: Vec<String> = Vec::new();
+    for l in lineas {
+        let l = sin_comentario(l);
+        d += llaves(l);
+        if d < 0 {
+            return false;
+        }
+        let mut r = l;
+        while let Some(i) = r.find('\\') {
+            r = &r[i + 1..];
+            let (abre, resto) = if let Some(x) = r.strip_prefix("begin{") {
+                (true, x)
+            } else if let Some(x) = r.strip_prefix("end{") {
+                (false, x)
+            } else {
+                continue;
+            };
+            let Some((nombre, _)) = resto.split_once('}') else { return false };
+            if abre {
+                pila.push(nombre.to_string());
+            } else if pila.pop().as_deref() != Some(nombre) {
+                return false;
+            }
+        }
+    }
+    d == 0 && pila.is_empty()
+}
+
 fn sin_comentario(l: &str) -> &str {
     let b = l.as_bytes();
     for i in 0..b.len() {
@@ -280,7 +326,19 @@ pub fn detectar(root: &Path, ix: &ProjectIndex) -> Vec<PiezaInfo> {
                 .map(|(_, t)| *t)
         };
         let partes_ix: Vec<usize> = lineas_de_partes.iter().map(|l| *l as usize - 1).collect();
+        // Only real calls count: in a file that opens the document, none before `\begin{document}` (a `\pretocmd{\printbibliography}`
+        // in the preamble is not the bibliography), and none inside an open brace group (an argument of another macro).
+        let inicio = todas.iter().position(|l| sin_comentario(l).contains("\\begin{document}")).unwrap_or(0);
+        let mut profundidad = Vec::with_capacity(todas.len());
+        let mut d: i64 = 0;
+        for l in &todas {
+            profundidad.push(d);
+            d += llaves(sin_comentario(l));
+        }
         for (n, l) in todas.iter().enumerate() {
+            if n < inicio || profundidad[n] != 0 {
+                continue;
+            }
             let linea = n as u32 + 1;
             let propio = tipo(l);
             let otras: Vec<usize> = (0..todas.len())
@@ -298,6 +356,15 @@ pub fn detectar(root: &Path, ix: &ProjectIndex) -> Vec<PiezaInfo> {
             // La bibliografía y el índice alfabético se sacan con su bloque (título, salto de página, secciones); el resto, sólo su línea.
             let mut push = |p: Pieza, nombre: String| {
                 let (desde, hasta) = if matches!(p, Pieza::Bibliography | Pieza::Index) { (b_desde, b_hasta) } else { (linea, linea) };
+                // Commenting must not leave a group or an environment open: a block that would is cut to its line, and a line that
+                // would is not a piece (the driver still empties the command itself).
+                let (desde, hasta) = if balanceado(&todas[desde as usize - 1..hasta as usize]) {
+                    (desde, hasta)
+                } else if balanceado(&todas[n..=n]) {
+                    (linea, linea)
+                } else {
+                    return;
+                };
                 if !out.iter().any(|x| x.clave == p.clave()) {
                     out.push(PiezaInfo { clave: p.clave(), nombre, archivo: rel.clone(), linea, desde, hasta, lugar: lugar.into(), parte: None, firma: None });
                 }
@@ -588,6 +655,31 @@ mod tests {
         assert_eq!(Pieza::de_clave("pdf:"), None);
         assert_eq!(Pieza::de_clave("pdf:a}b"), None);
         assert_eq!(Pieza::de_clave("portada"), None);
+    }
+
+    #[test]
+    fn a_mention_in_the_preamble_or_in_an_argument_is_not_the_bibliography_and_a_block_never_breaks_balance() {
+        let d = tempfile::tempdir().unwrap();
+        // the biblatex example: the preamble patches \printbibliography inside an open group
+        std::fs::write(
+            d.path().join("main.tex"),
+            "\\documentclass{article}\n\\ifdefstring{\\x}{y}{%\n\\pretocmd{\\printbibliography}{\\greektext}{}{}}{}\n\\begin{document}\nText.\n\\printbibliography\n\\end{document}\n",
+        )
+        .unwrap();
+        let ix = ProjectIndex::build(d.path(), "main.tex", &[]);
+        let p = detectar(d.path(), &ix);
+        let b = p.iter().find(|x| x.clave == "bibliography").unwrap();
+        assert_eq!((b.linea, b.desde, b.hasta), (6, 6, 6));
+        // the thesis: the block would run into an environment opened before it
+        std::fs::write(
+            d.path().join("main.tex"),
+            "\\documentclass{book}\n\\begin{document}\n\\begin{spacing}{1}\n\\cleardoublepage\n\\bibliography{refs}\n\\end{spacing}\n\\begin{appendices}\nA\n\\end{appendices}\n\\end{document}\n",
+        )
+        .unwrap();
+        let ix = ProjectIndex::build(d.path(), "main.tex", &[]);
+        let p = detectar(d.path(), &ix);
+        let b = p.iter().find(|x| x.clave == "bibliography").unwrap();
+        assert!(b.hasta < 6, "the block must not swallow the end of spacing: {}..{}", b.desde, b.hasta);
     }
 
     #[test]

@@ -1262,6 +1262,7 @@
 	"draft_status_patched": "已在 {ms} 毫秒内修补",
 	"draft_status_warm_ready": "已就绪",
 	"draft_status_compiling": "正在编译项目……",
+	"draft_loading_other": "正在加载新文档……",
 	"draft_status_compiling_export": "正在编译文档以导出……",
 	"draft_status_compiled": "已在 {secs} 秒内编译完成",
 	"draft_status_recompiled": "已重新编译（{reason}），耗时 {secs} 秒",

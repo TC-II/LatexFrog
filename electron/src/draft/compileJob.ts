@@ -16,9 +16,21 @@ export const OUT = '_draft';
 // The same goes for \pdfgentounicode and \pdfglyphtounicode (glyphtounicode.tex, used by many
 // book templates): they only shape the PDF text layer, which the draft never ships.
 export const PDF_SHIM =
-	`\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi` +
+	// LatexFrog: LuaTeX's own register where there is one: a fresh count reads 0, "no PDF", and classes that test it
+	// (ltnews) then skip hyperref and every \href fails
+	`\\ifdefined\\pdfoutput\\else\\ifdefined\\outputmode\\let\\pdfoutput\\outputmode\\else\\newcount\\pdfoutput\\fi\\fi` +
+	`\\ifdefined\\pdfinfo\\else\\ifdefined\\pdfextension\\protected\\def\\pdfinfo{\\pdfextension info }\\fi\\fi` +
 	`\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi` +
-	`\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi`;
+	`\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi` +
+	// LatexFrog: the PDF writer's settings templates set unguarded (\pdfcompresslevel=9 in a thesis preamble): plain
+	// registers that take the assignment and do nothing, defined only where the engine has none
+	`\\ifdefined\\pdfcompresslevel\\else\\newcount\\pdfcompresslevel\\fi` +
+	`\\ifdefined\\pdfobjcompresslevel\\else\\newcount\\pdfobjcompresslevel\\fi` +
+	`\\ifdefined\\pdfminorversion\\else\\newcount\\pdfminorversion\\fi` +
+	`\\ifdefined\\pdfdecimaldigits\\else\\newcount\\pdfdecimaldigits\\fi` +
+	`\\ifdefined\\pdfimageresolution\\else\\newcount\\pdfimageresolution\\fi` +
+	`\\ifdefined\\pdfpkresolution\\else\\newcount\\pdfpkresolution\\fi`;
+// (not \pdfpagewidth/\pdfpageheight: geometry and the classes test for them to pick how to set the paper size)
 
 /** everything that precedes the document in the job: extractor, hooks, shim */
 export function jobPrefix(engineDir: string): string {

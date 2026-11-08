@@ -4,6 +4,8 @@
 // image filenames (draftImages) and Type1 font paths (fontT1Map) attached, the
 // bibliography cycled between passes (draftBib), and refs exported for the warm daemon
 // (draftRefs). Same engine as the user's own compile, so exact by construction.
+import { seedDraftFromProfile } from '../lv/draftSeed';
+import { projectFingerprint, restoreSnapshot, saveSnapshot } from '../lv/draftSnapshot';
 import { liveExecFile as execFile, type LiveProcess } from '../lv/lvLive';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -237,6 +239,16 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 		}).join(' ');
 	}
 	const t0 = Date.now();
+	// LatexFrog: a first compile starts from the profile's full build (aux, parts' aux, bbl): one pass instead of up to four
+	seedDraftFromProfile(root, outAbs, mainFile);
+	// LatexFrog: back to a profile whose sources did not change since its last good compile: its kept result, no TeX
+	const fingerprint = projectFingerprint(root, mainFile, engine);
+	const kept = restoreSnapshot<DraftResult>(outAbs, mainFile, fingerprint);
+	if (kept && kept.ok) {
+		exportDaemonRefs(outAbs);
+		if (engine === 'lualatex') rewarmCompiler(root, mainFile, engineDir, body.readBack);
+		return { ...kept, ms: Date.now() - t0 };
+	}
 	const auxExisted = fs.existsSync(path.join(outAbs, 'draft.aux'));
 	const refsBefore = refState();
 	seedBbl(root, outAbs, mainFile);
@@ -412,7 +424,7 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 	const maxPageW = manifest.pages.length ? Math.max(...manifest.pages.map((p) => p.w || 0)) : 0;
 	const maxPageH = manifest.pages.length ? Math.max(...manifest.pages.map((p) => p.h || 0)) : 0;
 	rewarm();
-	return {
+	const result: DraftResult = {
 		ok: true,
 		ms,
 		passes,
@@ -439,4 +451,7 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 		marginY: ONE_INCH_PT + ((manifest as { vOffset?: number }).vOffset || 0),
 		pages
 	};
+	// a compile a newer one superseded while its pages were read is not the state of the sources
+	if (!superseded()) saveSnapshot(outAbs, mainFile, fingerprint, result);
+	return result;
 }

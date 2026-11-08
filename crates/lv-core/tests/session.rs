@@ -710,8 +710,8 @@ fn live_driver_opens_the_document_itself_with_the_profile_choices() {
     let t = fs::read_to_string(d.path().join(&rel)).unwrap();
     let (pre, body) = t.split_once("\\begin{document}\n").unwrap();
     assert!(pre.contains("\\def\\CompilacionReducida{}") && pre.contains("\\let\\lvIncludeonly\\includeonly"), "{t}");
-    // Live runs without shell escape: no externalization
-    assert!(!t.contains("TikzExternalizar"), "{t}");
+    // Live runs without shell escape: it reads the figure cache and never bakes
+    assert!(t.contains("TikzExternalizar") && t.contains("external/mode=graphics if exists"), "{t}");
     // what names the profile or its parts is in the body, outside the preamble Live keeps warm
     assert!(!pre.contains("parcial") && !pre.contains("Secciones"), "{pre}");
     assert_eq!(body, "\\def\\lvPerfil{parcial}\n\\lvIncludeonly{Secciones/Dos}\n\\input{.latexfrog/build/parcial/lv-parcial-live-resto}\n");

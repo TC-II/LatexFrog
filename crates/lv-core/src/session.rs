@@ -614,7 +614,12 @@ impl Session {
             flags.extend(cfg.flags.partial.iter().cloned());
         }
         let mut pc = pc;
-        pc.externalize &= !extra.live;
+        // Live never bakes (no shell escape in the draft engine) but reads the figures already in the cache, as a `cacheOnly`
+        // profile does: a figure there is included, one missing is drawn. On the book's Desnormalización chapter a cold Live pass
+        // goes from 26.9 s to 22.6 s. An edited figure shows its cached version until a full build bakes it again.
+        if extra.live && pc.externalize {
+            pc.cache_only = true;
+        }
         if pc.externalize {
             flags.extend(cfg.flags.externalize.iter().cloned());
         }

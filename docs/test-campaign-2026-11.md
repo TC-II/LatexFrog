@@ -4,6 +4,28 @@ Written for the agent that will fix what it found. Every finding says how it was
 
 Repo state tested: `main` at `97ca391e` plus the uncommitted `apps/texpile-editor/src/lib/lv/lvEngine.svelte.ts`. Sidecar built from the same tree (release). MiKTeX 25.4 on Windows 11, Node 24, Rust 1.92.
 
+## Fixes after the campaign (2026-11-08)
+
+| Item | Fix | Checked |
+|---|---|---|
+| 1 omit bibliography | `piezas.rs`: a mention counts only after `\begin{document}` and at brace depth 0; a block that would leave a group or environment open is cut to its line, a line that would is not a piece | unit test with both repro shapes |
+| 2 outline drift | `symbols.rs`: a backslash ending its line (control space, `\verb\|x\\\|`) swallowed the newline without counting it | `drift.mjs`: offset 0 on the 26k-line thesis and on `sec-appendices.tex`; unit test |
+| 3 watermark `{date}` | `\today` where the class has it, else the ISO date | unit test updated |
+| 4 Live emergency stop | `page-extract.lua` writes the manifest from `wrapup_run` when TeX stops before `\end{document}`: Live shows the pages shipped | latexindent: 0 -> 7 pages in a cold draft pass |
+| 5 pdfTeX primitives | `PDF_SHIM` adds `\pdfcompresslevel`, `\pdfobjcompresslevel`, `\pdfminorversion`, `\pdfdecimaldigits`, `\pdfimageresolution`, `\pdfpkresolution` | phd thesis: the error is gone |
+| 6 ltnews | the shim's own `\pdfoutput` read 0 ("no PDF"), so ltnews skipped hyperref: now `\let\pdfoutput\outputmode`, plus `\pdfinfo` | ltnews: 0 errors, 5 pages as the full build |
+| 6 tufte | not an app bug: plain `lualatex` fails the same way (tufte-latex under LuaTeX); Live always runs LuaLaTeX | |
+| 8 vitest | `draft_loading_other` in de, pt-BR, zh-Hans, zh-Hant; `compileLaneRace` turns Live off for the terminal-lane case (Live is on by default) | `suggestionsVisualFuzz` still fails: see below |
+| 9 cargo `--features tex` | stale expectation fixed | all pass |
+
+`suggestionsVisualFuzz` (tex, run 42): the fuzz walks `tests/live/fixtures`, where this repo added fixtures, so run *n* now lands on another file. Run 42 edits the upstream `beamer` fixture and the visual editor draws a rejected suggestion with a repeated phrase. That is Texpile's suggestion drawing, not code of this repo; it is left failing on purpose rather than hidden.
+
+### Live speed (book, chapter Desnormalización, perfil-1, LuaLaTeX, same machine)
+
+- Live reads the figure cache (`session.rs`: a Live driver of an externalizing profile is `cacheOnly`: `graphics if exists`, no shell escape). Session 1 measured 26.9 s -> 22.6 s a pass. An edited figure shows its cached version until a full build bakes it again.
+- First compile seeded from the profile's build (`electron/src/lv/draftSeed.ts`): `_draft` gets `lv-<profile>.aux`, the parts' `.aux` and the `.bbl`. And the `.bbl` is compared by content, so biber rewriting the same file costs no passes (`draftBib.ts`). Measured, warm OS caches: **46.2 s (3 passes + biber) -> 15.4 s (1 pass + biber)**; with cold caches 92.1 s -> 16.6 s.
+- Profile switches (`electron/src/lv/draftSnapshot.ts`): after a good compile Live keeps its result and `draft.*` products per driver under `_draft/snap/`, with a fingerprint (driver text, engine, size and mtime of every project file outside dot folders). Back to a profile whose sources did not change, the result is restored without TeX; on a switch to a profile with no kept result, the other profile's aux is replaced by this profile's build products. Unit tests in `tests/unit/electron/draft/draftSeedSnapshot.test.ts`.
+
 ## Summary
 
 | What | Result |

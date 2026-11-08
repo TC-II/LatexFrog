@@ -88,6 +88,8 @@ describe('runCompile with a stale cached command (the main-confirm re-entry)', (
 
 	it('a .tex main still compiles with LaTeX - the fresh resolve changes nothing there', async () => {
 		mainFile.current = `${ROOT}/main.tex`;
+		// Live is on by default and would take a .tex compile; this checks the terminal lane
+		projectConfigSync.setLiveMode(ROOT, false);
 		const record = { previewOpens: 0, ran: [] as string[] };
 		// stale cache pointing the OTHER way round, for symmetry
 		compiler = new CompilePipeline(staleDeps(record, { getCompileCommand: () => 'tinymist compile {main}' }));

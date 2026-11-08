@@ -261,6 +261,9 @@ fn texto_latex(t: &str) -> String {
     o
 }
 
+/// `{date}`: the class's `\today`, or the ISO date where the class has none (`minimal`).
+const FECHA: &str = "\\ifdefined\\today\\today\\else\\number\\year-\\number\\month-\\number\\day\\fi";
+
 /// The watermark's text: plain text with its fields, `{date}` (the compile's date), `{page}` and `{profile}`.
 fn texto_de_marca(t: &str, perfil: &str) -> String {
     let mut o = String::new();
@@ -268,7 +271,7 @@ fn texto_de_marca(t: &str, perfil: &str) -> String {
     while let Some(i) = resto.find('{') {
         o.push_str(&texto_latex(&resto[..i]));
         let r = &resto[i..];
-        let campo = [("{date}", "\\today".to_string()), ("{page}", "\\thepage".to_string()), ("{profile}", texto_latex(perfil))].into_iter().find(|(k, _)| r.starts_with(k));
+        let campo = [("{date}", FECHA.to_string()), ("{page}", "\\thepage".to_string()), ("{profile}", texto_latex(perfil))].into_iter().find(|(k, _)| r.starts_with(k));
         match campo {
             Some((k, v)) => {
                 o.push_str(&v);
@@ -1308,7 +1311,7 @@ mod tests {
         let w: crate::config::WatermarkCfg =
             serde_json::from_str(r##"{ "text": "50% {profile} - {date} - p. {page} {x} #1", "position": "bottom-right", "color": "#cc0000", "opacity": 40, "bold": true }"##).unwrap();
         let d = render_driver_spec(&DriverSpec { perfil: "p".into(), root_rel: "main.tex".into(), marca: Some((w, "Draft & co".into())), ..Default::default() }).unwrap();
-        assert!(d.contains("\\def\\lv@marca{50\\% Draft \\& co - \\today - p. \\thepage \\{x\\} \\#1}"), "{d}");
+        assert!(d.contains("\\def\\lv@marca{50\\% Draft \\& co - \\ifdefined\\today\\today\\else\\number\\year-\\number\\month-\\number\\day\\fi - p. \\thepage \\{x\\} \\#1}"), "{d}");
         assert!(d.contains("\\definecolor{lvMarca}{HTML}{CC0000}"), "{d}");
         assert!(d.contains("\\AddToHook{shipout/background}"), "{d}");
         assert!(d.contains("\\makebox(0,0)[br]{\\rotatebox{0}{\\scalebox{0.9}{\\normalfont\\fontsize{10}{12}\\selectfont\\bfseries\\color{lvMarca!40!white}\\lv@marca}}}"), "{d}");

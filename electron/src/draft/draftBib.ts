@@ -75,7 +75,8 @@ export function seedBbl(root: string, outAbs: string, mainFile: string): void {
 export async function auxCycle(root: string, outAbs: string, mainFile: string): Promise<boolean> {
 	await shellEnvReady();
 	const bbl = path.join(outAbs, 'draft.bbl');
-	const bblBefore = mtimeOf(bbl) + ':' + (fs.existsSync(bbl) ? sha1(fs.readFileSync(bbl)) : '');
+	// LatexFrog: by content only -- biber rewriting the same .bbl (a fresh _draft, a seeded one) is no reason for two more passes
+	const bblBefore = fs.existsSync(bbl) ? sha1(fs.readFileSync(bbl)) : '';
 	seedBbl(root, outAbs, mainFile);
 	const bcf = path.join(outAbs, 'draft.bcf');
 	const aux = path.join(outAbs, 'draft.aux');
@@ -115,6 +116,6 @@ export async function auxCycle(root: string, outAbs: string, mainFile: string): 
 			}
 		}
 	}
-	const bblAfter = mtimeOf(bbl) + ':' + (fs.existsSync(bbl) ? sha1(fs.readFileSync(bbl)) : '');
+	const bblAfter = fs.existsSync(bbl) ? sha1(fs.readFileSync(bbl)) : '';
 	return bblAfter !== bblBefore;
 }

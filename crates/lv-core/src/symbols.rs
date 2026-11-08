@@ -206,6 +206,10 @@ fn escanear(texto: &str) -> Vec<Cmd> {
             }
             b'\\' => {
                 if i + 1 >= b.len() || !b[i + 1].is_ascii_alphabetic() {
+                    // a backslash ending its line (a control space) takes the newline along: it still counts
+                    if b.get(i + 1) == Some(&b'\n') {
+                        linea += 1;
+                    }
                     i += 2;
                     continue;
                 }
@@ -1031,6 +1035,13 @@ mod tests {
         let s = simbolos(&d, "main.tex");
         assert_eq!(s.labels[0].line, 5);
         assert_eq!(s.sections[0].line, 8);
+    }
+
+    #[test]
+    fn a_backslash_ending_a_line_does_not_eat_the_line_count() {
+        let d = proyecto(&[("main.tex", "a \\\nb \\\r\nc\n\\section{Uno}\n\\verb|x\\|\n\\section{Dos}\n")]);
+        let s = simbolos(&d, "main.tex");
+        assert_eq!(s.sections.iter().map(|x| x.line).collect::<Vec<_>>(), [4, 6]);
     }
 
     /// One course of two guides, each a `\subfile` whose exercises come in through a macro of the project's class.

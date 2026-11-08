@@ -116,7 +116,7 @@ fn las_figuras_se_nombran_por_archivo_y_la_raiz_queda_limpia() {
     assert!(c.secuencia().iter().any(|e| e == "fin(completo,ok=true)"), "{:?}", c.secuencia());
     let mut sobras: Vec<String> = fs::read_dir(&c.p).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
     sobras.sort();
-    assert_eq!(sobras, [".latexfrog", "Secciones", "cap-a.tex", "estilo.tex", "figuras-cache", "latexfrog.json", "main.tex"], "las subcompilaciones no ensucian la raíz");
+    assert_eq!(sobras, [".latexfrog", "Secciones", "cap-a.tex", "estilo.tex", "figuras-cache", "main.tex"], "las subcompilaciones no ensucian la raíz");
     assert_eq!(fs::read_dir(c.p.join("Secciones")).unwrap().count(), 1, "ni la carpeta del \\include (el .aux queda en el perfil)");
     let st = c.s.figures_status().unwrap();
     assert_eq!((st.actuales, st.viejas, st.pendientes, st.fallidas), (4, 0, 0, 0), "{st:?}");

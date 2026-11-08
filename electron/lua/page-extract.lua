@@ -488,6 +488,18 @@ function page_extract_finish()
 	write_manifest()
 end
 
+-- LatexFrog: a run TeX ends before \end{document} (an "Emergency stop": a package asking for a file name in nonstop mode,
+-- as listings does for a missing \lstinputlisting) still shipped its pages; the full build keeps them in its PDF, so Live
+-- shows them too. wrapup_run runs at the end of every run, fatal ones included.
+if luatexbase and luatexbase.add_to_callback then
+	pcall(luatexbase.add_to_callback, "wrapup_run", function()
+		if not doc_ended then
+			doc_ended = true
+			write_manifest()
+		end
+	end, "texpile.wrapup")
+end
+
 -- Warm-compile handshake. The wrapper calls this right after the preamble: hooks are
 -- registered, \begin{document} has run, fonts are loaded -- everything a pass pays for
 -- before the first page. Hold here until the driver has written the BODY (padded so its
