@@ -28,6 +28,7 @@ import {
 	gitPublish,
 	gitSync,
 	githubPublish,
+	githubOwners,
 	gitRecheck,
 	type GitStatusEntry,
 	type GitFileChange,
@@ -354,6 +355,7 @@ export class ScmActions {
 			defaultName: basename(root)
 				.trim()
 				.replace(/[^A-Za-z0-9_.-]+/g, '-'),
+			owners: () => githubOwners(root),
 			submit: (choice) => this.publishTo(root, choice)
 		});
 	};

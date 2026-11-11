@@ -3322,6 +3322,8 @@
 	"lv_autosync_state_idle": "Synced at {time}",
 	"lv_autosync_state_waiting": "Waiting",
 	"lv_autosync_no_remote": "this project has no remote to sync with: publish it first",
+	"lv_publish_github_name_org": "Name, or organization/name",
+	"lv_publish_owner": "Owner",
 	"lv_autosync_synced": "{pulled} received, {pushed} sent",
 	"lv_autosync_commit": "Auto sync {time}",
 	"lv_autosync_auth": "the remote asked for a sign-in: press Sync once by hand",

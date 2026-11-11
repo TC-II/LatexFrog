@@ -7,7 +7,7 @@
 import { net, type WebContents } from 'electron';
 import { helperCall } from '../../helper/helperProcess';
 import { withAskpass } from '../auth/gitAskpass';
-import { createGithubRepo, type GithubFailure } from './github';
+import { createGithubRepo, listGithubOwners, type GithubFailure, type GithubOwners } from './github';
 import type { GitOpResult } from '../gitService';
 import type { GitCredentialResult, GitPushResult, PushFailure } from './gitRemote';
 
@@ -23,6 +23,23 @@ export type GithubPublishResult = {
 	url?: string;
 	fullName?: string;
 };
+
+export type GithubOwnersAnswer = { ok: boolean; failure?: GithubFailure; error?: string; owners?: GithubOwners };
+
+/** The account and organizations the publish dialog offers. Asks no one: with no sign-in already
+ *  held it answers not-ok and the dialog goes without a list, the sign-in question comes at Publish. */
+export function githubOwners(sender: WebContents, root: string): Promise<GithubOwnersAnswer> {
+	return withAskpass(
+		sender,
+		async (env): Promise<GithubOwnersAnswer> => {
+			const cred = (await helperCall('git.gitCredentialFill', [root, 'github.com', env])) as GitCredentialResult;
+			if (!cred.ok || !cred.credential) return { ok: false, failure: 'auth', error: cred.error };
+			const res = await listGithubOwners((url, init) => net.fetch(url, init), cred.credential.password);
+			return res.ok ? { ok: true, owners: res.owners } : { ok: false, failure: res.failure, error: res.error };
+		},
+		{ quiet: true }
+	);
+}
 
 export function githubPublish(
 	sender: WebContents,

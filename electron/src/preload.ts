@@ -347,6 +347,8 @@ contextBridge.exposeInMainWorld('texpileNative', {
 	/** create a GitHub repository, add it as `remote`, publish the branch there -> { ok, url?, failure? }. */
 	githubPublish: (root: string, opts: { name: string; isPrivate: boolean; remote: string; ssh?: boolean }) =>
 		invokeFs('git:githubPublish', root, opts),
+	/** the GitHub account and organizations a repository can be published under, from a sign-in already held -> { ok, owners? }. */
+	githubOwners: (root: string) => invokeFs('git:githubOwners', root),
 	/** git or ssh asking for a username, password, passphrase or host-key answer; returns an unsubscribe fn */
 	onGitAskpass: (cb: (req: unknown) => void) => {
 		function h(_e: unknown, req: unknown) {

@@ -4,6 +4,7 @@
 	// host. The choice runs while the dialog is up, so a name that is taken on GitHub or an address
 	// that is wrong is corrected in place instead of starting over.
 	import { CloudUpload } from '@lucide/svelte';
+	import { onMount } from 'svelte';
 	import { tip } from '$lib/components/tooltip.svelte';
 	import Modal from '../Modal.svelte';
 	import ModalActions from '../ModalActions.svelte';
@@ -23,10 +24,35 @@
 	let error = $state<string | null>(null);
 
 	// GitHub's own rule, so what is shown is what the repository will be called
-	const cleanName = $derived(repoName.trim().replace(/[^A-Za-z0-9_.-]+/g, '-'));
+	// `org/name` keeps its one slash: the part before it is the organization to publish under
+	const cleanName = $derived.by(() => {
+		const clean = (s: string) => s.trim().replace(/[^A-Za-z0-9_.-]+/g, '-');
+		const raw = repoName.trim();
+		const slash = raw.indexOf('/');
+		if (slash < 0) return clean(raw);
+		const owner = raw.slice(0, slash).trim();
+		const name = clean(raw.slice(slash + 1));
+		return owner && name ? `${owner}/${name}` : '';
+	});
+
+	// The account and organizations to publish under, once GitHub has said; until then, or with no
+	// sign-in held, there is no list and the name takes `org/name`. '' is the author's own account.
+	let owners = $state<{ login: string; orgs: string[] } | null>(null);
+	let owner = $state('');
+	onMount(() => {
+		let gone = false;
+		void ask.owners?.().then((o) => {
+			if (!gone && o && o.orgs.length) owners = o;
+		});
+		return () => (gone = true);
+	});
 
 	const choice = $derived.by((): PublishChoice | null => {
-		if (picked === 'github') return cleanName ? { kind: 'github', name: cleanName, isPrivate } : null;
+		if (picked === 'github') {
+			if (!cleanName) return null;
+			// a typed `org/name` wins over the list
+			return { kind: 'github', name: owner && !cleanName.includes('/') ? `${owner}/${cleanName}` : cleanName, isPrivate };
+		}
 		if (picked === 'url') return url.trim() ? { kind: 'url', url: url.trim() } : null;
 		return { kind: 'remote', remote: picked.slice('remote:'.length) };
 	});
@@ -88,11 +114,19 @@
 				<label for="publish-to-github" class="block cursor-pointer font-medium">{m.vcs_publish_github()}</label>
 				{#if picked === 'github'}
 					<div class="mt-2 flex flex-wrap items-stretch gap-2">
+						{#if owners}
+							<select class="select w-auto min-w-32 text-sm" aria-label={m.lv_publish_owner()} bind:value={owner} disabled={busy}>
+								<option value="">{owners.login}</option>
+								{#each owners.orgs as org (org)}
+									<option value={org}>{org}</option>
+								{/each}
+							</select>
+						{/if}
 						<input
 							class="input min-w-40 flex-1 text-sm"
 							type="text"
 							aria-label={m.vcs_publish_github_name()}
-							placeholder={m.vcs_publish_github_name()}
+							placeholder={owners ? m.vcs_publish_github_name() : m.lv_publish_github_name_org()}
 							bind:value={repoName}
 							disabled={busy}
 						/>

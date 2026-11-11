@@ -5,7 +5,7 @@ import { helperCall, onHelperEvent } from '../helper/helperProcess';
 import { handleFs, handleFsE } from './ipcResult';
 import { timeSpan } from '../startupStats';
 import { withAskpass, registerAskpassIpc } from '../git/auth/gitAskpass';
-import { githubPublish } from '../git/remote/githubPublish';
+import { githubOwners, githubPublish } from '../git/remote/githubPublish';
 
 // channel -> gitService export
 const OPS: Record<string, string> = {
@@ -108,5 +108,6 @@ export function registerGitIpc(): void {
 	handleFsE('git:githubPublish', (e, root: string, opts: { name: string; isPrivate: boolean; remote: string }) =>
 		timeSpan('git:githubPublish', githubPublish(e.sender, root, opts))
 	);
+	handleFsE('git:githubOwners', (e, root: string) => githubOwners(e.sender, root));
 	registerAskpassIpc();
 }

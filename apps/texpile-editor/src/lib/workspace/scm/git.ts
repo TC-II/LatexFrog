@@ -389,6 +389,19 @@ export async function githubPublish(
 	}
 }
 
+/** the GitHub account and its organizations, for the publish dialog's owner list; null when there is
+ *  no sign-in to ask with (the dialog then goes without the list) */
+export async function githubOwners(root: string): Promise<{ login: string; orgs: string[] } | null> {
+	const n = nativeBridge();
+	if (!n?.githubOwners) return null;
+	try {
+		const res = await n.githubOwners(root);
+		return res.ok && res.owners ? res.owners : null;
+	} catch {
+		return null;
+	}
+}
+
 /** The preload's remote half (electron/src/preload.ts). Optional throughout: an older preload
  *  predates it, and the client degrades to no publishing, sync or sign-in prompts. */
 export type GitRemoteBridge = {
@@ -399,6 +412,7 @@ export type GitRemoteBridge = {
 	gitPublish?: (root: string, remote: string) => Promise<GitPushResult>;
 	gitSync?: (root: string, message?: string) => Promise<GitSyncResult>;
 	githubPublish?: (root: string, opts: { name: string; isPrivate: boolean; remote: string }) => Promise<GithubPublishResult>;
+	githubOwners?: (root: string) => Promise<{ ok: boolean; owners?: { login: string; orgs: string[] } }>;
 	onGitAskpass?: (cb: (req: GitAskpassRequest) => void) => () => void;
 	onGitAskpassClosed?: (cb: (ids: number[]) => void) => () => void;
 	gitAskpassReply?: (id: number, answer: string | null) => Promise<boolean>;

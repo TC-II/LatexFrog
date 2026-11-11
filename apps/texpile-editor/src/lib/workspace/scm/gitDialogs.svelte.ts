@@ -21,6 +21,9 @@ export type PublishAsk = {
 	remotes: GitRemote[];
 	/** what a new GitHub repository is called unless the author says otherwise */
 	defaultName: string;
+	/** the GitHub account and organizations to publish under, from a sign-in already held; null when
+	 *  there is none, and the name then takes `org/name` typed by hand */
+	owners?: () => Promise<{ login: string; orgs: string[] } | null>;
 	/** Runs the choice while the dialog stays up, so a taken name or a bad address is fixed in place
 	 *  rather than started over. Resolves to the error to show, or null when it is done. */
 	submit: (choice: PublishChoice) => Promise<string | null>;
