@@ -26,6 +26,13 @@ LaTeX editor for large projects: a fork of Texpile (Electron + Svelte, AGPL-3.0)
 - Never use Texpile's name or logo for this product. Say it derives from Texpile, as `TRADEMARK.md` requires.
 - Pushes need an explicit request from Javier.
 
+## Untrusted code
+
+- Before running `pnpm install`, tests, build scripts or any code from a clone, PR, fork or LaTeX project that is not ours, read it first and report anything odd before running it. Check `package.json` scripts (`preinstall`, `install`, `postinstall`, `prepare`), `.npmrc`, `pnpm` settings, git hooks, CI files, shell and `.mjs` scripts, and LaTeX `\write18` or shell-escape use.
+- Do not add packages to `pnpm.onlyBuiltDependencies` (currently electron, esbuild, node-pty) without asking Javier.
+- Never build a shell command by joining outside text (branch names, URLs, file names). Pass arguments as a list.
+- Open untrusted projects and PRs in a separate folder, never inside this repository. A review by Claude is not a guarantee; say what was and was not checked.
+
 ## Upstream
 
 `upstream` is texpile/texpile. Merge only when asked, on a test branch, with tests passing before it reaches `main`.
