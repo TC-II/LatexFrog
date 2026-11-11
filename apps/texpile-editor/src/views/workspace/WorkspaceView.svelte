@@ -154,7 +154,16 @@
 
 	onMount(() => {
 		mark('workspace');
-		return startWorkspace({ guest, hostMode, wsdoc, editFlow, files, cc, compiler, draftCtl, commentsCtl, layout, termDock });
+		const stop = startWorkspace({ guest, hostMode, wsdoc, editFlow, files, cc, compiler, draftCtl, commentsCtl, layout, termDock });
+		// LatexFrog: a project always opens with the preview shown and the Agent panel under the editor alone
+		// (not termDock.available: the effect that sets it is declared below, so it runs after this one)
+		if (stop && !guest && isDesktop()) {
+			if (!layout.pdfPaneOpen) layout.setPdfPaneOpen(true);
+			if (!termDock.shrink) termDock.toggleShrink();
+			// on the Agent tab: the per-folder reset in workspaceIntegrations picks it
+			termDock.show();
+		}
+		return stop;
 	});
 
 	// $state (not const) because descendants bind into these objects' fields: svelte needs an

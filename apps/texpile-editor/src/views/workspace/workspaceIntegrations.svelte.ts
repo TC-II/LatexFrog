@@ -79,6 +79,7 @@ import type { DockView } from '$lib/terminal/dockView';
 import type { WorkspaceComments } from './workspaceComments.svelte';
 import { selectedSpan } from './selectedSpan';
 import { fileService } from '$lib/files/service/fileService';
+import { panelTabOff } from '$lib/ai/agentPanel/agentOffer.svelte';
 
 type IntegrationDeps = {
 	provider: WorkspaceProvider;
@@ -349,7 +350,8 @@ export class WorkspaceIntegrations {
 				compileLog.current = null;
 				pdfStore.current = null; // initProject's loadExistingPdf refills it for the new folder
 				wsdoc.projectMacros = '';
-				d.setDockView('terminal');
+				// LatexFrog: the dock opens on the Agent tab while there is one
+				d.setDockView(panelTabOff() ? 'terminal' : 'agent');
 				d.compiler().resetForFolder(); // any pollers still watching the previous folder's paths stand down
 				d.cc().resolveNow();
 			});

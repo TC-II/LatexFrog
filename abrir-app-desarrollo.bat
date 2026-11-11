@@ -17,6 +17,16 @@ if not exist "%TEMP%\latexfrog-dev" mkdir "%TEMP%\latexfrog-dev"
 where corepack >nul 2>&1 && (echo @corepack pnpm %%*) > "%TEMP%\latexfrog-dev\pnpm.cmd"
 where corepack >nul 2>&1 || (echo @npx --yes pnpm@10.14.0 %%*) > "%TEMP%\latexfrog-dev\pnpm.cmd"
 
+rem pnpm links node_modules with absolute paths: if the folder was moved or copied, the links break.
+rem Then the dependencies are installed again here (CI=true so pnpm does not ask for confirmation).
+if not exist "node_modules\typescript\package.json" (
+  echo node_modules is missing or points to another folder: installing dependencies...
+  set "CI=true"
+  call pnpm install --frozen-lockfile --config.engine-strict=false || goto fallo
+  call node node_modules/electron/install.js || goto fallo
+  set "CI="
+)
+
 call cargo build --release -p lv-sidecar || goto fallo
 call pnpm electron:build || goto fallo
 

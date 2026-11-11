@@ -30,9 +30,11 @@ import { stopLive, useSidecarExecutable } from './lv/lvLive';
 import { pickFolder } from './lv/folderPicker';
 import { registerAiMergeIpc } from './lv/aiMerge';
 import { registerWindowChrome } from './windowChrome';
+import { addSavedWindowsPath } from './lv/windowsPath';
 
 applyAppIdentity();
 stopCwdProgramLookup();
+addSavedWindowsPath();
 registerPrivilegedSchemes();
 
 // not deferred: the window opens its project in the engine while it boots, and a Compile that follows must find it open
