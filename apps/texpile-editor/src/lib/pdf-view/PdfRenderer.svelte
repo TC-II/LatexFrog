@@ -267,7 +267,12 @@
 		rotateClockwise: () => viewer?.rotateClockwise(),
 		rotateCounterClockwise: () => viewer?.rotateCounterClockwise(),
 		goToPage: (page: number) => viewer?.scrollToPage(page),
-		scrollToPosition: (page, x, y, w, h) => viewer?.scrollToPosition(page, x, y, w, h),
+		// LatexFrog: behind any load, so a jump that also switched the PDF lands on the new one instead of being reset to its top.
+		// A tick first: the switch queues its load when the effects run, just after the jump was asked for.
+		scrollToPosition: (page, x, y, w, h) =>
+			void setTimeout(() => {
+				loadQueue = loadQueue.then(() => viewer?.scrollToPosition(page, x, y, w, h));
+			}, 0),
 		search: async (query: string) => {
 			if (!findController) return;
 			viewerState.isSearching = true;

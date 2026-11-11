@@ -28,8 +28,15 @@ export function wordAt(records: any[], textMapOf: (r: any) => number[] | undefin
 		const g = row[k];
 		const u = uniOf[g.f]?.uni;
 		const cp = u ? u[g.c] || 0 : g.c;
-		if (cp < 32 || cp > 0xffff) return word.length >= 2 ? word : undefined; // ligature/PUA: keep what we have
+		if (cp < 32 || cp > 0xffff) return asTyped(word); // ligature/PUA: keep what we have
 		word += String.fromCodePoint(cp);
 	}
-	return word.length >= 2 ? word : undefined;
+	return asTyped(word);
+}
+
+// LatexFrog: a ligature glyph maps to its presentation form (`fi` is U+FB01): the source has the letters, so a word with one
+// ("verificación") never matched and the jump fell back to the start of the line
+function asTyped(word: string): string | undefined {
+	const typed = word.replace(/[ﬀ-ﬆ]/g, (c) => c.normalize('NFKC'));
+	return typed.length >= 2 ? typed : undefined;
 }

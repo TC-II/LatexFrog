@@ -104,6 +104,7 @@ fn run(p: &Value, cmd: &str, s: &Arc<Session>) -> Result<Value, String> {
         "status" => Ok(json!({ "building": s.is_building(), "lockedBy": s.view().map_err(err)?.locked_by })),
         "problems" => to_json(s.problems(text(p, "profile")?)),
         "symbols" => to_json(s.symbols().map_err(err)?),
+        "synctex-forward" if p.get("pdf").is_some() => to_json(s.synctex_forward_pdf(text(p, "pdf")?, text(p, "file")?, number(p, "line")? as u32).map_err(err)?),
         "synctex-forward" => to_json(s.synctex_forward_in(text(p, "file")?, number(p, "line")? as u32, p.get("profile").and_then(Value::as_str)).map_err(err)?),
         "synctex-inverse" => to_json(s.synctex_inverse(text(p, "profile")?, number(p, "page")? as u32, number(p, "x")?, number(p, "y")?).map_err(err)?),
         "synctex-inverse-pdf" => to_json(s.synctex_inverse_pdf(text(p, "pdf")?, number(p, "page")? as u32, number(p, "x")?, number(p, "y")?).map_err(err)?),

@@ -135,7 +135,14 @@ export class SyncTexNav {
 		const pdf = live ? d.getDraftRoot() + '/_draft/draft.pdf' : d.expectedPdfPath();
 		const path = d.getLoadedPath();
 		if (!path || !d.isTex() || !pdf) return;
-		const res = await synctexForward(pdf, path, line);
+		// LatexFrog: Live's PDF through the engine; the `synctex` program misses files with accents in their names on Windows
+		const own = live && lvProject.active ? await lvProject.syncForwardLive(path, line) : undefined;
+		const res: Awaited<ReturnType<typeof synctexForward>> =
+			own === undefined
+				? await synctexForward(pdf, path, line)
+				: own
+					? { ok: true, x: own.h, y: own.v, ...own }
+					: { ok: false, error: m.wsview_toast_synctex_no_match(), page: 0, x: 0, y: 0, h: 0, v: 0, width: 0, height: 0 };
 		console.debug('[synctex] forward', { tex: path, line, pdf, res });
 		if (!res.ok) {
 			// LatexFrog: Follow asks on its own (a folder just opened, before any compile); only a jump someone asked for reports

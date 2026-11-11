@@ -78,8 +78,9 @@
 	});
 	const vp = ctrl.vp;
 	const compiler = ctrl.compiler;
-	// LatexFrog: another document (a Live profile switch) keeps the old pages until its first pass settles; hide them meanwhile
-	const loadingOther = $derived(!!mainFile && !!compiler.landedFor && compiler.landedFor !== root + '|' + mainFile);
+	// LatexFrog: another document (a Live profile switch, or another chapter of a `current` profile) keeps the old pages until its
+	// first pass settles; hide them meanwhile
+	const loadingOther = $derived(!!mainFile && !!compiler.landedFor && compiler.landedFor !== root + '|' + mainFile + '|' + lvProject.liveDocument);
 
 	/** Instant path: re-typeset one edited paragraph on the warm daemon and splice it into its
 	 * page -- only when provably identical to a full recompile. Called on every edit burst. */

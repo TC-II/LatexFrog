@@ -433,6 +433,21 @@ fn sin_argumentos_no_texto(t: &str) -> String {
     out
 }
 
+/// The character a math symbol's command stands for, for titles and captions read as text.
+fn simbolo(nombre: &str) -> Option<&'static str> {
+    const TABLA: &[(&str, &str)] = &[
+        ("alpha", "α"), ("beta", "β"), ("gamma", "γ"), ("delta", "δ"), ("epsilon", "ε"), ("varepsilon", "ε"), ("zeta", "ζ"), ("eta", "η"),
+        ("theta", "θ"), ("vartheta", "ϑ"), ("iota", "ι"), ("kappa", "κ"), ("lambda", "λ"), ("mu", "μ"), ("nu", "ν"), ("xi", "ξ"), ("pi", "π"),
+        ("rho", "ρ"), ("sigma", "σ"), ("tau", "τ"), ("upsilon", "υ"), ("phi", "φ"), ("varphi", "φ"), ("chi", "χ"), ("psi", "ψ"),
+        ("omega", "ω"), ("Gamma", "Γ"), ("Delta", "Δ"), ("Theta", "Θ"), ("Lambda", "Λ"), ("Xi", "Ξ"), ("Pi", "Π"), ("Sigma", "Σ"),
+        ("Phi", "Φ"), ("Psi", "Ψ"), ("Omega", "Ω"), ("infty", "∞"), ("times", "×"), ("cdot", "·"), ("pm", "±"), ("mp", "∓"),
+        ("leq", "≤"), ("le", "≤"), ("geq", "≥"), ("ge", "≥"), ("neq", "≠"), ("ne", "≠"), ("approx", "≈"), ("sim", "∼"), ("to", "→"),
+        ("rightarrow", "→"), ("leftarrow", "←"), ("Rightarrow", "⇒"), ("ldots", "…"), ("dots", "…"), ("cdots", "⋯"), ("partial", "∂"),
+        ("nabla", "∇"), ("sqrt", "√"), ("circ", "∘"), ("degree", "°"), ("in", "∈"), ("sum", "∑"), ("prod", "∏"), ("int", "∫"),
+    ];
+    TABLA.iter().find(|(c, _)| *c == nombre).map(|(_, s)| *s)
+}
+
 pub(crate) fn titulo_legible(t: &str) -> String {
     let t = sin_argumentos_no_texto(&sin_texorpdfstring(t));
     let mut out = String::new();
@@ -454,6 +469,9 @@ pub(crate) fn titulo_legible(t: &str) -> String {
                     if let Some(s) = chars.next() {
                         out.push(if "%$&#_{}".contains(s) { s } else { ' ' });
                     }
+                } else if let Some(s) = simbolo(&nombre) {
+                    // `$\theta$` reads θ: dropped, a caption read «Recorrido de , dominio…»
+                    out.push_str(s);
                 } else if nombre != "label" {
                     out.push(' ');
                 }
@@ -980,7 +998,7 @@ mod tests {
     fn math_shifts_leave_the_title_and_an_escaped_dollar_stays() {
         assert_eq!(titulo_legible(r"Respuesta de $H(s)$"), "Respuesta de H(s)");
         assert_eq!(titulo_legible(r"Costo en \$ por unidad"), "Costo en $ por unidad");
-    }
+        assert_eq!(titulo_legible(r"Recorrido de $\theta$, de $0$ a $\infty$ y $4L \times 2L_i$"), "Recorrido de θ, de 0 a ∞ y 4L × 2L_i");    }
 
     fn proyecto(archivos: &[(&str, &str)]) -> tempfile::TempDir {
         let d = tempfile::tempdir().unwrap();

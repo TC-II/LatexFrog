@@ -65,6 +65,9 @@ pub struct Synctex {
     /// (tag << 32 | línea, índice de nodo), ordenado.
     fwd: Vec<(u64, u32)>,
     by_page: Vec<Vec<u32>>,
+    /// The folder the document was compiled in, read from the driver's path (`<root>/.latexfrog/drivers/...`), with `/` and no
+    /// trailing one. A project moved or copied to another folder (or machine) keeps its builds: their paths start here instead.
+    raiz_compilada: Option<String>,
 }
 
 /// Un rectángulo en bp, con el origen en el borde superior izquierdo de la página (`y` es el borde de arriba).
@@ -277,7 +280,12 @@ impl Synctex {
         }
         // El corrimiento va en sp sin magnificar (como en `synctex_parser.c`, que lo escala sólo por `Unit`).
         let (off_x, off_y) = (off_x * unit / 65781.76, off_y * unit / 65781.76);
-        Synctex { inputs, scale: unit * (mag / 1000.0) / 65781.76, off_x, off_y, nodes, pages, fwd, by_page }
+        let raiz_compilada = inputs.iter().find_map(|(_, r)| {
+            let r = r.replace('\\', "/").replace("/./", "/");
+            let k = r.to_ascii_lowercase().find("/.latexfrog/drivers/")?;
+            Some(r[..k].trim_start_matches("//?/").to_string())
+        });
+        Synctex { inputs, scale: unit * (mag / 1000.0) / 65781.76, off_x, off_y, nodes, pages, fwd, by_page, raiz_compilada }
     }
 
     /// The project files TeX read for this PDF, relative to the root with `/` (the driver and the system's files left out).
@@ -319,8 +327,13 @@ impl Synctex {
         let raiz = root.display().to_string().replace('\\', "/");
         let raiz = raiz.trim_start_matches("//?/");
         let prefijo = format!("{raiz}/");
-        let rel = if ruta.len() > prefijo.len() && ruta.is_char_boundary(prefijo.len()) && ruta[..prefijo.len()].eq_ignore_ascii_case(&prefijo) {
+        let bajo = |p: &str| ruta.len() > p.len() && ruta.is_char_boundary(p.len()) && ruta[..p.len()].eq_ignore_ascii_case(p);
+        let movida = self.raiz_compilada.as_ref().map(|r| format!("{r}/")).filter(|p| bajo(p));
+        let rel = if bajo(&prefijo) {
             ruta[prefijo.len()..].to_string()
+        } else if let Some(p) = movida {
+            // compiled before the project was moved: the same file, under the folder it was compiled in
+            ruta[p.len()..].to_string()
         } else if ruta.contains(':') || ruta.starts_with('/') {
             return None;
         } else {
@@ -528,6 +541,18 @@ mod tests {
         assert_eq!(s.files(root), ["Capítulos/Introducción.tex", "main.tex"]);
     }
 
+    /// A build made before the project was moved (or on another machine): its paths start at the old folder, which the driver's
+    /// path names. The files are still the project's.
+    #[test]
+    fn a_build_from_before_the_project_moved_still_names_its_files() {
+        let mut data = b"SyncTeX Version:1\nInput:1:C:\\Old\\Book\\.latexfrog\\drivers\\lv-p.tex\nInput:2:C:\\Users\\X\\MiKTeX\\tex\\latex\\base\\book.cls\nInput:3:C:\\Old\\Book\\Secciones\\Cap\xC3\xADtulo.tex\nOutput:pdf\nContent:\n".to_vec();
+        data.extend_from_slice(b"Postamble:\n");
+        let s = Synctex::parse(&data);
+        let root = Path::new("D:/New place/Book");
+        assert_eq!(s.files(root), ["Secciones/Capítulo.tex"]);
+        assert_eq!(s.tag_of(root, "Secciones/Capítulo.tex"), Some(3));
+    }
+
     /// Una página con un párrafo de dos líneas de texto. La caja del párrafo (`(1,5`) lleva la línea 5 (donde TeX terminó
     /// de armarla) y sus hijos la 3 y la 4, como en el libro.
     fn muestra() -> String {
@@ -590,7 +615,11 @@ mod tests {
         assert_eq!(s.rel_of_tag(raiz(), 1).as_deref(), Some("main.tex"));
         assert_eq!(s.rel_of_tag(raiz(), 3).as_deref(), Some("Secciones/Aproximación.tex"));
         assert_eq!(s.rel_of_tag(raiz(), 2), None, "el driver es de la app");
-        assert_eq!(s.rel_of_tag(Path::new("C:/otro"), 1), None, "fuera del proyecto");
+        // asked from another folder, the build is of a project that moved there: its files are still its own, the driver still the app's
+        assert_eq!(s.rel_of_tag(Path::new("C:/otro"), 1).as_deref(), Some("main.tex"), "proyecto movido");
+        assert_eq!(s.rel_of_tag(Path::new("C:/otro"), 2), None);
+        let suelto = Synctex::parse(b"SyncTeX Version:1\nInput:1:C:/Proyecto/main.tex\nOutput:pdf\nContent:\nPostamble:\n");
+        assert_eq!(suelto.rel_of_tag(Path::new("C:/otro"), 1), None, "fuera del proyecto, sin driver que diga dónde se compiló");
         assert_eq!(s.rel_of_tag(raiz(), 99), None);
     }
 

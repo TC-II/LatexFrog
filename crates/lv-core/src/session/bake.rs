@@ -864,8 +864,13 @@ impl Session {
                         codigo: Some(f.archivo.clone()),
                         linea: Some(f.linea),
                         // the line that brings the code in, only for a file that is not a part of its own (a figure kept in its own
-                        // file): a figure in an exercise or chapter opens there, not on the line of the main file that loads it
-                        donde_linea: indice.as_ref().is_none_or(|ix| ix.part_of(&f.archivo) == ix.part_of(archivo)).then_some(f.donde_linea),
+                        // file): a figure in an exercise or chapter opens there, not on the line of the main file that loads it. A figure
+                        // file two places input (a chapter and a test bench) is reckoned in the first one's part, and is still not a part
+                        // of its own: the other one's copy goes under the heading above its own \input
+                        donde_linea: indice
+                            .as_ref()
+                            .is_none_or(|ix| ix.part_of(&f.archivo) == ix.part_of(archivo) || !ix.parts.iter().any(|p| p.file.as_deref() == Some(f.archivo.as_str())))
+                            .then_some(f.donde_linea),
                         caption: f.caption,
                     });
                 }

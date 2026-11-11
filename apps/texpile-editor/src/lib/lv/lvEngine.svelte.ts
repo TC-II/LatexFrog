@@ -415,6 +415,17 @@ class LvProject {
 		return this.view?.config?.profiles.find((p) => p.id === this.view?.state.activeProfile) ?? null;
 	}
 
+	/**
+	 * Which document Live shows: the profile and the parts it compiles. A `current` profile keeps its driver's path when the chapter
+	 * changes, so the path alone did not tell Live that the pages on screen are of another chapter. Empty outside a project.
+	 */
+	get liveDocument(): string {
+		const p = this.activeProfile;
+		if (!p) return '';
+		const parts = p.compiles ?? (p.parts === 'current' ? [this.view?.state.currentPart ?? ''] : []);
+		return `${p.id}:${parts.join('|')}`;
+	}
+
 	/** how this project compiles by itself, chosen beside Compile: on saving, once typing stops, or only by hand */
 	get compileWhen(): 'save' | 'idle' | 'manual' {
 		const when = this.view?.state.autoCompile;
@@ -554,6 +565,28 @@ class LvProject {
 			pdfStore.current = target + '&t=' + Date.now();
 		}
 		return { page: res.page, h: box.x, v: box.y + box.h, width: box.w, height: box.h, rects: res.rects };
+	}
+
+	/**
+	 * A source line to its place in Live's PDF (`_draft/draft.pdf`), boxes in the shape of the `synctex` program's records. The
+	 * program itself misses a file whose name has an accent on Windows; the engine reads the paths as TeX Live wrote them.
+	 * `undefined` when the engine cannot answer (no Live pass yet), null when the file is not in that PDF.
+	 */
+	async syncForwardLive(path: string, line: number) {
+		const v = this.view;
+		if (!v) return undefined;
+		const file = relativeTo(v.root, path).replace(/\\/g, '/');
+		let res: SyncForward | null;
+		try {
+			res = await this.request<SyncForward | null>('synctex-forward', { pdf: '_draft/draft.pdf', file, line });
+		} catch {
+			return undefined;
+		}
+		const box = res?.rects[0];
+		if (!res || !box) return null;
+		// y is the box's bottom, close to the baseline; bl its left edge
+		const boxes = res.rects.map((r) => ({ page: r.page, x: r.x, y: r.y + r.h, W: r.w, H: r.h, bl: r.x }));
+		return { page: res.page, h: box.x, v: box.y + box.h, width: box.w, height: box.h, boxes };
 	}
 
 	/** a place in the shown PDF to its source line; null when it comes from outside the project */

@@ -1211,18 +1211,34 @@ impl Session {
 
     /// El SyncTeX de un perfil, cargado una vez por build (47 ms con el libro completo) y cacheado por mtime.
     fn cargar_synctex(&self, perfil: &str) -> Result<Arc<Synctex>> {
-        let ruta = self.synctex_gz(perfil);
-        let mtime = std::fs::metadata(&ruta)
-            .and_then(|m| m.modified())
-            .map_err(|_| Error::NotFound(format!("the SyncTeX of profile {perfil:?}: compile first")))?;
-        if let Some((m, s)) = self.synctex.lock().map_err(|_| otro("cache envenenado"))?.get(perfil) {
+        self.cargar_synctex_en(perfil, &self.synctex_gz(perfil), &format!("the SyncTeX of profile {perfil:?}: compile first"))
+    }
+
+    /// A SyncTeX file, cached under `clave` by its mtime: a profile's id, or `pdf:<path>` for another PDF of the project.
+    fn cargar_synctex_en(&self, clave: &str, ruta: &Path, falta: &str) -> Result<Arc<Synctex>> {
+        let mtime = std::fs::metadata(ruta).and_then(|m| m.modified()).map_err(|_| Error::NotFound(falta.to_string()))?;
+        if let Some((m, s)) = self.synctex.lock().map_err(|_| otro("cache envenenado"))?.get(clave) {
             if *m == mtime {
                 return Ok(s.clone());
             }
         }
-        let s = Arc::new(Synctex::load(&ruta).map_err(|e| Error::Io(format!("{}: {e}", ruta.display())))?);
-        self.synctex.lock().map_err(|_| otro("cache envenenado"))?.insert(perfil.to_string(), (mtime, s.clone()));
+        let s = Arc::new(Synctex::load(ruta).map_err(|e| Error::Io(format!("{}: {e}", ruta.display())))?);
+        self.synctex.lock().map_err(|_| otro("cache envenenado"))?.insert(clave.to_string(), (mtime, s.clone()));
         Ok(s)
+    }
+
+    /// Live's PDF (or another of the project), its SyncTeX beside it, cached like a profile's: Follow asks on every caret rest.
+    fn cargar_synctex_pdf(&self, pdf: &str) -> Result<Arc<Synctex>> {
+        let ruta = self.synctex_beside(pdf)?;
+        self.cargar_synctex_en(&format!("pdf:{pdf}"), &ruta, &format!("the SyncTeX of {pdf:?}: compile first"))
+    }
+
+    /// Code to PDF over another PDF of the project: Live's. The `synctex` program TeX Live ships does not find a file whose name
+    /// has an accent on Windows (it reads its arguments in the ANSI code page, the SyncTeX holds UTF-8), so Live asks here too.
+    pub fn synctex_forward_pdf(&self, pdf: &str, rel: &str, line: u32) -> Result<Option<SyncForward>> {
+        let sx = self.cargar_synctex_pdf(pdf)?;
+        let Some(tag) = sx.tag_of(&self.root, rel) else { return Ok(None) };
+        Ok(sx.forward(tag, line).map(|f| SyncForward { pdf: pdf.replace('\\', "/"), page: f.rects[0].page, rects: f.rects, line_used: f.line_used, perfil: String::new() }))
     }
 
     /// Del cursor al PDF. `Ok(None)` si el archivo no figura en el SyncTeX del PDF elegido (todavía no se compiló con él).
@@ -1278,20 +1294,18 @@ impl Session {
 
     /// The same over another PDF of the project: Live's (`_draft/draft.pdf`), whose SyncTeX lies beside it.
     pub fn synctex_inverse_pdf(&self, pdf: &str, page: u32, x: f64, y: f64) -> Result<Option<SyncInverse>> {
-        let ruta = self.synctex_beside(pdf)?;
-        let sx = Synctex::load(&ruta).map_err(|e| Error::Io(format!("{}: {e}", ruta.display())))?;
+        let sx = self.cargar_synctex_pdf(pdf)?;
         Ok(self.inverse_en_proyecto(&sx, page, x, y))
     }
 
     /// The project files another PDF of the project read: Live's, when Live is on screen. A profile's build says nothing about
     /// what Live shows (it may be of another chapter, or older). `Ok(None)` while that PDF has no SyncTeX yet.
     pub fn synctex_files_pdf(&self, pdf: &str) -> Result<Option<Vec<String>>> {
-        let ruta = self.synctex_beside(pdf)?;
-        if !ruta.is_file() {
-            return Ok(None);
+        match self.cargar_synctex_pdf(pdf) {
+            Ok(sx) => Ok(Some(sx.files(&self.root))),
+            Err(Error::NotFound(_)) => Ok(None),
+            Err(e) => Err(e),
         }
-        let sx = Synctex::load(&ruta).map_err(|e| Error::Io(format!("{}: {e}", ruta.display())))?;
-        Ok(Some(sx.files(&self.root)))
     }
 
     /// The SyncTeX beside a PDF given relative to the root; a path that leaves the project is refused.

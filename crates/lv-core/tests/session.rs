@@ -519,6 +519,31 @@ fn the_files_of_lives_pdf_come_from_its_own_synctex_and_not_from_the_profile_bui
     assert!(build.iter().any(|f| f == "Secciones/Uno.tex") && !build.iter().any(|f| f == "Secciones/Dos.tex"), "{build:?}");
 }
 
+/// Code to PDF over Live's PDF, for a file whose name has an accent: TeX Live's `synctex` program does not find it on Windows,
+/// so Live asks the engine.
+#[test]
+fn code_to_live_pdf_finds_a_file_with_an_accent_in_its_name() {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::io::Write;
+    let d = proyecto();
+    let (s, _) = abrir(&d, OK);
+    assert!(matches!(s.synctex_forward_pdf("_draft/draft.pdf", "Secciones/Aproximación.tex", 1), Err(_)), "no Live pass yet");
+    let r = s.root.display().to_string().replace('\\', "/");
+    let texto = format!(
+        "SyncTeX Version:1\nInput:1:{r}/./.latexfrog/drivers/lv-parcial-live.tex\nInput:3:{r}/./Secciones/Aproximación.tex\nOutput:pdf\nMagnification:1000\nUnit:1\nContent:\n{{1\n[1,1:4736286,4736286:30000000,40000000,0\n(3,1:4736286,12000000:30000000,500000,100000\nk3,1:4736286,12000000:100000\n)\n]\n}}1\nPostamble:\n"
+    );
+    let mut e = GzEncoder::new(Vec::new(), Compression::default());
+    e.write_all(texto.as_bytes()).unwrap();
+    fs::create_dir_all(s.root.join("_draft")).unwrap();
+    fs::write(s.root.join("_draft/draft.synctex.gz"), e.finish().unwrap()).unwrap();
+
+    let f = s.synctex_forward_pdf("_draft/draft.pdf", "Secciones/Aproximación.tex", 1).unwrap().expect("found");
+    assert_eq!((f.pdf.as_str(), f.page), ("_draft/draft.pdf", 1));
+    assert!(s.synctex_forward_pdf("_draft/draft.pdf", "Secciones/Otra.tex", 1).unwrap().is_none());
+    assert!(s.synctex_forward_pdf("../x/draft.pdf", "Secciones/Aproximación.tex", 1).is_err());
+}
+
 #[test]
 fn el_salto_va_y_vuelve_con_las_rutas_relativas_a_la_raiz() {
     let d = proyecto();

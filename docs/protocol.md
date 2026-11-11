@@ -41,7 +41,7 @@ Every command except `open` needs an open project.
 | `status` | | `{building: bool, lockedBy: number or null}` |
 | `problems` | `profile` | `Problem[]` |
 | `symbols` *async* | | `Symbols`; `sections` is the project-wide outline |
-| `synctex-forward` | `file`, `line`, optional `profile` | `SyncForward` or `null`; `profile`, the PDF on screen, is used first when it holds the file |
+| `synctex-forward` | `file`, `line`, optional `profile`, or `pdf` (relative to the root) | `SyncForward` or `null`; `profile`, the PDF on screen, is used first when it holds the file. With `pdf`, over that PDF's SyncTeX only: Live's `_draft/draft.pdf` (TeX Live's `synctex` program misses files with accents in their names on Windows) |
 | `synctex-files` | `profile`, or `pdf` (relative to the root) | the project files that profile's PDF read (from its SyncTeX), or `null` before its first build; a file a TeX conditional skips is missing. With `pdf`, the same for another PDF of the project with its SyncTeX beside it: Live's `_draft/draft.pdf` |
 | `synctex-inverse` | `profile`, `page`, `x`, `y` | `SyncInverse` or `null`; only the project's own files count (a click on a TikZ picture goes to the line that draws it, not into the library) |
 | `synctex-inverse-pdf` | `pdf` (relative to the root), `page`, `x`, `y` | the same over another PDF of the project with its SyncTeX beside it: Live's `_draft/draft.pdf` |

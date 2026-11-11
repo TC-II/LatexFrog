@@ -6,6 +6,7 @@ import { updateEngineTruth } from './engineTruth';
 import { readBackExtensions } from '$lib/languages/latex/knowledge/registries/sidecarExtensions';
 import { m } from '$lib/paraglide/messages';
 import { livePass } from '$lib/lv/livePass.svelte';
+import { lvProject } from '$lib/lv/lvEngine.svelte';
 
 type CompilerHooks = {
 	root: () => string;
@@ -130,7 +131,8 @@ export class DraftCompiler {
 	private async runPass(reason: string, myToken: number): Promise<boolean | null> {
 		const n = nativeBridge()!;
 		let landed = false;
-		const doc = this.hooks.root() + '|' + this.hooks.mainFile();
+		// LatexFrog: with the profile's parts, so a chapter switch reads as another document (DraftView's loadingOther)
+		const doc = this.hooks.root() + '|' + this.hooks.mainFile() + '|' + lvProject.liveDocument;
 		const startedAt = performance.now();
 		livePass.state = 'compiling';
 		this.lastReason = reason;
