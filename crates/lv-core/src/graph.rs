@@ -129,6 +129,21 @@ pub struct ProjectIndex {
     /// are not part of the document, but the macros they define say what the document's commands load and print.
     pub packages: Vec<String>,
     pub scan_ms: u64,
+    /// What the index was read from, to tell whether it still holds (`vigente`).
+    pub huella: Huella,
+}
+
+/// The size and time of each file the index read, and the time of each folder it looked in. A folder's time moves when a file
+/// is created, removed or renamed in it, so a missing `\input` that appears, or a new `.sty`, changes it too.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Huella {
+    comandos: Vec<String>,
+    sellos: Vec<(std::path::PathBuf, Option<(u64, std::time::SystemTime)>)>,
+}
+
+fn sello(p: &Path) -> Option<(u64, std::time::SystemTime)> {
+    let m = std::fs::metadata(p).ok()?;
+    Some((if m.is_dir() { 0 } else { m.len() }, m.modified().ok()?))
 }
 
 // --- lectura de los comandos -------------------------------------------------------------------------------------------
@@ -382,9 +397,10 @@ const SIN_PAQUETES: [&str; 7] = [".git", ".latexfrog", ".texpile", "node_modules
 /// The project's own `.cls` and `.sty` files by name (`tc2-guide.cls`), wherever they are: TeX finds them through `TEXINPUTS`
 /// (`style//` in a `latexmkrc`, or a folder Overleaf searches), which the index does not read, so a name that is unique in the
 /// project is taken as that file. A name found twice keeps the shallowest one.
-fn paquetes_del_proyecto(root: &Path) -> HashMap<String, String> {
-    fn rec(root: &Path, rel: &str, nivel: u32, out: &mut HashMap<String, String>, cuenta: &mut usize) {
+fn paquetes_del_proyecto(root: &Path, vistas: &mut Vec<String>) -> HashMap<String, String> {
+    fn rec(root: &Path, rel: &str, nivel: u32, out: &mut HashMap<String, String>, cuenta: &mut usize, vistas: &mut Vec<String>) {
         let Ok(rd) = std::fs::read_dir(root.join(rel)) else { return };
+        vistas.push(rel.to_string());
         let mut hijos: Vec<_> = rd.flatten().collect();
         hijos.sort_by_key(|e| e.file_name());
         let mut carpetas = Vec::new();
@@ -409,11 +425,11 @@ fn paquetes_del_proyecto(root: &Path) -> HashMap<String, String> {
         }
         // the files of a folder before those of its subfolders: the shallowest of a repeated name wins
         for c in carpetas {
-            rec(root, &c, nivel + 1, out, cuenta);
+            rec(root, &c, nivel + 1, out, cuenta, vistas);
         }
     }
     let mut out = HashMap::new();
-    rec(root, "", 0, &mut out, &mut 0);
+    rec(root, "", 0, &mut out, &mut 0, vistas);
     out
 }
 
@@ -536,7 +552,8 @@ impl ProjectIndex {
         // User macros that load files (`\Ejercicio{slug}` → `\input{ejercicios/slug}`) are only known after reading their
         // definitions, which are in files the graph reaches or in the project's own classes and packages they load: walk, read
         // the definitions, and walk again while that finds more.
-        let propios = paquetes_del_proyecto(root);
+        let mut carpetas = Vec::new();
+        let propios = paquetes_del_proyecto(root, &mut carpetas);
         let mut aprendido = Aprendido::default();
         let mut ix = Self::walk(root, root_file, commands, &aprendido);
         // the project's macros that set a title (`\metaEjercicio{Título}{...}`): they name the part that opens with one
@@ -605,8 +622,44 @@ impl ProjectIndex {
         orden.sort_by(|&a, &b| claves[a].cmp(&claves[b]));
         let mut viejas: Vec<Option<Part>> = std::mem::take(&mut ix.parts).into_iter().map(Some).collect();
         ix.parts = orden.into_iter().filter_map(|i| viejas[i].take()).collect();
+        ix.huella = ix.huella_de(root, commands, &carpetas, numeros.is_some());
         ix.scan_ms = t0.elapsed().as_millis() as u64;
         ix
+    }
+
+    /// Whether an index built now would come out the same: the same root and commands, and nothing it read or looked for changed.
+    pub fn vigente(&self, root_file: &str, commands: &[String]) -> bool {
+        self.root_file == root_file && self.huella.comandos == commands && self.huella.sellos.iter().all(|(p, s)| sello(p) == *s)
+    }
+
+    fn huella_de(&self, root: &Path, commands: &[String], carpetas: &[String], leyo_numeros: bool) -> Huella {
+        let mut rels: BTreeSet<&str> = BTreeSet::new();
+        rels.extend(self.files.keys().map(String::as_str));
+        rels.extend(self.packages.iter().map(String::as_str));
+        rels.extend(self.reachable.iter().map(String::as_str));
+        rels.extend(self.files.values().flatten().filter_map(|e| e.target.as_deref()));
+        let mut sellos: Vec<_> = carpetas.iter().map(|c| root.join(c)).chain(rels.into_iter().map(|r| root.join(r))).map(|p| {
+            let s = sello(&p);
+            (p, s)
+        }).collect();
+        // the numbers a part takes from the last build (`numeros_compilados`): the build's aux files
+        if leyo_numeros {
+            let mut pendientes = vec![root.join(".latexfrog").join("build")];
+            while let Some(dir) = pendientes.pop() {
+                sellos.push((dir.clone(), sello(&dir)));
+                let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+                for e in rd.flatten() {
+                    let p = e.path();
+                    if p.is_dir() {
+                        pendientes.push(p);
+                    } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("aux")) {
+                        let s = sello(&p);
+                        sellos.push((p, s));
+                    }
+                }
+            }
+        }
+        Huella { comandos: commands.to_vec(), sellos }
     }
 
     /// The project's own classes and packages that the walked files load, and those they load in turn.
@@ -1441,5 +1494,43 @@ mod tests {
         let ix = ProjectIndex::build(d.path(), "main.tex", &cmds(&["include"]));
         let targets: Vec<Option<String>> = ix.files["ch/one.tex"].iter().map(|e| e.target.clone()).collect();
         assert_eq!(targets, [Some("ch/figures/a.png".to_string()), Some("common/b.pdf".to_string())]);
+    }
+
+    /// The index kept between requests holds while nothing it read or looked for changed, and only then.
+    #[test]
+    fn an_index_holds_until_a_file_it_read_or_a_folder_it_looked_in_changes() {
+        let d = proyecto(&[
+            ("main.tex", "\\documentclass{book}\n\\begin{document}\n\\include{ch/one}\n\\input{ch/two}\n\\end{document}\n"),
+            ("ch/one.tex", "\\chapter{One}\n"),
+        ]);
+        let c = cmds(&["include"]);
+        let pausa = || std::thread::sleep(std::time::Duration::from_millis(30));
+        let ix = ProjectIndex::build(d.path(), "main.tex", &c);
+        assert!(ix.vigente("main.tex", &c));
+        assert!(!ix.vigente("other.tex", &c), "another root");
+        assert!(!ix.vigente("main.tex", &cmds(&["include", "Capitulo"])), "other part commands");
+
+        // an edit in a part
+        pausa();
+        std::fs::write(d.path().join("ch/one.tex"), "\\chapter{One, edited}\n").unwrap();
+        assert!(!ix.vigente("main.tex", &c));
+        let ix = ProjectIndex::build(d.path(), "main.tex", &c);
+        assert!(ix.vigente("main.tex", &c));
+
+        // the file `\input{ch/two}` asked for, missing until now
+        pausa();
+        std::fs::write(d.path().join("ch/two.tex"), "two\n").unwrap();
+        assert!(!ix.vigente("main.tex", &c));
+        let ix = ProjectIndex::build(d.path(), "main.tex", &c);
+        assert!(ix.files.contains_key("ch/two.tex"));
+
+        // a class or package of the project's own, anywhere in it
+        pausa();
+        std::fs::create_dir_all(d.path().join("style")).unwrap();
+        assert!(!ix.vigente("main.tex", &c), "a new folder");
+        let ix = ProjectIndex::build(d.path(), "main.tex", &c);
+        pausa();
+        std::fs::write(d.path().join("style/mine.sty"), "\\ProvidesPackage{mine}\n").unwrap();
+        assert!(!ix.vigente("main.tex", &c), "a new .sty");
     }
 }

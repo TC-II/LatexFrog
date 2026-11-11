@@ -339,31 +339,146 @@ fn texto_seguro(t: &str, que: &str) -> Result<()> {
 /// Driver ASCII del perfil: define `\lvPerfil` y `\lvParcial`, los flags y las variables, inyecta `\includeonly` por hook
 /// y carga la raíz real del proyecto (4.2 del plan). El nombre del driver es el `\jobname`, así que va sin espacios ni
 /// tildes aunque la raíz los tenga (S4). El orden es el de `spikes/s4-driver/gen-driver.mjs`, el que se midió.
-/// The driver line that removes `TEXMF_OUTPUT_DIRECTORY` from pgf's figure runs (outside Windows).
+/// The driver line that removes `TEXMF_OUTPUT_DIRECTORY` from pgf's figure runs.
 /// `\@input` from `\begin{document}` on: the aux of a part left out (`\lv@fuera@<name>.aux`) goes in with `\@writefile` off.
 /// It stays for the whole run: the contents and the lists are written when the main aux is read again at `\end{document}`.
 /// The macros are defined outside the hook, so no `#` goes through the hook's code.
 const LEER_AUX_SIN_LISTAS: &str = r"\makeatletter\def\lv@sin#1{\let\lv@wf\@writefile\let\@writefile\@gobbletwo\lv@input@orig{#1}\let\@writefile\lv@wf}\def\lv@input@leer#1{\ifcsname lv@fuera@\detokenize{#1}\endcsname\expandafter\lv@sin\else\expandafter\lv@input@orig\fi{#1}}\AddToHook{begindocument/before}{\let\lv@input@orig\@input\let\@input\lv@input@leer}\makeatother";
 
+#[cfg(not(windows))]
 const SALIDA_DE_PGF: &str = "\\AddToHook{begindocument/before}{\\ifdefined\\tikzexternalize\\tikzset{external/system call/.add={env -u TEXMF_OUTPUT_DIRECTORY }{}}\\fi}";
+/// On Windows the shell escape runs through `cmd`, which has no `env`: `set NAME=` there empties the variable for the command
+/// after `&`. MiKTeX does not set it, and an empty one changes nothing.
+#[cfg(windows)]
+const SALIDA_DE_PGF: &str = "\\AddToHook{begindocument/before}{\\ifdefined\\tikzexternalize\\tikzset{external/system call/.add={set TEXMF_OUTPUT_DIRECTORY=& }{}}\\fi}";
+
+/// Live draws a page's pictures by number: the Nth picture is the Nth file the log names with graphicx's `<use FILE>`
+/// (`electron/src/draft/draftImages.ts`). pgf loads an externalized figure from the cache with `\saveimageresource` itself and
+/// writes nothing, so the numbers moved by one for each figure and the book's figure 9.1 was drawn as a small icon
+/// (`coal.png`) loaded after it. Each picture pgf loads is named the same way, with its size, as graphicx names its own.
+/// Only Live reads those lines: a profile's build numbers no pictures, so its driver goes without it (`Rol::SoloLive`).
+const IMAGENES_DE_PGF_EN_EL_LOG: &str = r"\makeatletter\def\lv@imagenpgf{\lv@definirimagen{\setbox0\hbox{\useimageresource\lastsavedimageresourceindex}\typeout{<use \pgf@filename>^^J(lv) Requested size: \the\wd0\space x \the\ht0.}}}\AddToHook{begindocument/before}{\ifdefined\saveimageresource\ifdefined\pgfsys@defineimage\let\lv@definirimagen\pgfsys@defineimage\let\pgfsys@defineimage\lv@imagenpgf\fi\fi}\makeatother";
+
+/// What a driver line is for. Both drivers come from one list (`driver_lineas`): the profile's driver is every line but the
+/// `SoloLive` ones, in order (`render_driver_spec`); Live's places each line by its role (`render_driver_live`), never by reading
+/// the text back, so a line added to the profile's driver reaches Live's too.
+#[derive(Debug, Clone, PartialEq)]
+enum Rol {
+    /// The first line, a comment that names the file.
+    Cabecera,
+    /// Only in Live's driver.
+    SoloLive,
+    /// `\def\lvPerfil{…}`.
+    Perfil,
+    /// The comment that heads the pieces left out (`piezas::MARCA_DEL_DRIVER`).
+    MarcaDePiezas,
+    /// The hook that redefines the pieces left out; it holds what the hook runs.
+    Piezas(String),
+    /// `\declare@file@substitution{origen}{copia}` on a line of its own; it holds the original.
+    Sustitucion(String),
+    /// The `\includeonly` hook; it holds the list of parts.
+    Includeonly(String),
+    /// `\expandafter\def\csname lvParte@…`: a part a loader may load.
+    ParteElegida,
+    /// The last line: `\input` of the root (or of its copy).
+    Carga,
+    /// Anything else: the same in both drivers, in the preamble.
+    Comun,
+}
+
+struct LineaDriver {
+    rol: Rol,
+    texto: String,
+}
+
+/// The driver's lines as they are built; `push` and `extend` add lines of no particular role.
+#[derive(Default)]
+struct Lineas(Vec<LineaDriver>);
+
+impl Lineas {
+    fn con(&mut self, rol: Rol, texto: impl Into<String>) {
+        self.0.push(LineaDriver { rol, texto: texto.into() });
+    }
+    fn push(&mut self, texto: impl Into<String>) {
+        self.con(Rol::Comun, texto);
+    }
+    fn extend(&mut self, textos: impl IntoIterator<Item = String>) {
+        for t in textos {
+            self.push(t);
+        }
+    }
+}
 
 pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
+    let l: Vec<String> = driver_lineas(s)?.into_iter().filter(|l| l.rol != Rol::SoloLive).map(|l| l.texto).collect();
+    Ok(l.join("\n") + "\n")
+}
+
+/// How Live's driver reads the file that opens the document (`Session::live_driver` writes the copies).
+pub struct CargaLive<'a> {
+    /// The project file that has `\begin{document}`, relative to the root.
+    pub origen: &'a str,
+    /// The copy of what comes before `\begin{document}` in it, with `.tex`.
+    pub pre: &'a str,
+    /// The copy of what follows it, with `.tex`.
+    pub resto: &'a str,
+    /// The preamble reads `\lvPerfil`: it stays before `\begin{document}`.
+    pub lee_perfil: bool,
+}
+
+/// Live's driver for the same spec as the profile's driver: the same lines, with the document's `\begin{document}` in the file
+/// itself, as Live needs to keep the preamble warm (`Session::live_driver`). What only names the profile or its parts goes after
+/// `\begin{document}`, so it is not part of the preamble Live keeps warm: `\lvPerfil` (unless the preamble reads it), the parts
+/// (`\includeonly` from a copy taken in the preamble: it only sets the list `\include` reads), the parts a loader may load, and
+/// the pieces left out. Those are commands redefined at `begindocument/before`; redefined right after `\begin{document}` instead
+/// they do the same (nothing prints between the two), and two profiles that leave out different pieces keep one preamble: on the
+/// book, four profiles named two preambles, so a switch between them started the warm lualatex again.
+pub fn render_driver_live(s: &DriverSpec, c: &CargaLive) -> Result<String> {
+    let mut pre = Vec::new();
+    let mut cuerpo = Vec::new();
+    for LineaDriver { rol, texto } in driver_lineas(s)? {
+        match rol {
+            Rol::Cabecera => pre.push("% Live driver (generated by Latex Frog, do not edit)".to_string()),
+            Rol::Perfil if c.lee_perfil => pre.push(texto),
+            Rol::Perfil | Rol::ParteElegida => cuerpo.push(texto),
+            Rol::MarcaDePiezas => {}
+            Rol::Piezas(redefiniciones) => cuerpo.push(redefiniciones),
+            Rol::Includeonly(partes) => cuerpo.push(format!("\\lvIncludeonly{{{partes}}}")),
+            // the file that opens the document is read from the copy that stops before it
+            Rol::Sustitucion(origen) if origen == c.origen => {}
+            Rol::Carga if c.origen == s.root_rel => pre.push(format!("\\input{{{}}}", c.pre.trim_end_matches(".tex"))),
+            Rol::Carga => {
+                pre.push(format!("\\makeatletter\\declare@file@substitution{{{}}}{{{}}}\\makeatother", c.origen, c.pre));
+                pre.push(texto);
+            }
+            Rol::SoloLive | Rol::Sustitucion(_) | Rol::Comun => pre.push(texto),
+        }
+    }
+    pre.push("\\begin{document}".into());
+    pre.extend(cuerpo);
+    pre.push(format!("\\input{{{}}}", c.resto.trim_end_matches(".tex")));
+    Ok(pre.join("\n") + "\n")
+}
+
+fn driver_lineas(s: &DriverSpec) -> Result<Vec<LineaDriver>> {
     let perfil = &s.perfil;
     perfil_valido(perfil)?;
     if let Some(c) = s.root_rel.chars().find(|c| PROHIBIDOS_EN_LA_RAIZ.contains(*c)) {
         return Err(Error::InvalidPath(format!("{:?}: the character {c:?} breaks \\input", s.root_rel)));
     }
-    let mut l = vec![
-        format!("% {} (generado por Latex Frog, no editar)", driver_rel(perfil)),
-        format!("\\def\\lvPerfil{{{perfil}}}"),
-        format!("\\def\\lvParcial{{{}}}", if s.partial { 1 } else { 0 }),
-    ];
+    let mut l = Lineas::default();
+    l.con(Rol::Cabecera, format!("% {} (generado por Latex Frog, no editar)", driver_rel(perfil)));
+    // taken before the root loads, in every profile (with or without parts), so the line is the same in all of them
+    l.con(Rol::SoloLive, "\\let\\lvIncludeonly\\includeonly");
+    l.con(Rol::SoloLive, IMAGENES_DE_PGF_EN_EL_LOG);
+    l.con(Rol::Perfil, format!("\\def\\lvPerfil{{{perfil}}}"));
+    l.push(format!("\\def\\lvParcial{{{}}}", if s.partial { 1 } else { 0 }));
     // Las imágenes como cajas del tamaño que tendrían, sin incluir el archivo. Es lo que hace el «Fast [draft]» de Overleaf (su
     // `DraftModeManager` antepone estas dos líneas al archivo principal): `graphics` además de `graphicx`, por si el documento carga
     // uno u otro.
     if s.draft_images {
-        l.push("\\PassOptionsToPackage{draft}{graphicx}".into());
-        l.push("\\PassOptionsToPackage{draft}{graphics}".into());
+        l.push("\\PassOptionsToPackage{draft}{graphicx}");
+        l.push("\\PassOptionsToPackage{draft}{graphics}");
     }
     for f in &s.flags {
         if !crate::config::macro_valida(f) {
@@ -379,28 +494,29 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
     }
     // TeX Live hands the build's `-output-directory` to the pdflatex runs pgf starts, through `TEXMF_OUTPUT_DIRECTORY`: the figure
     // would be written to `.latexfrog/build/<profile>/<cache>` instead of the cache at the root.
-    if !cfg!(windows) {
-        l.push(SALIDA_DE_PGF.into());
+    l.push(SALIDA_DE_PGF);
+    if let Some(redefiniciones) = crate::piezas::redefiniciones_del_driver(&s.omitir) {
+        l.con(Rol::MarcaDePiezas, crate::piezas::MARCA_DEL_DRIVER);
+        l.con(Rol::Piezas(redefiniciones.clone()), format!("\\AddToHook{{begindocument/before}}{{{redefiniciones}}}"));
     }
-    l.extend(crate::piezas::lineas_del_driver(&s.omitir));
     // Los archivos con piezas sacadas se leen desde su copia (`\declare@file@substitution`, núcleo de LaTeX 2020-10): el proyecto no se
     // toca. La raíz no pasa por `\input` con su nombre, así que si es ella la que tiene la copia se carga la copia directamente.
     let mut raiz = s.root_rel.clone();
     let otras: Vec<&(String, String)> = s.sustituciones.iter().filter(|(o, c)| if *o == s.root_rel { raiz = c.clone(); false } else { true }).collect();
     if !otras.is_empty() {
-        l.push("\\makeatletter".into());
+        l.push("\\makeatletter");
         for (o, c) in otras {
             if let Some(ch) = o.chars().chain(c.chars()).find(|ch| PROHIBIDOS_EN_LA_RAIZ.contains(*ch)) {
                 return Err(Error::InvalidPath(format!("{o:?}: the character {ch:?} cannot be substituted")));
             }
-            l.push(format!("\\declare@file@substitution{{{o}}}{{{c}}}"));
+            l.con(Rol::Sustitucion(o.clone()), format!("\\declare@file@substitution{{{o}}}{{{c}}}"));
         }
-        l.push("\\makeatother".into());
+        l.push("\\makeatother");
     }
     if s.solo_cache {
         // Va por hook y no en el preámbulo: la raíz (o el bloque `app`) llama a `\tikzexternalize` con su propio modo, y el hook
         // corre después, justo antes de `\begin{document}`.
-        l.push("\\AddToHook{begindocument/before}{\\tikzset{external/mode=graphics if exists}}".into());
+        l.push("\\AddToHook{begindocument/before}{\\tikzset{external/mode=graphics if exists}}");
     }
     if let Some(partes) = &s.includeonly {
         for p in partes {
@@ -411,7 +527,7 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
         }
         // `\includeonly` sólo vale en el preámbulo. El hook corre al principio de `\begin{document}`, antes de que LaTeX
         // lo prohíba, y así no hay que editar la raíz del usuario (S4: el PDF sale idéntico píxel a píxel).
-        l.push(format!("\\AddToHook{{begindocument/before}}{{\\includeonly{{{}}}}}", partes.join(",")));
+        l.con(Rol::Includeonly(partes.join(",")), format!("\\AddToHook{{begindocument/before}}{{\\includeonly{{{}}}}}", partes.join(",")));
         // The aux of a part left out is read at \begin{document} (from the main aux's `\@input`): read it without its lines for
         // the contents, the lists of figures and tables. Names compared detokenized, so accents and spaces are safe.
         let fuera: Vec<&String> = s.excluidas.iter().filter(|p| !partes.contains(p) && texto_seguro(p, "the part").is_ok()).collect();
@@ -419,14 +535,14 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
             for p in fuera {
                 l.push(format!("\\expandafter\\def\\csname lv@fuera@\\detokenize{{{p}.aux}}\\endcsname{{}}"));
             }
-            l.push(LEER_AUX_SIN_LISTAS.into());
+            l.push(LEER_AUX_SIN_LISTAS);
         }
         // A part a loader `\input`s is out of `\includeonly`'s reach: the macro is wrapped, once the preamble has defined it, so
         // a call whose name is not chosen loads nothing. It still runs, into a box that is thrown away and with `\input` off, so
         // its counters step and a chosen exercise keeps the number it has in the whole document (as `\include` keeps a chapter's).
         if !s.cargadores.is_empty() {
             for p in partes {
-                l.push(format!("\\expandafter\\def\\csname lvParte@{p}\\endcsname{{}}"));
+                l.con(Rol::ParteElegida, format!("\\expandafter\\def\\csname lvParte@{p}\\endcsname{{}}"));
             }
         }
         for (cmd, g) in &s.cargadores {
@@ -461,18 +577,18 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
     }
     if !por_parte.is_empty() && !s.cargadores.is_empty() {
         // the stack ends in `\lvBase`: what is left after a pop is never one braced group alone, which TeX would unbrace
-        l.push("\\let\\lvBase\\relax\\def\\lvParteActual{}\\def\\lvPila{\\lvBase}".into());
-        l.push("\\def\\lvEntra#1{\\xdef\\lvPila{{\\lvParteActual}\\lvPila}\\xdef\\lvParteActual{#1}\\ifcsname lvCopias@#1\\endcsname\\csname lvCopias@#1\\endcsname\\fi}".into());
-        l.push("\\def\\lvSale{\\ifcsname lvSinCopias@\\lvParteActual\\endcsname\\csname lvSinCopias@\\lvParteActual\\endcsname\\fi\\expandafter\\lvSaleDe\\lvPila\\lvFin}".into());
-        l.push("\\def\\lvSaleDe#1#2\\lvFin{\\xdef\\lvParteActual{#1}\\xdef\\lvPila{#2}}".into());
-        l.push("\\makeatletter".into());
+        l.push("\\let\\lvBase\\relax\\def\\lvParteActual{}\\def\\lvPila{\\lvBase}");
+        l.push("\\def\\lvEntra#1{\\xdef\\lvPila{{\\lvParteActual}\\lvPila}\\xdef\\lvParteActual{#1}\\ifcsname lvCopias@#1\\endcsname\\csname lvCopias@#1\\endcsname\\fi}");
+        l.push("\\def\\lvSale{\\ifcsname lvSinCopias@\\lvParteActual\\endcsname\\csname lvSinCopias@\\lvParteActual\\endcsname\\fi\\expandafter\\lvSaleDe\\lvPila\\lvFin}");
+        l.push("\\def\\lvSaleDe#1#2\\lvFin{\\xdef\\lvParteActual{#1}\\xdef\\lvPila{#2}}");
+        l.push("\\makeatletter");
         for (parte, copias) in &por_parte {
             let pon: String = copias.iter().map(|(n, c)| format!("\\declare@file@substitution{{{n}}}{{{c}}}")).collect();
             let quita: String = copias.iter().map(|(n, _)| format!("\\undeclare@file@substitution{{{n}}}")).collect();
             l.push(format!("\\expandafter\\def\\csname lvCopias@{parte}\\endcsname{{{pon}}}"));
             l.push(format!("\\expandafter\\def\\csname lvSinCopias@{parte}\\endcsname{{{quita}}}"));
         }
-        l.push("\\makeatother".into());
+        l.push("\\makeatother");
         for (cmd, g) in &s.cargadores {
             if !cmd.bytes().all(|c| c.is_ascii_alphabetic()) || g.arg >= g.arity || g.arity > 9 {
                 continue;
@@ -488,11 +604,11 @@ pub fn render_driver_spec(s: &DriverSpec) -> Result<String> {
     if s.fragmento {
         // `begindocument/end` corre al terminar `\begin{document}`: el fragmento es lo primero del cuerpo. Con `\includeonly{}` ninguna
         // parte entra, así que el PDF es sólo el fragmento (más lo que la raíz imprima fuera de las partes).
-        l.push("\\AddToHook{begindocument/end}{\\input{.latexfrog/fragment/frag}}".into());
+        l.push("\\AddToHook{begindocument/end}{\\input{.latexfrog/fragment/frag}}");
     }
     let base = raiz.strip_suffix(".tex").or_else(|| raiz.strip_suffix(".TEX")).unwrap_or(&raiz);
-    l.push(format!("\\input{{\"{base}\"}}"));
-    Ok(l.join("\n") + "\n")
+    l.con(Rol::Carga, format!("\\input{{\"{base}\"}}"));
+    Ok(l.0)
 }
 
 /// El driver del perfil sin flags ni partes: el del completo de F1.
@@ -527,7 +643,9 @@ pub fn render_latexmkrc() -> String {
         "$ENV{BIBINPUTS} = getcwd() . $sep . ($ENV{BIBINPUTS} // '');",
         "$ENV{BSTINPUTS} = getcwd() . $sep . ($ENV{BSTINPUTS} // '');",
         // MiKTeX creates the folders of `\\include{Cap/x}` aux files in the output directory; TeX Live does not and the build stops with
-        // "I can't write on file": the project's folders (hidden ones left out) are repeated inside the output directory.
+        // "I can't write on file": the project's folders (hidden ones left out) are repeated inside the output directory. Not on
+        // Windows, where this walk takes 0.3 s on the book: there the session creates the parts' folders itself before each build
+        // (`auxiliares::ensure_include_dirs`), which every build of the app goes through.
         "if ($^O ne 'MSWin32') { require File::Find; require File::Path; File::Find::find({ no_chdir => 1, wanted => sub { if (-d $_ && $_ ne '.') { if (m{/\\.}) { $File::Find::prune = 1; return; } File::Path::make_path(\"$out_dir/\" . substr($_, 2)); } } }, '.'); }",
         "",
     ]
@@ -1109,6 +1227,36 @@ mod tests {
         // a part's name that could break the driver is refused
         let mal = DriverSpec { copias_en_partes: vec![("a}b".into(), "a.tex".into(), ".latexfrog/piezas/p/a.tex".into())], ..s };
         assert!(render_driver_spec(&mal).is_err());
+    }
+
+    #[test]
+    fn lives_driver_has_every_line_of_the_profiles_driver_and_only_live_adds_the_picture_names() {
+        let s = DriverSpec {
+            perfil: "p".into(),
+            root_rel: "main.tex".into(),
+            partial: true,
+            flags: vec!["Uno".into()],
+            includeonly: Some(vec!["Cap/uno".into()]),
+            excluidas: vec!["Cap/dos".into()],
+            cargadores: vec![("Ejercicio".into(), crate::graph::Gate { arity: 1, arg: 0 })],
+            solo_cache: true,
+            omitir: vec![crate::piezas::Pieza::Toc],
+            sustituciones: vec![("cuerpo.tex".into(), ".latexfrog/piezas/p/cuerpo.tex".into()), ("x.tex".into(), ".latexfrog/piezas/p/x.tex".into())],
+            ..Default::default()
+        };
+        let perfil = render_driver_spec(&s).unwrap();
+        let c = CargaLive { origen: "cuerpo.tex", pre: ".latexfrog/build/live/lv-live-pre-X.tex", resto: ".latexfrog/build/p/lv-p-live-resto.tex", lee_perfil: false };
+        let live = render_driver_live(&s, &c).unwrap();
+        let (pre, cuerpo) = live.split_once("\\begin{document}\n").unwrap();
+        assert!(pre.contains(SALIDA_DE_PGF) && pre.contains(IMAGENES_DE_PGF_EN_EL_LOG), "{live}");
+        assert!(!perfil.contains("<use ") && !perfil.contains("lvIncludeonly"), "{perfil}");
+        // what Live moves after `\begin{document}` or reads from its own copy; every other line is the same, in the same order
+        let movidas = ["% .latexfrog", crate::piezas::MARCA_DEL_DRIVER, "\\AddToHook{begindocument/before}{\\RenewDocumentCommand", "\\AddToHook{begindocument/before}{\\includeonly", "\\def\\lvPerfil", "\\expandafter\\def\\csname lvParte@", "\\declare@file@substitution{cuerpo.tex}"];
+        let comunes: Vec<&str> = perfil.lines().filter(|l| !movidas.iter().any(|m| l.starts_with(m))).collect();
+        let en_live: Vec<&str> = pre.lines().filter(|l| comunes.contains(l)).collect();
+        assert_eq!(en_live, comunes, "{live}");
+        assert!(cuerpo.starts_with("\\def\\lvPerfil{p}\n\\RenewDocumentCommand\\tableofcontents{}{}\n\\lvIncludeonly{Cap/uno}\n"), "{cuerpo}");
+        assert!(pre.contains("\\declare@file@substitution{cuerpo.tex}{.latexfrog/build/live/lv-live-pre-X.tex}") && pre.ends_with("\\input{\"main\"}\n"), "{pre}");
     }
 
     #[test]

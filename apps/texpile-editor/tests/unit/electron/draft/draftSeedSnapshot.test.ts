@@ -1,10 +1,9 @@
-// LatexFrog: Live's first compile starts from the profile's build, and a profile Live comes back to unchanged costs no TeX.
+// LatexFrog: Live's first compile starts from the profile's build.
 import { it, expect, afterAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { seedDraftFromProfile, profileOfLiveDriver } from '../../../../../../electron/src/lv/draftSeed';
-import { projectFingerprint, saveSnapshot, restoreSnapshot } from '../../../../../../electron/src/lv/draftSnapshot';
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lv-draftseed-')));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -49,29 +48,4 @@ it('seeds aux, parts aux and bbl from the profile build, and swaps them when Liv
 	expect(fs.existsSync(path.join(out, 'Secciones/uno.aux'))).toBe(false);
 	// not a Live driver: nothing
 	expect(seedDraftFromProfile(root, out, 'main.tex')).toBe(false);
-});
-
-it('restores a profile kept result while nothing changed, and not after an edit', () => {
-	const { root, out } = project('snap');
-	const drvA = '.latexfrog/drivers/lv-a-live.tex';
-	const drvB = '.latexfrog/drivers/lv-b-live.tex';
-	fs.mkdirSync(path.join(out, 'Secciones'), { recursive: true });
-	fs.writeFileSync(path.join(out, 'draft.aux'), 'A');
-	fs.writeFileSync(path.join(out, 'Secciones/uno.aux'), 'A1');
-	const fpA = projectFingerprint(root, drvA, 'lualatex');
-	saveSnapshot(out, drvA, fpA, { ok: true, count: 3 });
-	// Live goes to b, which writes its own products
-	fs.writeFileSync(path.join(out, 'draft.aux'), 'B');
-	fs.rmSync(path.join(out, 'Secciones/uno.aux'));
-	expect(restoreSnapshot(out, drvB, projectFingerprint(root, drvB, 'lualatex'))).toBeNull();
-	// back to a: same fingerprint, its result and products come back
-	expect(projectFingerprint(root, drvA, 'lualatex')).toBe(fpA);
-	expect(restoreSnapshot(out, drvA, projectFingerprint(root, drvA, 'lualatex'))).toEqual({ ok: true, count: 3 });
-	expect(fs.readFileSync(path.join(out, 'draft.aux'), 'utf8')).toBe('A');
-	expect(fs.readFileSync(path.join(out, 'Secciones/uno.aux'), 'utf8')).toBe('A1');
-	// another engine is another result
-	expect(projectFingerprint(root, drvA, 'xelatex')).not.toBe(fpA);
-	// an edited source is a compile
-	fs.writeFileSync(path.join(root, 'Secciones/uno.tex'), 'one, edited\n');
-	expect(restoreSnapshot(out, drvA, projectFingerprint(root, drvA, 'lualatex'))).toBeNull();
 });

@@ -28,6 +28,7 @@ import { registerDeferredIpc, shutdownDeferred } from './ipc/deferredIpc';
 import { executable as lvSidecarExecutable, registerLvSidecarIpc } from './lv/lvSidecar';
 import { stopLive, useSidecarExecutable } from './lv/lvLive';
 import { pickFolder } from './lv/folderPicker';
+import { registerAiMergeIpc } from './lv/aiMerge';
 import { registerWindowChrome } from './windowChrome';
 
 applyAppIdentity();
@@ -36,6 +37,7 @@ registerPrivilegedSchemes();
 
 // not deferred: the window opens its project in the engine while it boots, and a Compile that follows must find it open
 registerLvSidecarIpc();
+registerAiMergeIpc();
 useSidecarExecutable(lvSidecarExecutable);
 
 // only what a window needs before it can paint; the rest is in deferredIpc

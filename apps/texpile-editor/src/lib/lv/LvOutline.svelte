@@ -9,6 +9,8 @@
 	import { outlineDepths, outlineParents, outlineVisible } from '$lib/lv/lvOutlineTree';
 	import { treeMarker, treeText } from '$lib/lv/lvTreeStyle';
 	import { pdfStore } from '$lib/stores/pdfStore';
+	import { latexLiveMode } from '$lib/workspace/projectConfigSync.svelte';
+	import { livePass } from '$lib/lv/livePass.svelte';
 
 	let { onOpenFileAt }: { onOpenFileAt: (file: string, line: number) => void } = $props();
 
@@ -19,6 +21,9 @@
 	$effect(() => {
 		void lvProject.revision;
 		void pdfStore.current;
+		// each Live pass is a new PDF on screen
+		void latexLiveMode();
+		void livePass.state;
 		if (!lvProject.view?.root) return;
 		let stale = false;
 		void lvProject.pdfFiles().then((f) => {

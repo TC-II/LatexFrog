@@ -1,7 +1,5 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
-	"lv_outline_cond": "仅当定义了 {name} 时：当前不在 PDF 中",
-	"lv_outline_cond_never": "位于 iffalse 中：永远不在 PDF 中",
 	"lv_outline_title": "Project outline",
 	"lv_outline_loading": "Reading the project...",
 	"lv_outline_empty": "No chapters or sections in the project's files.",
@@ -10,6 +8,8 @@
 	"lv_config_subfolder": "The main file is in {folder}: that folder is the project, since TeX reads every input from the main file's folder.",
 	"lv_config_subfolder_open": "Open {folder}",
 	"lv_outline_untitled": "(untitled)",
+	"lv_outline_cond": "仅当定义了 {name} 时：当前不在 PDF 中",
+	"lv_outline_cond_never": "位于 iffalse 中：永远不在 PDF 中",
 	"modal_close_aria": "关闭",
 	"start_heading": "开始",
 	"start_open_folder": "打开文件夹…",

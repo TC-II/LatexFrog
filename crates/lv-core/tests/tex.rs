@@ -38,6 +38,11 @@ fn compilar(fix: &str, raiz: &str) -> (TempDir, PathBuf, Recolector, BuildEvent)
     let tmp = TempDir::new().unwrap();
     let proyecto = tmp.path().join("pr ñ oyecto");
     copiar(&fixture(fix), &proyecto);
+    // what the session does before each build: TeX Live does not create the folders of `\include{Cap/x}` aux files under the
+    // output directory (MiKTeX does), and the rc's own walk is left out on Windows, where it costs 0.3 s on the book
+    let cmds = vec!["include".to_string()];
+    let ix = lv_core::graph::ProjectIndex::build(&proyecto, raiz, &cmds);
+    lv_core::auxiliares::ensure_include_dirs(&proyecto, "completo", &ix.include_dirs(&cmds)).unwrap();
     let r = Recolector::nuevo();
     Builder::new().start(&proyecto, raiz, "completo", r.sink.clone()).expect("lanzar latexmk");
     let fin = r.esperar(300);

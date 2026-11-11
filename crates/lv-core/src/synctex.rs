@@ -139,6 +139,16 @@ fn rec(b: &[u8], mut p: usize, size: u8) -> Registro {
     Registro { tag: tag as u16, line: line as u32, x, y, w, h, d }
 }
 
+/// An input's path. Under latexmk on Windows (which sets the console to the ANSI code page), TeX Live writes the folder it runs in
+/// in that code page (`ñ` as the byte 0xF1) and the names the document gives in UTF-8: each part of the path that is not UTF-8 is
+/// read as Latin-1, which is what the ANSI code page gives for the accents a Spanish folder has.
+fn ruta_de_bytes(b: &[u8]) -> String {
+    b.split(|&c| c == b'/' || c == b'\\')
+        .map(|s| std::str::from_utf8(s).map(str::to_string).unwrap_or_else(|_| s.iter().map(|&c| c as char).collect()))
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 // TeX Live writes the project's inputs as `<root>/./main.tex`.
 fn norm(s: &str) -> String {
     s.replace('\\', "/").replace("/./", "/").trim_start_matches("//?/").to_lowercase()
@@ -173,7 +183,7 @@ impl Synctex {
             if linea.starts_with(b"Input:") {
                 let mut p = 6;
                 let n = num(linea, &mut p) as u16;
-                let ruta = linea.get(p + 1..).map(|r| String::from_utf8_lossy(r).to_string()).unwrap_or_default();
+                let ruta = linea.get(p + 1..).map(ruta_de_bytes).unwrap_or_default();
                 inputs.push((n, ruta));
                 continue;
             }
@@ -505,6 +515,18 @@ mod tests {
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use std::io::Write;
+
+    /// TeX Live under latexmk on Windows: the folder it runs in comes in the ANSI code page (`ñ` is 0xF1), the document's own
+    /// names in UTF-8, in the same path.
+    #[test]
+    fn a_path_with_the_folder_in_the_ansi_code_page_and_the_names_in_utf8_is_found() {
+        let mut data = b"SyncTeX Version:1\nInput:1:C:/T/pr \xF1 oyecto/./Cap\xC3\xADtulos/Introducci\xC3\xB3n.tex\nInput:2:C:/T/pr \xF1 oyecto/./main.tex\nOutput:pdf\nContent:\n".to_vec();
+        data.extend_from_slice(b"Postamble:\n");
+        let s = Synctex::parse(&data);
+        let root = Path::new("C:/T/pr ñ oyecto");
+        assert!(s.tag_of(root, "main.tex").is_some());
+        assert_eq!(s.files(root), ["Capítulos/Introducción.tex", "main.tex"]);
+    }
 
     /// Una página con un párrafo de dos líneas de texto. La caja del párrafo (`(1,5`) lleva la línea 5 (donde TeX terminó
     /// de armarla) y sus hijos la 3 y la 4, como en el libro.

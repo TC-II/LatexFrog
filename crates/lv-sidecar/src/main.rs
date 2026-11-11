@@ -107,7 +107,10 @@ fn run(p: &Value, cmd: &str, s: &Arc<Session>) -> Result<Value, String> {
         "synctex-forward" => to_json(s.synctex_forward_in(text(p, "file")?, number(p, "line")? as u32, p.get("profile").and_then(Value::as_str)).map_err(err)?),
         "synctex-inverse" => to_json(s.synctex_inverse(text(p, "profile")?, number(p, "page")? as u32, number(p, "x")?, number(p, "y")?).map_err(err)?),
         "synctex-inverse-pdf" => to_json(s.synctex_inverse_pdf(text(p, "pdf")?, number(p, "page")? as u32, number(p, "x")?, number(p, "y")?).map_err(err)?),
-        "synctex-files" => to_json(s.synctex_files(text(p, "profile")?).map_err(err)?),
+        "synctex-files" => match p.get("pdf").and_then(Value::as_str) {
+            Some(pdf) => to_json(s.synctex_files_pdf(pdf).map_err(err)?),
+            None => to_json(s.synctex_files(text(p, "profile")?).map_err(err)?),
+        },
         "driver-for-live" => to_json(s.live_driver(p.get("profile").and_then(Value::as_str)).map_err(err)?),
         "pdf-for" =>to_json(s.elegir_pdf(text(p, "file")?).map_err(err)?),
         "figures-status" => to_json(s.figures_status().map_err(err)?),

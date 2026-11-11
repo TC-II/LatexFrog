@@ -97,6 +97,14 @@ function dropJobFiles(outAbs: string): void {
 
 /** Claim the warm process for this compile: alive, ready, and warmed on exactly this preamble. */
 export function takeWarmCompiler(root: string, preamble: string): Warm | null {
+	// LatexFrog: a compile that starts within the beat after the last one (a quick switch of chapter) must not leave that
+	// compile's rewarm pending. It fired while this compile's warm pass was writing texd_warm.*, deleted and rewrote those
+	// files under it, and the pass's last block landed after a gap of NUL bytes: draft.aux came out corrupt, and every
+	// pass after it stopped with 101 "Text line contains an invalid character" and no pages. This compile rewarms at its end.
+	if (rewarmTimer) {
+		clearTimeout(rewarmTimer);
+		rewarmTimer = null;
+	}
 	const w = warm;
 	if (!w || w.key !== keyOf(root)) return null;
 	warm = null;
@@ -164,12 +172,17 @@ function promote(outAbs: string, seedOnly: ReadonlySet<string>): void {
 		try {
 			if (seedOnly.has(suffix)) fs.rmSync(from, { force: true });
 			else {
+				// rename replaces `to`; deleting it first lost draft.pdf whenever the rename then failed on a file TeX
+				// still held open (Windows), and the preview drew every figure as an empty box
 				const to = path.join(outAbs, 'draft.' + suffix);
-				fs.rmSync(to, { force: true });
-				fs.renameSync(from, to);
+				try {
+					fs.renameSync(from, to);
+				} catch {
+					fs.copyFileSync(from, to);
+				}
 			}
 		} catch {
-			/* a locked file costs that one product, not the compile */
+			/* a locked file costs that one product's update; the previous one stays */
 		}
 	}
 }

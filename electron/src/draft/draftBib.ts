@@ -9,9 +9,34 @@ import { shellEnvReady } from '../shell/shellEnv';
 
 const OUT = '_draft';
 
-// per-root biber control-file hash: biber is slow (~1-3s), so rerun it only when the
-// .bcf actually changed (citation set changed), not on every keystroke's recompile
-const lastBcf = new Map<string, string>();
+// biber is slow (~1-3s), so rerun it only when what it reads changed (the citation set, a .bib),
+// not on every keystroke's recompile.
+// LatexFrog: what the .bbl in _draft was made from is written beside it (`draft.bcfhash`), not remembered once per root.
+// Live goes back and forth between documents (chapters, profiles), each with its own citations: one remembered hash
+// was always the other chapter's, so biber ran again on every switch (1.1 s on the book), also when a kept result's
+// .bbl had just been put back. The file travels with the .bbl it describes. It also covers the .bib files the .bcf
+// names: an edited .bib used to reach Live only when the citations changed too.
+const BCF_MEMO = 'draft.bcfhash';
+
+/** what biber would read: the control file and the size and mtime of each data source it names */
+export function biberInputs(root: string, bcf: Buffer): string {
+	const h = crypto.createHash('sha1').update(bcf);
+	for (const m of bcf.toString('utf8').matchAll(/<bcf:datasource[^>]*>([^<]+)<\/bcf:datasource>/g)) {
+		const name = m[1].trim();
+		let stat = 'absent';
+		for (const candidate of [name, name + '.bib']) {
+			try {
+				const st = fs.statSync(path.resolve(root, candidate));
+				stat = `${st.size} ${st.mtimeMs}`;
+				break;
+			} catch {
+				/* not under this name */
+			}
+		}
+		h.update(`\0${name}\0${stat}`);
+	}
+	return h.digest('hex');
+}
 
 function sha1(buf: Buffer | string): string {
 	return crypto.createHash('sha1').update(buf).digest('hex');
@@ -82,12 +107,23 @@ export async function auxCycle(root: string, outAbs: string, mainFile: string): 
 	const aux = path.join(outAbs, 'draft.aux');
 	const auxText = fs.existsSync(aux) ? fs.readFileSync(aux, 'utf8') : '';
 	if (fs.existsSync(bcf)) {
-		const h = sha1(fs.readFileSync(bcf));
-		if (lastBcf.get(root) !== h) {
+		const h = biberInputs(root, fs.readFileSync(bcf));
+		const memo = path.join(outAbs, BCF_MEMO);
+		let made = '';
+		try {
+			made = fs.readFileSync(memo, 'utf8');
+		} catch {
+			/* biber has not run for this _draft */
+		}
+		if (made !== h || !fs.existsSync(bbl)) {
 			// biblatex: biber reads _draft/draft.bcf; datasource paths in the .bcf are as
 			// written in \addbibresource (root-relative), so run from root
 			await run('biber', ['--input-directory', OUT, '--output-directory', OUT, 'draft'], { cwd: root });
-			lastBcf.set(root, h);
+			try {
+				fs.writeFileSync(memo, h);
+			} catch {
+				/* biber runs again next time */
+			}
 		}
 	} else if (/\\bibdata\{/.test(auxText)) {
 		// classic bibtex: runs inside the output dir (reads draft.aux there); .bib/.bst

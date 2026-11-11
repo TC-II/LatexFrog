@@ -11,6 +11,7 @@
 	import NoRepoGate from './gates/NoRepoGate.svelte';
 	import UnsafeRepoGate from './gates/UnsafeRepoGate.svelte';
 	import HistoryTimeline from './graph/HistoryTimeline.svelte';
+	import LvAutoSync from '$lib/lv/autosync/LvAutoSync.svelte';
 	import { pathLabels } from './changes/pathLabels';
 	import { isBuildArtifact } from '$lib/workspace/buildArtifacts';
 	// what is going on in git that only the display needs: not callbacks, so read here, not passed down
@@ -248,6 +249,8 @@
 				</button>
 			</div>
 		</div>
+
+		<LvAutoSync />
 
 		<!-- which half matters depends on what you are doing, so it is not the scrollbar's decision -->
 		<div class="flex min-h-0 flex-1 flex-col" bind:this={splitEl}>

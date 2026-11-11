@@ -21,6 +21,8 @@ import { gitignoreLines } from '$lib/workspace/buildArtifacts';
 import { provideScmHandlers } from '$lib/workspace/scm/actions/scmHandlers.svelte';
 import { ScmFetch } from '$lib/workspace/scm/remote/scmFetch.svelte';
 import { AutoCheck } from '$lib/workspace/scm/actions/scmAutoCheck.svelte';
+import { autoSync } from '$lib/lv/autosync/autoSync.svelte';
+import { openAiKeys } from '$lib/lv/autosync/openAiKeys';
 import { LocalHistoryActions, provideLocalHistoryActions } from '$lib/workspace/localHistory/localHistoryActions.svelte';
 import { provideAgentHost } from '$lib/ai/agentPanel/agentHost.svelte';
 import { provideFolderSwitch } from '$lib/workspace/openWorkspace';
@@ -203,6 +205,27 @@ export class WorkspaceIntegrations {
 		closeAgentSessionWithWorkspace();
 		const fetcher = new ScmFetch(this.scm);
 		// co-authors' new versions, looked for every few minutes while this project is open
+		// LatexFrog: save, take in and send every minute or so, AI keys settling conflicts (lib/lv/autosync)
+		$effect(() =>
+			autoSync.attach({
+				scm: this.scm,
+				getLoadedPath: () => doc.path,
+				hasPendingSave: () => !!d.editFlow().saver.pending,
+				flushPendingSave: () => d.editFlow().saver.flushAndWait(),
+				refreshTree: () => d.files().refreshTree(),
+				loadFile: (path) => d.wsdoc.loadFile(path),
+				readText: async (p) => {
+					try {
+						return await fileService.readText(p);
+					} catch {
+						return null;
+					}
+				},
+				writeText: (p, content) => fileService.writeText(p, content),
+				openKeys: openAiKeys
+			})
+		);
+		$effect(() => autoSync.open(workspaceRoot.current));
 		const autoCheck = new AutoCheck({ isBusy: () => this.scm.busy });
 		$effect(() => {
 			// again for each folder opened in this window: checked soon after it opens, as the first was

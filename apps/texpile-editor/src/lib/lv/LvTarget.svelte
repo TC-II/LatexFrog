@@ -25,7 +25,7 @@
 
 	$effect(() => {
 		void activeFilePath.current;
-		void lvProject.noteActiveFile();
+		lvProject.activeFileChanged();
 	});
 
 	const target = $derived.by(() => {

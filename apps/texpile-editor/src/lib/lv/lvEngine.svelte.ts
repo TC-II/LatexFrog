@@ -14,8 +14,9 @@ import { fileService } from '$lib/files/service/fileService';
 import { fileMode } from '$lib/workspace/fileMode.svelte';
 import { collabGuest } from '$lib/collab/guestStore.svelte';
 import { latexLiveMode } from '$lib/workspace/projectConfigSync.svelte';
+import { latest } from './latest';
 
-export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; omit?: string[]; compileOn: string | null; output?: { dir: string; pattern: string; perPart?: boolean } | null };
+export type Profile = { id: string; label: string; parts: string; hidden: boolean; color: string | null; draftImages: boolean; publica: boolean; partList: string[]; omit?: string[]; compileOn: string | null; /** the parts it compiles now, as the engine resolved them; null when it cannot say */ compiles?: string[] | null; output?: { dir: string; pattern: string; perPart?: boolean } | null };
 /** `imageDirs`: where the engine found the images the file (and what it brings in) inserts, relative to the root */
 export type FileInfo = { part: string | null; affects: 'yes' | 'other_part' | 'unrelated'; profileAuto: boolean; partsChanged: boolean; imageDirs?: string[] };
 export type OutlineTab = 'contents' | 'figures';
@@ -263,21 +264,25 @@ class LvProject {
 	 * Live compiles the active profile: the engine writes a driver with the profile's flags, parts and pieces that opens the document
 	 * itself, so Live can keep the preamble warm. Written again when the profile, its parts or the files change.
 	 */
-	async prepareLive() {
-		if (!this.view) {
+	prepareLive = latest(async () => {
+		const root = this.view?.root;
+		if (!root) {
 			this.liveDriver = null;
 			return;
 		}
 		try {
 			const d = await this.request<{ path: string; changed: boolean }>('driver-for-live');
+			// another folder was opened while the engine answered: that driver is not this project's
+			if (this.view?.root !== root) return;
 			const moved = d.path !== this.liveDriver;
 			this.liveDriver = d.path;
 			if (d.changed || moved) this.liveRevision++;
 		} catch (e) {
+			if (this.view?.root !== root) return;
 			this.liveDriver = null;
 			this.onError?.(e instanceof Error ? e.message : String(e));
 		}
-	}
+	});
 
 	async setState(fields: object) {
 		await this.request('set-state', fields);
@@ -307,15 +312,39 @@ class LvProject {
 		return (this.fileInfo?.imageDirs ?? []).map((d) => (d ? joinPath(root, d) : root));
 	}
 
-	/** tells the engine which file is being worked on: a `current` profile builds that file's part */
-	async noteActiveFile() {
-		const root = this.view?.root.replace(/\\/g, '/');
+	/**
+	 * The open file changed (another tab). Told to the engine once the choice rests: flipping through tabs, or to a file and
+	 * straight back, would otherwise move a `current` profile to each chapter passed over, and Live would start a compile of
+	 * each one only to kill it for the next.
+	 */
+	activeFileChanged() {
+		if (this.activeFileTimer) clearTimeout(this.activeFileTimer);
+		this.activeFileTimer = setTimeout(() => {
+			this.activeFileTimer = null;
+			void this.noteActiveFile();
+		}, 150);
+	}
+	private activeFileTimer: ReturnType<typeof setTimeout> | null = null;
+
+	/**
+	 * Tells the engine which file is being worked on: a `current` profile builds that file's part. One at a time, and the
+	 * last one always for the file open when it starts (`latest`).
+	 */
+	noteActiveFile = latest(async () => {
+		if (this.activeFileTimer) {
+			clearTimeout(this.activeFileTimer);
+			this.activeFileTimer = null;
+		}
+		const opened = this.view?.root;
+		const root = opened?.replace(/\\/g, '/');
 		const path = activeFilePath.current?.replace(/\\/g, '/');
 		if (!root || !path?.toLowerCase().startsWith(root.toLowerCase() + '/')) {
 			this.fileInfo = null;
 			return;
 		}
 		const info = await this.request<FileInfo>('file-info', { file: path.slice(root.length + 1) }).catch(() => null);
+		// another folder was opened while the engine answered
+		if (this.view?.root !== opened) return;
 		const moreDirs = (info?.imageDirs ?? []).join('|') !== (this.fileInfo?.imageDirs ?? []).join('|');
 		this.fileInfo = info;
 		// an image the visual editor showed missing before the engine said where its folder is tries again
@@ -324,7 +353,7 @@ class LvProject {
 		// Live recompiles; the outline's left-out rows follow too
 		const movedPart = !!info?.part && info.part !== this.view?.state.currentPart;
 		if (info?.partsChanged || movedPart) await this.refresh();
-	}
+	});
 
 	async compile() {
 		await this.noteActiveFile();
@@ -365,7 +394,10 @@ class LvProject {
 		const part = item.kind === 'part' ? item.name : (item.part ?? null);
 		if (part === null) return false;
 		const st = this.view?.state;
-		if (p.parts === 'all') return (p.omit ?? []).includes(`part:${part}`);
+		// The engine says which parts the profile compiles (`compiles`, the list its driver takes), so what is dimmed here is
+		// what the PDF lacks. Worked out here too, the two disagreed: a `current` profile with no chapter yet compiles the
+		// first one, and this showed every chapter as left out. The rule below stays for a profile that cannot say.
+		if (p.parts === 'all') return p.compiles ? !p.compiles.includes(part) : (p.omit ?? []).includes(`part:${part}`);
 		const chosen =
 			p.parts === 'selection' ? (st?.selection ?? []) : p.parts === 'current' ? [...p.partList, ...(st?.currentPart ? [st.currentPart] : [])] : p.partList;
 		const names = (this.view?.parts ?? []).map((x) => x.name);
@@ -374,8 +406,9 @@ class LvProject {
 			const holds = (q: string) => this.partGroups[q] === part || (this.partAlso[q] ?? []).includes(part);
 			if (chosen.some(holds)) return true;
 		}
+		if (p.compiles) return !p.compiles.includes(part);
 		// an exercise of a chosen guide left out by name (`part:<name>`) is out, as the engine reads it
-		return !withGroups(chosen, this.partGroups, names, this.partAlso).includes(part) || (p.omit ?? []).includes(`part:${part}`);
+		return!withGroups(chosen, this.partGroups, names, this.partAlso).includes(part) || (p.omit ?? []).includes(`part:${part}`);
 	}
 
 	private get activeProfile() {
@@ -486,9 +519,12 @@ class LvProject {
 
 	/** the project files the PDF on show was built from (null before it has SyncTeX): what code-to-PDF sync can reach */
 	pdfFiles = async (): Promise<Set<string> | null> => {
+		// Live shows its own PDF: the profile's last build may hold another chapter, or be older, and then every heading of
+		// the chapter on screen read as not in the PDF
 		const profile = this.shownProfile();
-		if (!profile) return null;
-		const files = await this.request<string[] | null>('synctex-files', { profile }).catch(() => null);
+		const ask = latexLiveMode() ? { pdf: '_draft/draft.pdf' } : profile ? { profile } : null;
+		if (!ask) return null;
+		const files = await this.request<string[] | null>('synctex-files', ask).catch(() => null);
 		return files ? new Set(files.map((f) => f.toLowerCase())) : null;
 	};
 

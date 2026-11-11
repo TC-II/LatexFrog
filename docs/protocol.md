@@ -31,7 +31,7 @@ Every command except `open` needs an open project.
 |---|---|---|
 | `open` | `root`: absolute folder | `{project: ProjectView, migration: Migration}` |
 | `close` | | `null`; releases the project and its lock |
-| `view` | | `ProjectView` |
+| `view` | | `ProjectView`. Each of `config.profiles` carries `compiles`: the parts it compiles now, by name and in document order (the list its driver takes), or `null` when it cannot say; the interface dims the other parts from it |
 | `refresh` | | `ProjectView`, re-indexed from disk |
 | `set-root` | `file` | `ProjectView`; session only, persist through `config-write` |
 | `set-state` | any of `profile`, `selection` (part names), `autoCompile`, `idleMs`, `outsideSave`, `draftImages` | `State` |
@@ -42,7 +42,7 @@ Every command except `open` needs an open project.
 | `problems` | `profile` | `Problem[]` |
 | `symbols` *async* | | `Symbols`; `sections` is the project-wide outline |
 | `synctex-forward` | `file`, `line`, optional `profile` | `SyncForward` or `null`; `profile`, the PDF on screen, is used first when it holds the file |
-| `synctex-files` | `profile` | the project files that profile's PDF read (from its SyncTeX), or `null` before its first build; a file a TeX conditional skips is missing |
+| `synctex-files` | `profile`, or `pdf` (relative to the root) | the project files that profile's PDF read (from its SyncTeX), or `null` before its first build; a file a TeX conditional skips is missing. With `pdf`, the same for another PDF of the project with its SyncTeX beside it: Live's `_draft/draft.pdf` |
 | `synctex-inverse` | `profile`, `page`, `x`, `y` | `SyncInverse` or `null`; only the project's own files count (a click on a TikZ picture goes to the line that draws it, not into the library) |
 | `synctex-inverse-pdf` | `pdf` (relative to the root), `page`, `x`, `y` | the same over another PDF of the project with its SyncTeX beside it: Live's `_draft/draft.pdf` |
 | `pdf-for` | `file` | PDF path or `null`, the newest PDF that contains the file |

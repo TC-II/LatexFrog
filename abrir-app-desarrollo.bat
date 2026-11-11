@@ -12,8 +12,10 @@ rem The port of the vite server. Another one: set LF_PUERTO=number before runnin
 if not defined LF_PUERTO set "LF_PUERTO=5180"
 
 rem pnpm is not on this PC's PATH and the repo's scripts call it by name.
+rem Node 25 and later no longer ship corepack: then pnpm comes through npx, at the version the lockfile was made with.
 if not exist "%TEMP%\latexfrog-dev" mkdir "%TEMP%\latexfrog-dev"
-(echo @corepack pnpm %%*) > "%TEMP%\latexfrog-dev\pnpm.cmd"
+where corepack >nul 2>&1 && (echo @corepack pnpm %%*) > "%TEMP%\latexfrog-dev\pnpm.cmd"
+where corepack >nul 2>&1 || (echo @npx --yes pnpm@10.14.0 %%*) > "%TEMP%\latexfrog-dev\pnpm.cmd"
 
 call cargo build --release -p lv-sidecar || goto fallo
 call pnpm electron:build || goto fallo

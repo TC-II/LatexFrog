@@ -134,7 +134,8 @@ fn el_driver_del_parcial_lleva_flags_e_includeonly_de_la_seleccion() {
     s.set_state(StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
     assert!(matches!(s.request_build(Some("parcial")).unwrap(), BuildAck::Started { .. }));
     esperar_finales(&r, 1, 60);
-    let t = driver(&d, "parcial");
+    // the line that keeps pgf's figure runs out of the build folder (`SALIDA_DE_PGF`) differs by system: left out here
+    let t: String = driver(&d, "parcial").lines().filter(|l| !l.contains("TEXMF_OUTPUT_DIRECTORY")).map(|l| format!("{l}\n")).collect();
     assert!(
         t.starts_with("% .latexfrog/drivers/lv-parcial.tex (generado por Latex Frog, no editar)\n\\def\\lvPerfil{parcial}\n\\def\\lvParcial{1}\n\\def\\CompilacionReducida{}\n\\def\\TikzExternalizar{}\n\\AddToHook{begindocument/before}{\\includeonly{Secciones/Dos}}\n"),
         "{t}"
@@ -486,6 +487,38 @@ fn el_pdf_para_un_salto_se_elige_por_especificidad_y_no_por_fecha() {
     assert_eq!(s.elegir_pdf("Secciones/Uno.tex").unwrap().as_deref(), Some("completo"));
 }
 
+/// Live's PDF has its own SyncTeX: what the outline marks as "not in the PDF" while Live is on screen comes from it, not from a
+/// profile build that holds another chapter. TeX Live writes Live's inputs as `<root>/./file`.
+#[test]
+fn the_files_of_lives_pdf_come_from_its_own_synctex_and_not_from_the_profile_build() {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::io::Write;
+    let d = proyecto();
+    let (s, _) = abrir(&d, OK);
+    assert_eq!(s.synctex_files_pdf("_draft/draft.pdf").unwrap(), None, "no Live pass yet");
+    assert!(s.synctex_files_pdf("../elsewhere/draft.pdf").is_err());
+    assert!(s.synctex_files_pdf("C:/elsewhere/draft.pdf").is_err());
+
+    // the profile build holds Uno; Live compiled Dos
+    escribir_synctex(&s.root, "parcial");
+    let r = s.root.display().to_string().replace('\\', "/");
+    let texto = format!(
+        "SyncTeX Version:1\nInput:1:{r}/./.latexfrog/drivers/lv-parcial-live.tex\nInput:2:{r}/./main.tex\nInput:3:{r}/./Secciones/Dos.tex\nOutput:pdf\nMagnification:1000\nUnit:1\nContent:\n{{1\n[1,1:4736286,4736286:30000000,40000000,0\n(3,1:4736286,12000000:30000000,500000,100000\nk3,1:4736286,12000000:100000\n)\n]\n}}1\nPostamble:\n"
+    );
+    let mut e = GzEncoder::new(Vec::new(), Compression::default());
+    e.write_all(texto.as_bytes()).unwrap();
+    fs::create_dir_all(s.root.join("_draft")).unwrap();
+    fs::write(s.root.join("_draft/draft.synctex.gz"), e.finish().unwrap()).unwrap();
+
+    let live = s.synctex_files_pdf("_draft/draft.pdf").unwrap().unwrap();
+    assert!(live.iter().any(|f| f == "Secciones/Dos.tex"), "{live:?}");
+    assert!(live.iter().any(|f| f == "main.tex"), "{live:?}");
+    assert!(!live.iter().any(|f| f == "Secciones/Uno.tex"), "{live:?}");
+    let build = s.synctex_files("parcial").unwrap().unwrap();
+    assert!(build.iter().any(|f| f == "Secciones/Uno.tex") && !build.iter().any(|f| f == "Secciones/Dos.tex"), "{build:?}");
+}
+
 #[test]
 fn el_salto_va_y_vuelve_con_las_rutas_relativas_a_la_raiz() {
     let d = proyecto();
@@ -744,6 +777,24 @@ fn live_driver_reads_a_body_file_from_its_copy_before_the_document() {
 }
 
 #[test]
+fn live_reads_the_roots_copy_when_the_profile_leaves_out_a_block_of_the_root() {
+    let d = proyecto();
+    fs::write(d.path().join("main.tex"), "\\documentclass{book}\n\\begin{document}\n\\begin{titlepage}\nT\n\\end{titlepage}\n\\include{Secciones/Uno}\n\\include{Secciones/Dos}\n\\end{document}\n").unwrap();
+    fs::write(d.path().join("latexfrog.json"), r#"{ "root": "main.tex", "profiles": { "sin": { "omit": ["block:titlepage"] }, "con": {} } }"#).unwrap();
+    let (s, _r) = abrir(&d, OK);
+    let resto = |perfil: &str| {
+        s.live_driver(Some(perfil)).unwrap();
+        fs::read_to_string(d.path().join(format!(".latexfrog/build/{perfil}/lv-{perfil}-live-resto.tex"))).unwrap()
+    };
+    // the profile's build reads the root's copy, with the block commented: so does Live, with the same line numbers
+    let sin = resto("sin");
+    assert!(sin.contains("% lv: \\begin{titlepage}\n% lv: T\n% lv: \\end{titlepage}\n"), "{sin:?}");
+    assert_eq!(sin.lines().nth(5), Some("\\include{Secciones/Uno}"), "{sin:?}");
+    assert_eq!(fs::read_to_string(d.path().join(".latexfrog/build/sin/lv-sin-live-resto.origen")).unwrap(), "main.tex");
+    assert!(resto("con").contains("\n\\begin{titlepage}\nT\n"));
+}
+
+#[test]
 fn live_profiles_that_differ_only_in_parts_share_the_preamble() {
     let d = proyecto();
     let (s, _r) = abrir(&d, OK);
@@ -756,4 +807,70 @@ fn live_profiles_that_differ_only_in_parts_share_the_preamble() {
     assert_eq!(pre("parcial"), pre("rapido"));
     // `completo` is not partial: its flags differ, and so does its preamble
     assert_ne!(pre("parcial"), pre("completo"));
+}
+
+#[test]
+fn the_view_says_which_parts_each_profile_compiles() {
+    let d = proyecto();
+    fs::write(
+        d.path().join("latexfrog.json"),
+        r#"{ "root": "main.tex", "profiles": {
+            "todo": {},
+            "sin-dos": { "omit": ["part:Secciones/Dos"] },
+            "actual": { "parts": "current" },
+            "lista": { "parts": "list", "partList": ["Secciones/Dos"] },
+            "nada": { "parts": "list" },
+            "elegidas": { "parts": "selection" },
+            "una": { "parts": "one" } } }"#,
+    )
+    .unwrap();
+    let (s, _r) = abrir(&d, OK);
+    let compila = |perfil: &str| s.view().unwrap().config.unwrap().profiles.into_iter().find(|p| p.id == perfil).unwrap().compiles;
+    let partes = |v: &[&str]| Some(v.iter().map(|p| p.to_string()).collect::<Vec<_>>());
+    assert_eq!(compila("todo"), partes(&["Secciones/Uno", "Secciones/Dos"]));
+    assert_eq!(compila("sin-dos"), partes(&["Secciones/Uno"]));
+    // no chapter worked on yet: the first one, which is what a build compiles
+    assert_eq!(compila("actual"), partes(&["Secciones/Uno"]));
+    s.file_info("Secciones/Dos.tex").unwrap();
+    assert_eq!(compila("actual"), partes(&["Secciones/Dos"]));
+    assert_eq!(compila("lista"), partes(&["Secciones/Dos"]));
+    assert_eq!(compila("nada"), partes(&[]));
+    s.set_state(StatePatch { selection: Some(vec!["Secciones/Dos".into()]), ..Default::default() }).unwrap();
+    assert_eq!(compila("elegidas"), partes(&["Secciones/Dos"]));
+    // an export profile compiles what Export asks for: it cannot say
+    assert_eq!(compila("una"), None);
+    // and it is the list the driver takes
+    let driver = fs::read_to_string(d.path().join(s.live_driver(Some("actual")).unwrap().path)).unwrap();
+    assert!(driver.contains(&format!("\\lvIncludeonly{{{}}}\n", compila("actual").unwrap().join(","))), "{driver}");
+}
+
+#[test]
+fn live_profiles_that_leave_out_different_pieces_share_the_preamble() {
+    let d = proyecto();
+    fs::write(d.path().join("main.tex"), "\\documentclass{book}\n\\begin{document}\n\\tableofcontents\n\\include{Secciones/Uno}\n\\include{Secciones/Dos}\n\\printindex\n\\end{document}\n").unwrap();
+    fs::write(
+        d.path().join("latexfrog.json"),
+        r#"{ "root": "main.tex", "profiles": {
+            "a": { "parts": "list", "partList": ["Secciones/Uno"], "omit": ["toc", "index"] },
+            "b": { "parts": "list", "partList": ["Secciones/Dos"], "omit": ["toc"] },
+            "c": { "parts": "list", "partList": ["Secciones/Dos"] } } }"#,
+    )
+    .unwrap();
+    let (s, _r) = abrir(&d, OK);
+    let partes = |perfil: &str| {
+        let t = fs::read_to_string(d.path().join(s.live_driver(Some(perfil)).unwrap().path)).unwrap();
+        let (pre, body) = t.split_once("\\begin{document}\n").unwrap();
+        (pre.to_string(), body.to_string())
+    };
+    let (a, b, c) = (partes("a"), partes("b"), partes("c"));
+    // one preamble for the three: Live keeps its warm lualatex across a switch between them
+    assert_eq!(a.0, b.0);
+    assert_eq!(b.0, c.0);
+    assert!(!a.0.contains("tableofcontents") && !a.0.contains("piezas"), "{}", a.0);
+    // the pieces are left out in the body, before anything of the document is read
+    let fuera = "\\RenewDocumentCommand\\tableofcontents{}{}";
+    assert!(a.1.starts_with(&format!("\\def\\lvPerfil{{a}}\n{fuera}\\ifdefined\\printindex\\RenewDocumentCommand\\printindex{{o}}{{}}\\fi\n")), "{}", a.1);
+    assert!(b.1.starts_with(&format!("\\def\\lvPerfil{{b}}\n{fuera}\n")), "{}", b.1);
+    assert!(!c.1.contains("RenewDocumentCommand"), "{}", c.1);
+    assert!(a.1.ends_with("\\lvIncludeonly{Secciones/Uno}\n\\input{.latexfrog/build/a/lv-a-live-resto}\n"), "{}", a.1);
 }

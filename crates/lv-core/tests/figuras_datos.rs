@@ -93,7 +93,22 @@ impl Caso {
     /// La caja del PDF de la figura `uno-0`: cambia si el dibujo cambia (el PDF lleva fechas, así que no se comparan los bytes).
     fn caja_de_uno(&self) -> String {
         let bytes = fs::read(self.p.join(format!("figuras-cache/{}-uno-0.pdf", self.sello()))).unwrap();
-        let t = String::from_utf8_lossy(&bytes);
+        // TeX Live's pdfTeX keeps the page dictionaries in a compressed object stream: the streams are read inflated too
+        let mut t = String::from_utf8_lossy(&bytes).to_string();
+        let mut resto = &bytes[..];
+        while let Some(i) = resto.windows(6).position(|w| w == b"stream") {
+            let mut ini = i + 6;
+            while ini < resto.len() && (resto[ini] == b'\r' || resto[ini] == b'\n') {
+                ini += 1;
+            }
+            let Some(fin) = resto[ini..].windows(9).position(|w| w == b"endstream") else { break };
+            let mut s = String::new();
+            if std::io::Read::read_to_string(&mut flate2::read::ZlibDecoder::new(&resto[ini..ini + fin]), &mut s).is_ok() {
+                t.push('\n');
+                t.push_str(&s);
+            }
+            resto = &resto[ini + fin + 9..];
+        }
         let i = t.find("/MediaBox").expect("el PDF de la figura tiene MediaBox");
         t[i..].lines().next().unwrap().trim().to_string()
     }

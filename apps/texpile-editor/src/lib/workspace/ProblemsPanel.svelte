@@ -5,6 +5,8 @@
 	import { mainFile, effectiveCompileFormat } from '$lib/workspace/workspaceStore';
 	import type { LogEntry } from '$lib/compileLog/compileLog';
 	import { m } from '$lib/paraglide/messages';
+	import LvAttention from '$lib/lv/diagnose/LvAttention.svelte';
+	import LvExplain from '$lib/lv/diagnose/LvExplain.svelte';
 
 	// root is the workspace root used to resolve TeX-printed relative paths
 	let { root, onJump }: { root: string; onJump: (file: string, line: number) => void } = $props();
@@ -70,6 +72,7 @@
 				{m.problems_boxes_count({ count: log.badboxes.length })}
 			</label>
 		</div>
+		<LvAttention />
 		<div class="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto">
 			{#if rows.length === 0}
 				<!-- no icon: the header row above already carries the check next to "Compiled clean" -->
@@ -109,6 +112,7 @@
 							<span class="text-muted shrink-0 font-mono">{m.problems_page_ref({ page: e.page })}</span>
 						{/if}
 					</button>
+					{#if e.level === 'error'}<LvExplain entry={e} />{/if}
 				{/each}
 			{/if}
 		</div>

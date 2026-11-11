@@ -613,7 +613,12 @@ fn nombre_del_bloque(l: &str) -> Option<String> {
 
 /// Las líneas del driver que sacan esas piezas. Van en `begindocument/before`: ahí los paquetes ya definieron sus comandos y el
 /// cuerpo todavía no los usó. `\RenewDocumentCommand` (del núcleo de LaTeX desde 2020) acepta los argumentos opcionales de cada uno.
-pub fn lineas_del_driver(omitir: &[Pieza]) -> Vec<String> {
+/// The comment line that heads the pieces in a driver; the one line after it is their hook (`build::driver_lineas` writes both).
+pub const MARCA_DEL_DRIVER: &str = "% --- piezas que el perfil saca ---";
+
+/// What the pieces' hook runs, `None` if nothing is redefined. The profile's driver runs it at `begindocument/before`, Live's
+/// right after `\begin{document}` (`build::render_driver_live`).
+pub fn redefiniciones_del_driver(omitir: &[Pieza]) -> Option<String> {
     let mut cuerpo = Vec::new();
     for p in omitir {
         match p {
@@ -628,7 +633,6 @@ pub fn lineas_del_driver(omitir: &[Pieza]) -> Vec<String> {
             Pieza::Pdf(a) => cuerpo.push(format!("\\expandafter\\def\\csname lvsinpdf@\\detokenize{{{a}}}\\endcsname{{}}")),
         }
     }
-    let mut l = Vec::new();
     if omitir.iter().any(|p| matches!(p, Pieza::Pdf(_))) {
         // Un `\includepdf` cuyo archivo está en la lista no inserta nada; los demás siguen como siempre.
         cuerpo.push(
@@ -636,11 +640,7 @@ pub fn lineas_del_driver(omitir: &[Pieza]) -> Vec<String> {
                 .into(),
         );
     }
-    if !cuerpo.is_empty() {
-        l.push("% --- piezas que el perfil saca ---".into());
-        l.push(format!("\\AddToHook{{begindocument/before}}{{{}}}", cuerpo.join("")));
-    }
-    l
+    (!cuerpo.is_empty()).then(|| cuerpo.join(""))
 }
 
 #[cfg(test)]
@@ -817,8 +817,8 @@ mod tests {
 
     #[test]
     fn el_driver_anula_cada_pieza_por_separado() {
-        assert!(lineas_del_driver(&[]).is_empty());
-        let l = lineas_del_driver(&[Pieza::Toc, Pieza::Pdf("Imagenes/Tapa.pdf".into())]).join("\n");
+        assert!(redefiniciones_del_driver(&[]).is_none());
+        let l = redefiniciones_del_driver(&[Pieza::Toc, Pieza::Pdf("Imagenes/Tapa.pdf".into())]).unwrap();
         assert!(l.contains("\\RenewDocumentCommand\\tableofcontents{}{}"));
         assert!(l.contains("lvsinpdf@\\detokenize{Imagenes/Tapa.pdf}"));
         assert!(l.contains("\\NewCommandCopy\\lvIncludepdf\\includepdf"));

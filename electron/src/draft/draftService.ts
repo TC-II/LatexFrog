@@ -5,7 +5,8 @@
 // bibliography cycled between passes (draftBib), and refs exported for the warm daemon
 // (draftRefs). Same engine as the user's own compile, so exact by construction.
 import { seedDraftFromProfile } from '../lv/draftSeed';
-import { projectFingerprint, restoreSnapshot, saveSnapshot } from '../lv/draftSnapshot';
+import { primeFromKept, restoreSnapshot, saveSnapshot, startSnapshot } from '../lv/draftSnapshot';
+import { repairCutAux } from '../lv/draftAux';
 import { liveExecFile as execFile, type LiveProcess } from '../lv/lvLive';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -122,7 +123,9 @@ const OUT = '_draft';
 // the editor just fires the fresh compile and the stale one bails. gen is the monotonic run
 // id per root; a run is superseded once its root's gen moves past it. Keyed per root so one
 // window's compile can never cancel another window's.
-type CompileRun = { gen: number; child: LiveProcess | null };
+// LatexFrog: `doc` is the document (the driver's text) whose products _draft holds and the parked warm engine read at its
+// \begin{document}; null while a compile runs or after one that did not finish
+type CompileRun = { gen: number; child: LiveProcess | null; doc?: string | null };
 const compileRuns = new Map<string, CompileRun>();
 function runFor(root: string): CompileRun {
 	const key = process.platform === 'win32' ? path.resolve(root).toLowerCase() : path.resolve(root);
@@ -191,6 +194,9 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 	// extra passes and every fallback go cold. lualatex only: the warm pool spawns that.
 	const split = engine === 'lualatex' ? splitForWarm(root, mainFile) : null;
 	let warmLeft = split ? takeWarmCompiler(root, split.preamble) : null;
+	// LatexFrog: the document _draft was left in by the last compile that finished
+	const lastDoc = run.doc ?? null;
+	run.doc = null;
 	let usedWarm = false;
 	function enginePass(): Promise<void> {
 		if (superseded()) return Promise.resolve(); // a newer compile already took over
@@ -225,9 +231,24 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 	}
 
 	// the pass products a rerun would read differently: cross-refs and the contents listings
-	const REF_FILES = body.readBack.byTex.map((ext) => `draft.${ext}`);
+	// LatexFrog: and the aux of each `\include`d part (its labels and counters are there, not in draft.aux), and the .bbl
+	const REF_FILES = [...body.readBack.byTex.map((ext) => `draft.${ext}`), 'draft.bbl'];
+	function partAux(rel = ''): string[] {
+		const out: string[] = [];
+		try {
+			for (const e of fs.readdirSync(path.join(outAbs, rel), { withFileTypes: true })) {
+				const r = rel ? `${rel}/${e.name}` : e.name;
+				// `snap/` holds kept results of other documents, not what the next pass reads
+				if (e.isDirectory()) out.push(...(r === 'snap' ? [] : partAux(r)));
+				else if (rel && e.name.endsWith('.aux')) out.push(r);
+			}
+		} catch {
+			/* no such folder */
+		}
+		return out.sort();
+	}
 	function refState(): string {
-		return REF_FILES.map((f) => {
+		return [...REF_FILES, ...partAux()].map((f) => {
 			try {
 				return crypto
 					.createHash('sha1')
@@ -241,14 +262,31 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 	const t0 = Date.now();
 	// LatexFrog: a first compile starts from the profile's full build (aux, parts' aux, bbl): one pass instead of up to four
 	seedDraftFromProfile(root, outAbs, mainFile);
-	// LatexFrog: back to a profile whose sources did not change since its last good compile: its kept result, no TeX
-	const fingerprint = projectFingerprint(root, mainFile, engine);
-	const kept = restoreSnapshot<DraftResult>(outAbs, mainFile, fingerprint);
+	// LatexFrog: back to a document (a profile, a chapter of it) whose sources did not change since its last good compile:
+	// its kept result, no TeX
+	const snapshot = startSnapshot(root, mainFile, engine);
+	const kept = restoreSnapshot<DraftResult>(root, outAbs, mainFile, snapshot);
 	if (kept && kept.ok) {
+		run.doc = snapshot.key;
 		exportDaemonRefs(outAbs);
 		if (engine === 'lualatex') rewarmCompiler(root, mainFile, engineDir, body.readBack);
 		return { ...kept, ms: Date.now() - t0 };
 	}
+	// LatexFrog: another document than the last one (another chapter, another profile), kept before: its own aux, contents
+	// and bibliography go back in place of the other document's. The parked warm engine read the other document's at its
+	// \begin{document}, so its pass would print this one with those references and ask for another; a cold pass reads the
+	// right ones and is the only one needed. Measured on the book, coming back to an edited chapter: 8.5 s (a warm pass,
+	// biber and two cold passes) against one cold pass.
+	if (snapshot.key !== lastDoc && primeFromKept(outAbs, snapshot) && warmLeft) {
+		try {
+			warmLeft.child.kill('SIGKILL');
+		} catch {
+			/* already gone */
+		}
+		warmLeft = null;
+	}
+	// LatexFrog: a pass killed by a newer one (a quick switch of chapter) leaves its .aux cut mid-line; TeX stops on that
+	repairCutAux(outAbs);
 	const auxExisted = fs.existsSync(path.join(outAbs, 'draft.aux'));
 	const refsBefore = refState();
 	seedBbl(root, outAbs, mainFile);
@@ -261,8 +299,15 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 	// \cite/\ref/\tableofcontents see the freshly written aux/toc. Ordinary text edits
 	// keep the .bbl stable (bcf-hash + mtime guards) and stay single-pass.
 	const bblChanged = await auxCycle(root, outAbs, mainFile);
-	const extra = bblChanged ? 2 : !auxExisted ? 1 : 0;
+	// LatexFrog: with biber the pass after it reads the .bbl and prints the citations at once; only bibtex needs the second
+	// one, to carry \bibcite through the aux. If biblatex still wants a pass it says so, and the check below runs it.
+	const extra = bblChanged ? (fs.existsSync(path.join(outAbs, 'draft.bcf')) ? 1 : 2) : !auxExisted ? 1 : 0;
+	// LatexFrog: what the last pass started from. A rerun reads what that pass wrote; when it wrote what it had read, a rerun
+	// prints the same pages, whatever the log asks. Compared with the state before the whole compile instead, a first visit
+	// to a chapter (another chapter's aux before it) always looked changed and took a third pass: 3.3 s on the book.
+	let refsBeforeLast = refsBefore;
 	for (let i = 0; i < extra && !superseded(); i++) {
+		refsBeforeLast = refState();
 		await enginePass();
 		passes++;
 	}
@@ -279,8 +324,8 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 		} catch {
 			// no log, no signal
 		}
-		const complained = /No file draft\.(toc|lof|lot)\.|Label\(s\) may have changed|There were undefined references/.test(log);
-		if (complained && refState() !== refsBefore) {
+		const complained = /No file draft\.(toc|lof|lot)\.|Label\(s\) may have changed|There were undefined references|Please rerun LaTeX/.test(log);
+		if (complained && refState() !== refsBeforeLast) {
 			await enginePass();
 			passes++;
 		}
@@ -452,6 +497,9 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 		pages
 	};
 	// a compile a newer one superseded while its pages were read is not the state of the sources
-	if (!superseded()) saveSnapshot(outAbs, mainFile, fingerprint, result);
+	if (!superseded()) {
+		run.doc = snapshot.key;
+		saveSnapshot(root, outAbs, mainFile, engine, snapshot, result);
+	}
 	return result;
 }

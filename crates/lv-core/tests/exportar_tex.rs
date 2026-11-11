@@ -89,7 +89,9 @@ impl Caso {
     }
 
     fn texto_de(&self, rel: &str) -> String {
-        let o = Command::new("pdftotext").arg(self.p.join(rel)).arg("-").output().expect("pdftotext (viene con MiKTeX)");
+        // MiKTeX brings pdftotext, TeX Live does not: `LV_PDFTOTEXT` names another one (Git for Windows has it in `ucrt64/bin`)
+        let exe = std::env::var_os("LV_PDFTOTEXT").unwrap_or_else(|| "pdftotext".into());
+        let o = Command::new(&exe).arg(self.p.join(rel)).arg("-").output().unwrap_or_else(|e| panic!("pdftotext ({exe:?}; MiKTeX brings it, with TeX Live set LV_PDFTOTEXT): {e}"));
         String::from_utf8_lossy(&o.stdout).to_string()
     }
 

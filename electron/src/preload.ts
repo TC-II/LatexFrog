@@ -578,6 +578,15 @@ contextBridge.exposeInMainWorld('lvEngine', {
 	onEvent: (cb: (event: unknown) => void) => ipcRenderer.on('lv:event', (_e, event) => cb(event))
 });
 
+// AI keys and conflict merging for auto sync; see lv/aiMerge.ts. Keys go in, never come back out
+contextBridge.exposeInMainWorld('lvAi', {
+	listKeys: () => ipcRenderer.invoke('lv:aiKeys:list'),
+	saveKeys: (edits: object[]) => ipcRenderer.invoke('lv:aiKeys:save', edits),
+	testKey: (id: string) => ipcRenderer.invoke('lv:aiKeys:test', id),
+	merge: (request: object) => ipcRenderer.invoke('lv:aiMerge', request),
+	explain: (request: object) => ipcRenderer.invoke('lv:aiExplain', request)
+});
+
 // terminal bridge to the node-pty shells in the main process, keyed by a string `id`
 contextBridge.exposeInMainWorld('texpileTerminal', {
 	/** whether node-pty loaded. Resolves { ok, error? }; error says why it failed. */

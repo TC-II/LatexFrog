@@ -86,6 +86,11 @@ pub struct ProfileView {
     pub watermark: Option<config::WatermarkCfg>,
     pub output: Option<config::OutputCfg>,
     pub compile_on: Option<String>,
+    /// The parts this profile compiles right now, by name and in document order: the same list its driver takes, with the
+    /// selection, the chapter being worked on, the groups made whole and the parts left out by name already applied. The
+    /// interface dims the rest from this list instead of working the rule out again. `None` when the profile cannot say (an
+    /// export profile, a selection with nothing chosen): a build of it would fail with the reason.
+    pub compiles: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -249,6 +254,8 @@ fn es_de_servicio(perfil: &str) -> bool {
 /// Todo lo que hace falta para lanzar un build, resuelto bajo el candado de los datos.
 struct Plan {
     spec: RunSpec,
+    /// What `spec.driver` was rendered from: Live's driver is rendered from it too (`build::render_driver_live`).
+    driver: DriverSpec,
     cache_dir: String,
     clean: bool,
     /// Partes excluidas y perfiles de donde sembrarlas (sólo si el perfil usa `\includeonly`).
@@ -352,6 +359,15 @@ impl Session {
         self.datos.lock().map_err(|_| otro("session state poisoned"))
     }
 
+    /// The project index as it is on disk: the one kept when nothing it read changed since, a new one otherwise. A tab switch built it
+    /// twice (the open file, then Live's driver), and each build walked the book's whole folder again.
+    fn indice_al_dia(&self, d: &Datos, rf: &str, comandos: &[String]) -> ProjectIndex {
+        match d.index.as_ref() {
+            Some(ix) if ix.vigente(rf, comandos) => ix.clone(),
+            _ => ProjectIndex::build(&self.root, rf, comandos),
+        }
+    }
+
     /// Rearma el índice y lo que depende de él (configuración inferida, perfil activo, selección).
     fn recalcular(&self, d: &mut Datos) {
         let Some(rf) = d.root_file.clone() else {
@@ -359,7 +375,7 @@ impl Session {
             return;
         };
         let comandos = d.config.as_ref().map(|c| c.parts.commands.clone()).unwrap_or_else(comandos_por_defecto);
-        let ix = ProjectIndex::build(&self.root, &rf, &comandos);
+        let ix = self.indice_al_dia(d, &rf, &comandos);
         let hay_partes = !ix.parts.is_empty();
         match &mut d.config {
             None => d.config = Some(infer_config(&rf, hay_partes)),
@@ -413,6 +429,7 @@ impl Session {
                     watermark: p.watermark.clone(),
                     output: p.output.clone(),
                     compile_on: p.compile_on.clone(),
+                    compiles: d.index.as_ref().and_then(|ix| Self::includeonly_de(d, id, p, ix).ok()).map(|sel| sel.unwrap_or_default()),
                 })
                 .collect(),
             publish_dir: c.publish.as_ref().map(|p| p.dir.clone()),
@@ -540,7 +557,7 @@ impl Session {
         let mut d = self.lock()?;
         let rf = d.root_file.clone().ok_or_else(|| otro("choose the document root first"))?;
         let comandos = d.config.as_ref().map(|c| c.parts.commands.clone()).unwrap_or_else(comandos_por_defecto);
-        let ix = ProjectIndex::build(&self.root, &rf, &comandos);
+        let ix = self.indice_al_dia(&d, &rf, &comandos);
         let parts_changed = self.partes_vistas.lock().is_ok_and(|v| *v != ix.part_names());
         let (part, affects, profile_auto) = {
             let cfg = d.config.as_ref().ok_or_else(|| otro("no configuration"))?;
@@ -587,8 +604,8 @@ impl Session {
         } else {
             cfg.profiles.get(perfil).ok_or_else(|| otro(format!("no profile {perfil:?}")))?.clone()
         };
-        // El índice se rehace acá: acaban de guardar y el pedido tiene que ver lo que hay en disco.
-        let ix = ProjectIndex::build(&self.root, &rf, &cfg.parts.commands);
+        // As it is on disk: a build often follows a save, and it must see what was saved (the index's fingerprint tells).
+        let ix = self.indice_al_dia(&d, &rf, &cfg.parts.commands);
         let nombres = ix.part_names();
         let includeonly = if let Some(partes) = &extra.partes {
             if let Some(mala) = partes.iter().find(|p| !nombres.contains(p)) {
@@ -663,7 +680,7 @@ impl Session {
             crate::build::write_if_changed(&self.root.join(&copia), &contenido)?;
             copias_en_partes.push((parte, rel, copia));
         }
-        let driver = render_driver_spec(&DriverSpec {
+        let driver_spec = DriverSpec {
             perfil: perfil.to_string(),
             root_rel: rf.clone(),
             partial: parcial,
@@ -680,11 +697,13 @@ impl Session {
             omitir: pc.omit.iter().filter_map(|o| crate::piezas::Pieza::de_clave(o)).collect(),
             sustituciones,
             copias_en_partes,
-        })?;
+        };
+        let driver = render_driver_spec(&driver_spec)?;
         let dirs = ix.include_dirs(&cfg.parts.commands);
         let datos_de_figuras = (pc.externalize && figcache::FigureCfg::de(&cfg).modo != figcache::Modo::Off).then(|| self.datos_de_figuras(&cfg, &ix));
         d.index = Some(ix);
         Ok(Plan {
+            driver: driver_spec,
             datos_de_figuras,
             fragmento: extra.fragmento.clone(),
             spec: RunSpec {
@@ -808,13 +827,11 @@ impl Session {
         }
         let plan = self.plan_con(&perfil, false, &PlanExtra { live: true, ..Default::default() })?;
         let archivos = self.lock()?.index.as_ref().map(crate::formato::archivos_del_preambulo).ok_or_else(|| otro("no project index"))?;
-        let mut lineas: Vec<String> = plan.spec.driver.lines().map(str::to_string).collect();
-        let sustituidos: std::collections::HashMap<String, String> = lineas
-            .iter()
-            .filter_map(|l| l.strip_prefix("\\declare@file@substitution{")?.trim_end_matches('}').split_once("}{").map(|(o, c)| (o.to_string(), c.to_string())))
-            .collect();
-        let raiz = &plan.spec.root_rel;
-        let copia = |a: &str| sustituidos.get(a).cloned().unwrap_or_else(|| a.to_string());
+        // The files read from a copy (pieces left out), as the profile's build reads them, the root's own copy too (the profile's
+        // driver loads that one directly). Lines are commented in a copy, never removed, so the body's copy keeps the original's
+        // line numbers and its `.origen` still names the original.
+        let sustituidos: std::collections::HashMap<&str, &str> = plan.driver.sustituciones.iter().map(|(o, c)| (o.as_str(), c.as_str())).collect();
+        let copia = |a: &str| sustituidos.get(a).map(|c| c.to_string()).unwrap_or_else(|| a.to_string());
         let cuerpo = crate::formato::cuerpo_del_documento(&self.root, &archivos, &copia)
             .ok_or_else(|| otro("Live needs \\begin{document} and \\end{document} in one file of the preamble"))?;
         let dir = format!(".latexfrog/build/{perfil}");
@@ -830,46 +847,12 @@ impl Session {
         let mut changed = crate::build::write_if_changed(&self.root.join(&rel_pre), &cuerpo.antes)?;
         crate::build::write_if_changed(&self.root.join(&rel_resto), &cuerpo.texto)?;
         changed |= crate::build::write_if_changed(&self.root.join(format!("{dir}/lv-{perfil}-live-resto.origen")), &cuerpo.origen)?;
-        // The driver ends loading the root; the file that opens the document is read from the copy that stops before it.
-        let carga = lineas.pop().unwrap_or_default();
-        if !carga.starts_with("\\input{") {
-            return Err(otro("unexpected driver: it does not end loading the root"));
-        }
-        let propia = format!("\\declare@file@substitution{{{}}}", cuerpo.origen);
-        lineas.retain(|l| !l.starts_with(&propia));
-        if &cuerpo.origen == raiz {
-            lineas.push(format!("\\input{{{}}}", rel_pre.trim_end_matches(".tex")));
-        } else {
-            lineas.push(format!("\\makeatletter\\declare@file@substitution{{{}}}{{{rel_pre}}}\\makeatother", cuerpo.origen));
-            lineas.push(carga);
-        }
-        if let Some(primera) = lineas.first_mut() {
-            *primera = "% Live driver (generated by Latex Frog, do not edit)".to_string();
-        }
-        // What only names the profile or its parts goes after `\begin{document}`, so it is not part of the preamble Live keeps warm:
-        // `\lvPerfil` (unless the preamble reads it), the parts (`\includeonly` from a copy taken in the preamble: it only sets the
-        // list `\include` reads) and the parts a loader may load.
         let lee_perfil = archivos.iter().any(|a| std::fs::read_to_string(self.root.join(copia(a))).is_ok_and(|t| t.contains("lvPerfil")));
-        let mut cuerpo_lineas = Vec::new();
-        let mut preambulo = Vec::new();
-        for l in lineas {
-            let solo_incluir = l.strip_prefix("\\AddToHook{begindocument/before}{\\includeonly{").and_then(|r| r.strip_suffix("}}"));
-            if let Some(partes) = solo_incluir {
-                cuerpo_lineas.push(format!("\\lvIncludeonly{{{partes}}}"));
-            } else if (l.starts_with("\\def\\lvPerfil{") && !lee_perfil) || l.starts_with("\\expandafter\\def\\csname lvParte@") {
-                cuerpo_lineas.push(l);
-            } else {
-                preambulo.push(l);
-            }
-        }
-        // taken before the root loads, in every profile (with or without parts), so the line is the same in all of them
-        preambulo.insert(1, "\\let\\lvIncludeonly\\includeonly".into());
-        let mut lineas = preambulo;
-        lineas.push("\\begin{document}".into());
-        lineas.extend(cuerpo_lineas);
-        lineas.push(format!("\\input{{{}}}", rel_resto.trim_end_matches(".tex")));
+        // the same spec as the profile's driver, so the two cannot drift apart
+        let carga = crate::build::CargaLive { origen: &cuerpo.origen, pre: &rel_pre, resto: &rel_resto, lee_perfil };
+        let texto = crate::build::render_driver_live(&plan.driver, &carga)?;
         let rel = format!(".latexfrog/drivers/lv-{perfil}-live.tex");
-        changed |= crate::build::write_if_changed(&self.root.join(&rel), &(lineas.join("\n") + "\n"))?;
+        changed |= crate::build::write_if_changed(&self.root.join(&rel), &texto)?;
         Ok(LiveDriver { path: rel, changed })
     }
 
@@ -1156,12 +1139,12 @@ impl Session {
 
     // --- símbolos, búsqueda y reemplazo -----------------------------------------------------------------------------------------
 
-    /// El índice del proyecto se rehace desde el disco cada vez: el grafo y los símbolos juntos cuestan ~25 ms con el libro.
+    /// The project index as it is on disk (`indice_al_dia`), and the root it starts from.
     fn indice_fresco(&self) -> Result<(ProjectIndex, String)> {
         let d = self.lock()?;
         let rf = d.root_file.clone().ok_or_else(|| otro("choose the document root first"))?;
         let comandos = d.config.as_ref().map(|c| c.parts.commands.clone()).unwrap_or_else(comandos_por_defecto);
-        Ok((ProjectIndex::build(&self.root, &rf, &comandos), rf))
+        Ok((self.indice_al_dia(&d, &rf, &comandos), rf))
     }
 
     /// Etiquetas, citas, secciones, definiciones y archivos del proyecto, con el lint (sin compilar).
@@ -1295,13 +1278,29 @@ impl Session {
 
     /// The same over another PDF of the project: Live's (`_draft/draft.pdf`), whose SyncTeX lies beside it.
     pub fn synctex_inverse_pdf(&self, pdf: &str, page: u32, x: f64, y: f64) -> Result<Option<SyncInverse>> {
+        let ruta = self.synctex_beside(pdf)?;
+        let sx = Synctex::load(&ruta).map_err(|e| Error::Io(format!("{}: {e}", ruta.display())))?;
+        Ok(self.inverse_en_proyecto(&sx, page, x, y))
+    }
+
+    /// The project files another PDF of the project read: Live's, when Live is on screen. A profile's build says nothing about
+    /// what Live shows (it may be of another chapter, or older). `Ok(None)` while that PDF has no SyncTeX yet.
+    pub fn synctex_files_pdf(&self, pdf: &str) -> Result<Option<Vec<String>>> {
+        let ruta = self.synctex_beside(pdf)?;
+        if !ruta.is_file() {
+            return Ok(None);
+        }
+        let sx = Synctex::load(&ruta).map_err(|e| Error::Io(format!("{}: {e}", ruta.display())))?;
+        Ok(Some(sx.files(&self.root)))
+    }
+
+    /// The SyncTeX beside a PDF given relative to the root; a path that leaves the project is refused.
+    fn synctex_beside(&self, pdf: &str) -> Result<PathBuf> {
         let rel = pdf.replace('\\', "/");
         if rel.starts_with('/') || rel.contains(':') || rel.split('/').any(|c| c == "..") || !rel.ends_with(".pdf") {
             return Err(otro(format!("not a PDF of the project: {pdf:?}")));
         }
-        let ruta = self.root.join(format!("{}.synctex.gz", rel.trim_end_matches(".pdf")));
-        let sx = Synctex::load(&ruta).map_err(|e| Error::Io(format!("{}: {e}", ruta.display())))?;
-        Ok(self.inverse_en_proyecto(&sx, page, x, y))
+        Ok(self.root.join(format!("{}.synctex.gz", rel.trim_end_matches(".pdf"))))
     }
 
     /// Only the project's own files count: a click on a picture drawn in place goes to the line that draws it, not into a TikZ library.

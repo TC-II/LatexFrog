@@ -239,6 +239,10 @@ pub fn chequeos_de_herramientas(n: &Necesidades, sonda: &Sonda) -> (Vec<Hallazgo
                 })]
             }),
             sc.spawn(|| {
+                // TeX Live for Windows brings its own Perl, and its `latexmk.exe` runs on it: none has to be on the PATH
+                if distro == Distro::TeXLive && cfg!(windows) && !sonda("perl", &["-v"], None).lanzado {
+                    return vec![Hallazgo::nuevo("perl", Nivel::Ok, "perl: the one TeX Live brings (latexmk runs on it)", "")];
+                }
                 vec![programa("perl", "perl", &["-v"], true, "latexmk is a Perl script: it does not run without Perl (MiKTeX does not include it).", sonda, |s| {
                     s.texto.lines().find(|l| l.contains("This is perl")).map(str::trim).unwrap_or("").to_string()
                 })]
@@ -617,6 +621,23 @@ mod tests {
             assert!(roto[0].detalle.contains("missing DLL") && roto[0].arreglo.as_deref().is_some_and(|a| a.contains("MiKTeX")));
             assert_eq!(roto[0].nivel, Nivel::Error);
         }
+    }
+
+    /// TeX Live for Windows runs latexmk on the Perl it brings: no perl on the PATH is not an error there, and still is elsewhere.
+    #[test]
+    fn tex_live_on_windows_needs_no_perl_on_the_path() {
+        let miktex = sonda_miktex(None, Some("perl"));
+        let texlive = |nombre: &str, args: &[&str], d: Option<&Path>| {
+            if nombre == "pdflatex" && args.contains(&"--version") {
+                salida("pdfTeX 3.141592653-2.6-1.40.29 (TeX Live 2026)\nkpathsea version 6.4.2")
+            } else {
+                miktex(nombre, args, d)
+            }
+        };
+        let (h, distro) = chequeos_de_herramientas(&NECESIDADES, &texlive);
+        assert_eq!(distro.as_deref(), Some("TeX Live 2026"));
+        let esperado = if cfg!(windows) { Nivel::Ok } else { Nivel::Error };
+        assert_eq!(ver(&h, "perl")[0].nivel, esperado, "{h:#?}");
     }
 
     #[test]
