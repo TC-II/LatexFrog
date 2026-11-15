@@ -34,7 +34,7 @@ LatexFrog adds a Rust compile engine to a visual and source editor: compile prof
 
 ## Download for Windows
 
-1. [Download `LatexFrog-Setup-1.6.2.exe`](https://github.com/TC-II/LatexFrog/releases/download/v1.6.2/LatexFrog-Setup-1.6.2.exe) and run it. Other versions and checksums are on the [releases page](https://github.com/TC-II/LatexFrog/releases).
+1. [Download `LatexFrog-Setup-1.6.3.exe`](https://github.com/TC-II/LatexFrog/releases/download/v1.6.3/LatexFrog-Setup-1.6.3.exe) and run it. Other versions and checksums are on the [releases page](https://github.com/TC-II/LatexFrog/releases).
 2. Install a TeX distribution if you have none: [MiKTeX](https://miktex.org/download) or [TeX Live](https://tug.org/texlive/windows.html). LatexFrog finds it by itself.
 3. Open a folder with your LaTeX project.
 
@@ -52,9 +52,8 @@ You need Node, Rust (`cargo build --release -p lv-sidecar`) and a TeX distributi
 
 ## Credits and license
 
-- Designed by Javier Petrucci.
-- Derived from [Texpile](https://github.com/texpile/texpile) (AGPL-3.0). LatexFrog is not published or endorsed by the Texpile project. "Texpile" and its logo are trademarks of that project; see [TRADEMARK.md](TRADEMARK.md).
-- The compile engine in `crates/` is based on Juan Sbruzzi's work (MIT License, [crates/LICENSE-MIT](crates/LICENSE-MIT)).
-- Third-party notices are in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
+**LatexFrog**, designed by Javier Petrucci.
 
-LatexFrog as a whole is licensed under the [AGPL-3.0](LICENSE).
+<sub>Free software under the [AGPL-3.0](LICENSE).</sub><br />
+<sub>Derived from [Texpile](https://github.com/texpile/texpile) (AGPL-3.0). LatexFrog is not published or endorsed by the Texpile project. "Texpile" and its logo are trademarks of that project; see [TRADEMARK.md](TRADEMARK.md).</sub><br />
+<sub>Compile engine based on Juan Sbruzzi's work ([MIT](crates/LICENSE-MIT)). Third-party notices: [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).</sub>

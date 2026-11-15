@@ -190,10 +190,10 @@
 				</div>
 			{/if}
 
-			<!-- the version heads the credits, the way the Help menu shows them -->
-			<div class="text-muted mt-8 px-2 text-center text-xs">
-				<p>{m.menubar_version_footer({ version: appVersion })}</p>
-				<p class="whitespace-pre-line">{m.about_credits()}</p>
+			<!-- who made it and which version, then the licences in a smaller size, as in the Help menu -->
+			<div class="mt-8 px-2 text-center">
+				<p class="text-xs font-medium">{m.menubar_version_footer({ version: appVersion })}</p>
+				<p class="text-muted mt-1.5 text-[11px] whitespace-pre-line">{m.about_credits()}</p>
 			</div>
 			<!-- release notes get their own line under the credits, not competing with the actions above -->
 			<div class="border-surface-200-800 text-muted mt-8 flex items-center justify-end gap-2 border-t px-2 pt-3 text-xs">

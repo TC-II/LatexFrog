@@ -209,7 +209,8 @@ if (!app.requestSingleInstanceLock()) {
 app.whenReady().then(() => {
 	registerProtocolHandlers();
 	// the native About panel (macOS app menu, Linux); the same text the Help menu shows, kept in English like a licence notice
-	const credits = "Designed by Javier Petrucci\n\nDerived from Texpile (AGPL-3.0).\nCompile engine based on Juan Sbruzzi's work (MIT)";
+	const credits =
+		"Designed by Javier Petrucci.\n\nFree software under the AGPL-3.0.\nDerived from Texpile (AGPL-3.0).\nCompile engine based on Juan Sbruzzi's work (MIT)";
 	app.setAboutPanelOptions({
 		applicationName: 'LatexFrog',
 		applicationVersion: app.getVersion(),

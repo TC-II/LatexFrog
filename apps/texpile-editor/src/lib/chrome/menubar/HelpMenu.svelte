@@ -48,8 +48,9 @@
 				<Menu.Separator class={separatorClass} />
 				<!-- Dev Tools used to ride this line; it lives in the command palette now (search
 				     "dev"), so the menu every writer opens carries no debugger furniture -->
-				<div class="text-muted px-2.5 py-1 text-xs">{m.menubar_version_footer({ version: appVersion })}</div>
-				<div class="text-muted max-w-60 px-2.5 pb-1 text-xs whitespace-pre-line">{m.about_credits()}</div>
+				<!-- the credits: who made it, then the licences in a smaller size -->
+				<div class="max-w-60 px-2.5 pt-1 text-xs font-medium">{m.menubar_version_footer({ version: appVersion })}</div>
+				<div class="text-muted max-w-60 px-2.5 pt-1 pb-1 text-[11px] whitespace-pre-line">{m.about_credits()}</div>
 			</Menu.Content>
 		</Menu.Positioner>
 	</Portal>

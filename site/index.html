@@ -9,43 +9,10 @@
 <meta property="og:title" content="LatexFrog" />
 <meta property="og:description" content="A fast desktop LaTeX editor for large projects. Rust compile engine, partial builds, instant SyncTeX." />
 <meta property="og:type" content="website" />
-<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20512%20512%22%3E%3Crect%20x%3D%2216%22%20y%3D%2216%22%20width%3D%22480%22%20height%3D%22480%22%20rx%3D%22104%22%20fill%3D%22%231f7a4d%22%20%2F%3E%3Ccircle%20cx%3D%22156%22%20cy%3D%22170%22%20r%3D%2284%22%20fill%3D%22%237ed957%22%20%2F%3E%3Ccircle%20cx%3D%22356%22%20cy%3D%22170%22%20r%3D%2284%22%20fill%3D%22%237ed957%22%20%2F%3E%3Cellipse%20cx%3D%22256%22%20cy%3D%22310%22%20rx%3D%22196%22%20ry%3D%22136%22%20fill%3D%22%237ed957%22%20%2F%3E%3Ccircle%20cx%3D%22156%22%20cy%3D%22164%22%20r%3D%2250%22%20fill%3D%22%23fbfff5%22%20%2F%3E%3Ccircle%20cx%3D%22356%22%20cy%3D%22164%22%20r%3D%2250%22%20fill%3D%22%23fbfff5%22%20%2F%3E%3Ccircle%20cx%3D%22166%22%20cy%3D%22168%22%20r%3D%2226%22%20fill%3D%22%2310301f%22%20%2F%3E%3Ccircle%20cx%3D%22346%22%20cy%3D%22168%22%20r%3D%2226%22%20fill%3D%22%2310301f%22%20%2F%3E%3Cpath%20d%3D%22M124%20318%20C176%20392%20336%20392%20388%20318%22%20fill%3D%22none%22%20stroke%3D%22%2310301f%22%20stroke-width%3D%2220%22%20stroke-linecap%3D%22round%22%20%2F%3E%3Ccircle%20cx%3D%22234%22%20cy%3D%22268%22%20r%3D%227%22%20fill%3D%22%2310301f%22%20%2F%3E%3Ccircle%20cx%3D%22278%22%20cy%3D%22268%22%20r%3D%227%22%20fill%3D%22%2310301f%22%20%2F%3E%3C%2Fsvg%3E" />
 <style>
 :root {
-	--bg: #f6faf4;
-	--bg-soft: #ecf4e8;
-	--card: #ffffff;
-	--ink: #10301f;
-	--ink-soft: #45604f;
-	--line: #d3e2cc;
-	--brand: #1f7a4d;
-	--brand-ink: #ffffff;
-	--accent: #3fae24;
-	--glow: rgba(63, 174, 36, 0.18);
-	--win-bg: #fbfdf9;
-	--win-bar: #e8f1e3;
-	--code: #10301f;
-	--shadow: 0 30px 80px -30px rgba(16, 48, 31, 0.35);
-}
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme='light']) {
-		--bg: #0b1f15;
-		--bg-soft: #0f2a1c;
-		--card: #12301f;
-		--ink: #eaf6e4;
-		--ink-soft: #9fbfa9;
-		--line: #1d4630;
-		--brand: #7ed957;
-		--brand-ink: #0b1f15;
-		--accent: #7ed957;
-		--glow: rgba(126, 217, 87, 0.16);
-		--win-bg: #0d2517;
-		--win-bar: #143a26;
-		--code: #cfeec3;
-		--shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.7);
-	}
-}
-:root[data-theme='dark'] {
+	color-scheme: dark;
 	--bg: #0b1f15;
 	--bg-soft: #0f2a1c;
 	--card: #12301f;
@@ -61,6 +28,7 @@
 	--code: #cfeec3;
 	--shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.7);
 }
+/* the dark green theme is the only one: it is the brand, whatever the system prefers */
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -202,11 +170,14 @@ h2 { margin: 8px 0 0; font-size: clamp(28px, 4vw, 44px); line-height: 1.1; lette
 .docs a span { color: var(--ink-soft); font-weight: 400; }
 .docs a:hover { border-color: var(--accent); }
 
-pre.cmd { margin: 28px 0 0; padding: 22px 24px; border-radius: 16px; background: #0b1f15; color: #cfeec3; overflow-x: auto; font-size: 14px; line-height: 1.8; border: 1px solid var(--line); }
+pre.cmd { margin: 28px 0 0; padding: 22px 24px; border-radius: 16px; background: var(--win-bg); color: #cfeec3; overflow-x: auto; font-size: 14px; line-height: 1.8; border: 1px solid var(--line); }
 pre.cmd .c { color: #6f9a7f; }
 
 footer { margin-top: 96px; padding: 36px 0 56px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 14px; }
-footer .wrap { display: grid; gap: 10px; }
+footer .wrap { display: grid; gap: 16px; }
+footer .credit { font-size: 15px; color: var(--ink); }
+footer .fine { font-size: 12.5px; line-height: 1.6; }
+footer .fine p { margin: 0 0 6px; max-width: 760px; }
 footer a { color: var(--ink); }
 
 @media (max-width: 900px) {
@@ -232,7 +203,7 @@ footer a { color: var(--ink); }
 <body>
 <nav>
 	<div class="wrap">
-		<a class="brand" href="#top"><img src="logo.svg" alt="" />LatexFrog</a>
+		<a class="brand" href="#top"><img src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20512%20512%22%3E%3Crect%20x%3D%2216%22%20y%3D%2216%22%20width%3D%22480%22%20height%3D%22480%22%20rx%3D%22104%22%20fill%3D%22%231f7a4d%22%20%2F%3E%3Ccircle%20cx%3D%22156%22%20cy%3D%22170%22%20r%3D%2284%22%20fill%3D%22%237ed957%22%20%2F%3E%3Ccircle%20cx%3D%22356%22%20cy%3D%22170%22%20r%3D%2284%22%20fill%3D%22%237ed957%22%20%2F%3E%3Cellipse%20cx%3D%22256%22%20cy%3D%22310%22%20rx%3D%22196%22%20ry%3D%22136%22%20fill%3D%22%237ed957%22%20%2F%3E%3Ccircle%20cx%3D%22156%22%20cy%3D%22164%22%20r%3D%2250%22%20fill%3D%22%23fbfff5%22%20%2F%3E%3Ccircle%20cx%3D%22356%22%20cy%3D%22164%22%20r%3D%2250%22%20fill%3D%22%23fbfff5%22%20%2F%3E%3Ccircle%20cx%3D%22166%22%20cy%3D%22168%22%20r%3D%2226%22%20fill%3D%22%2310301f%22%20%2F%3E%3Ccircle%20cx%3D%22346%22%20cy%3D%22168%22%20r%3D%2226%22%20fill%3D%22%2310301f%22%20%2F%3E%3Cpath%20d%3D%22M124%20318%20C176%20392%20336%20392%20388%20318%22%20fill%3D%22none%22%20stroke%3D%22%2310301f%22%20stroke-width%3D%2220%22%20stroke-linecap%3D%22round%22%20%2F%3E%3Ccircle%20cx%3D%22234%22%20cy%3D%22268%22%20r%3D%227%22%20fill%3D%22%2310301f%22%20%2F%3E%3Ccircle%20cx%3D%22278%22%20cy%3D%22268%22%20r%3D%227%22%20fill%3D%22%2310301f%22%20%2F%3E%3C%2Fsvg%3E" alt="" />LatexFrog</a>
 		<div class="links">
 			<a href="#speed">Speed</a>
 			<a href="#features">Features</a>
@@ -250,10 +221,10 @@ footer a { color: var(--ink); }
 			<h1>LaTeX, built<br /><em>for big books.</em></h1>
 			<p class="lede">A desktop editor for projects with dozens of chapters, heavy TikZ figures and builds that should take seconds, not minutes. A Rust compile engine ships inside the app.</p>
 			<div class="cta">
-				<a class="btn primary" data-download href="https://github.com/TC-II/LatexFrog/releases/download/v1.6.2/LatexFrog-Setup-1.6.2.exe">Download for Windows</a>
+				<a class="btn primary" data-download href="https://github.com/TC-II/LatexFrog/releases/download/v1.6.3/LatexFrog-Setup-1.6.3.exe">Download for Windows</a>
 				<a class="btn" href="https://github.com/TC-II/LatexFrog">View on GitHub</a>
 			</div>
-			<p class="meta"><span data-download-meta>v1.6.2 · Windows · 150 MB</span> · <a href="https://github.com/TC-II/LatexFrog/releases/latest">All releases and checksums</a> · Free and open source (AGPL-3.0)</p>
+			<p class="meta"><span data-download-meta>v1.6.3 · Windows · 150 MB</span> · <a href="https://github.com/TC-II/LatexFrog/releases/latest">All releases and checksums</a> · Free and open source (AGPL-3.0)</p>
 		</div>
 
 		<div class="win" aria-hidden="true">
@@ -416,7 +387,7 @@ The transfer function is
 		<h2>Install it and open a folder.</h2>
 		<p class="sub-lede">Download the Windows installer, run it, and open your LaTeX project. You also need a TeX distribution, MiKTeX or TeX Live, if you have none.</p>
 		<div class="cta" style="justify-content: flex-start">
-			<a class="btn primary" data-download href="https://github.com/TC-II/LatexFrog/releases/download/v1.6.2/LatexFrog-Setup-1.6.2.exe">Download for Windows</a>
+			<a class="btn primary" data-download href="https://github.com/TC-II/LatexFrog/releases/download/v1.6.3/LatexFrog-Setup-1.6.3.exe">Download for Windows</a>
 			<a class="btn" href="https://miktex.org/download">Get MiKTeX</a>
 			<a class="btn" href="https://tug.org/texlive/windows.html">Get TeX Live</a>
 		</div>
@@ -441,10 +412,12 @@ cargo build --release -p lv-sidecar</pre>
 
 <footer>
 	<div class="wrap">
-		<div><b>LatexFrog</b> is free software under the <a href="https://github.com/TC-II/LatexFrog/blob/main/LICENSE">AGPL-3.0</a>. <a href="https://github.com/TC-II/LatexFrog">Source on GitHub</a>.</div>
-		<div>Designed by Javier Petrucci.</div>
-		<div>Derived from <a href="https://github.com/texpile/texpile">Texpile</a> (AGPL-3.0). LatexFrog is not published or endorsed by the Texpile project. "Texpile" and its logo are trademarks of that project; see <a href="https://github.com/TC-II/LatexFrog/blob/main/TRADEMARK.md">TRADEMARK.md</a>.</div>
-		<div>Compile engine based on Juan Sbruzzi's work (<a href="https://github.com/TC-II/LatexFrog/blob/main/crates/LICENSE-MIT">MIT</a>). Third-party notices: <a href="https://github.com/TC-II/LatexFrog/blob/main/ACKNOWLEDGEMENTS.md">ACKNOWLEDGEMENTS.md</a>.</div>
+		<div class="credit"><b>LatexFrog</b>, designed by Javier Petrucci.</div>
+		<div class="fine">
+			<p>Free software under the <a href="https://github.com/TC-II/LatexFrog/blob/main/LICENSE">AGPL-3.0</a>. <a href="https://github.com/TC-II/LatexFrog">Source on GitHub</a>.</p>
+			<p>Derived from <a href="https://github.com/texpile/texpile">Texpile</a> (AGPL-3.0). LatexFrog is not published or endorsed by the Texpile project. "Texpile" and its logo are trademarks of that project; see <a href="https://github.com/TC-II/LatexFrog/blob/main/TRADEMARK.md">TRADEMARK.md</a>.</p>
+			<p>Compile engine based on Juan Sbruzzi's work (<a href="https://github.com/TC-II/LatexFrog/blob/main/crates/LICENSE-MIT">MIT</a>). Third-party notices: <a href="https://github.com/TC-II/LatexFrog/blob/main/ACKNOWLEDGEMENTS.md">ACKNOWLEDGEMENTS.md</a>.</p>
+		</div>
 	</div>
 </footer>
 <script>
