@@ -75,11 +75,6 @@ nav .btn { padding: 7px 14px; font-size: 14px; color: var(--ink); }
 		radial-gradient(500px 280px at 80% 10%, var(--glow), transparent 70%);
 }
 .hero .grid { display: grid; gap: 36px; justify-items: center; text-align: center; }
-.pill {
-	display: inline-flex; gap: 8px; align-items: center; padding: 5px 14px; border-radius: 999px;
-	border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font-size: 13px;
-}
-.pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--glow); }
 h1 {
 	margin: 18px 0 0; font-size: clamp(40px, 7vw, 76px); line-height: 1.04; letter-spacing: -0.035em;
 }
@@ -217,14 +212,13 @@ footer a { color: var(--ink); }
 <header class="hero" id="top">
 	<div class="wrap grid">
 		<div>
-			<span class="pill"><i></i>Windows today, Linux soon</span>
 			<h1>LaTeX, built<br /><em>for big books.</em></h1>
 			<p class="lede">A desktop editor for projects with dozens of chapters, heavy TikZ figures and builds that should take seconds, not minutes. A Rust compile engine ships inside the app.</p>
 			<div class="cta">
 				<a class="btn primary" data-download href="https://github.com/TC-II/LatexFrog/releases/download/v1.6.3/LatexFrog-Setup-1.6.3.exe">Download for Windows</a>
 				<a class="btn" href="https://github.com/TC-II/LatexFrog">View on GitHub</a>
 			</div>
-			<p class="meta"><span data-download-meta>v1.6.3 · Windows · 150 MB</span> · <a href="https://github.com/TC-II/LatexFrog/releases/latest">All releases and checksums</a> · Free and open source (AGPL-3.0)</p>
+			<p class="meta"><span data-download-meta>v1.6.3 · Windows · 150 MB</span> · <a href="https://github.com/TC-II/LatexFrog/releases/latest">All releases and checksums</a></p>
 		</div>
 
 		<div class="win" aria-hidden="true">
@@ -391,7 +385,7 @@ The transfer function is
 			<a class="btn" href="https://miktex.org/download">Get MiKTeX</a>
 			<a class="btn" href="https://tug.org/texlive/windows.html">Get TeX Live</a>
 		</div>
-		<p class="note">The installer is not code-signed yet: if Windows SmartScreen warns, choose More info, then Run anyway. Linux builds will follow.</p>
+		<p class="note">Windows today, Linux soon. The installer is not code-signed yet: if Windows SmartScreen warns, choose More info, then Run anyway.</p>
 		<h3 style="margin: 40px 0 0; font-size: 20px">Or build it yourself</h3>
 		<p class="sub-lede" style="font-size: 16px; margin-top: 6px">You need Node, Rust and a TeX distribution.</p>
 <pre class="cmd mono"><span class="c"># the app</span>
