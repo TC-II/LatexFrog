@@ -34,7 +34,7 @@ LatexFrog adds a Rust compile engine to a visual and source editor: compile prof
 
 ## Download for Windows
 
-1. Download `LatexFrog-Setup-<version>.exe` from the [latest release](https://github.com/TC-II/LatexFrog/releases/latest) and run it.
+1. [Download `LatexFrog-Setup-1.6.2.exe`](https://github.com/TC-II/LatexFrog/releases/download/v1.6.2/LatexFrog-Setup-1.6.2.exe) and run it. Other versions and checksums are on the [releases page](https://github.com/TC-II/LatexFrog/releases).
 2. Install a TeX distribution if you have none: [MiKTeX](https://miktex.org/download) or [TeX Live](https://tug.org/texlive/windows.html). LatexFrog finds it by itself.
 3. Open a folder with your LaTeX project.
 
