@@ -163,7 +163,10 @@ export class WorkspaceFiles {
 		// land AFTER initProject had already recorded "not confirmed", leaving a starred main that still
 		// opened the picker on the first compile. Same symptom as the detection bug, different cause.
 		$effect(() => {
-			if (mainFile.current) this.mainPrompt.confirmed = true;
+			if (!mainFile.current) return;
+			this.mainPrompt.confirmed = true;
+			// untracked: opening the prompt by hand on a folder that has a main must not close it
+			untrack(() => this.mainPrompt.answeredElsewhere());
 		});
 		// a Typst main names the Hayagriva bibliography whose keys the @ picker offers
 		$effect(() => {

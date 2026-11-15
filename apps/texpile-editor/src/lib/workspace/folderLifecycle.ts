@@ -25,6 +25,7 @@ import { detectMainFile, gatherProjectMacros } from '$lib/workspace/project';
 import { claimWorkspace, releaseWorkspace, pickFolder, samePath, type TexFile } from '$lib/workspace/fileSystem';
 import { warnMissingFolder } from '$lib/workspace/missingFolder';
 import { projectFolder } from '$lib/workspace/openWorkspace';
+import { declaredMainFile } from '$lib/lv/declaredMain';
 
 export type FolderLifecycleDeps = {
 	scanTexFiles(root: string): Promise<{ files: TexFile[] }>;
@@ -161,11 +162,13 @@ export class FolderLifecycle {
 		}
 		const saved = savedMainFile(root);
 		const savedExists = !!(saved && files.some((f) => samePath(f.path, saved)));
-		const main = savedExists ? saved : files.length === 1 ? files[0].path : null;
+		// LatexFrog: a main the project names on disk is a choice too, read before deciding to ask
+		const declared = savedExists ? null : await declaredMainFile(root, files);
+		const main = savedExists ? saved : (declared ?? (files.length === 1 ? files[0].path : null));
 		if (workspaceRoot.current !== root) return; // folder changed under us
 		// a folder whose main file was never explicitly chosen asks once before the first compile
 		// (single-file folders have nothing to choose)
-		d.setMainConfirmed(savedExists || files.length <= 1);
+		d.setMainConfirmed(savedExists || !!declared || files.length <= 1);
 		mainFile.current = main;
 		detectedMainFile.current = null;
 		if (!main) void detectMainFile(files).then((found) => workspaceRoot.current === root && (detectedMainFile.current = found));

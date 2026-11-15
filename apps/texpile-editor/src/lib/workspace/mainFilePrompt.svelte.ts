@@ -68,6 +68,12 @@ export class MainFilePrompt {
 		this.docRoots = await findDocRoots(files);
 	}
 
+	/** LatexFrog: a main set from elsewhere (the project's config landing late, the tree) while the
+	 * prompt is up answers it; close it and run what was waiting, rather than ask a settled question */
+	answeredElsewhere(): void {
+		if (this.open && mainFile.current) this.finish();
+	}
+
 	async confirm(): Promise<void> {
 		await this.settle(this.choice);
 	}

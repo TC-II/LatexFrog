@@ -34,7 +34,9 @@ function packagedFlag(name: string): boolean {
  * pinned BEFORE the rename can move them.
  */
 export function applyAppIdentity(): void {
-	const dataDirName = devChannel ? 'latexfrog-dev' : 'latexfrog';
+	// an unpackaged dev run gets the dev dir too: sharing the installed app's settings made a fresh
+	// install reopen whatever folder the last dev run had open (session restore reads openFolders)
+	const dataDirName = devChannel || isDev ? 'latexfrog-dev' : 'latexfrog';
 	app.setPath('userData', path.join(app.getPath('appData'), dataDirName));
 	app.setPath('sessionData', path.join(app.getPath('appData'), dataDirName));
 	app.setName(devChannel ? 'LatexFrog Dev' : 'LatexFrog');

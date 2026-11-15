@@ -31,6 +31,12 @@ describe('resolveGraphicUrl', () => {
 		expect(r).toEqual({ url: 'served:/BERT_Overall.pdf', isPdf: true });
 	});
 
+	it('ignores spaces around the name, as the engine does', async () => {
+		const files = ['served:/a/Diag básico.pdf'];
+		const r = await resolveGraphicUrl('Diag básico.pdf ', urlsInDirs(['b', 'a']), existing(files), PDFLATEX);
+		expect(r).toEqual({ url: 'served:/a/Diag básico.pdf', isPdf: true });
+	});
+
 	it('falls through to whichever raster exists', async () => {
 		const r = await resolveGraphicUrl('fig1', urlFor, existing(['served:/fig1.jpg']), PDFLATEX);
 		expect(r).toEqual({ url: 'served:/fig1.jpg', isPdf: false });

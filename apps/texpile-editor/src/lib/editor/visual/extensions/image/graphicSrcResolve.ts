@@ -16,6 +16,9 @@ export async function resolveGraphicUrl(
 	/** what the engine tries on a name without one, dotted, in its order */
 	extensions: string[]
 ): Promise<ResolvedGraphic> {
+	// LatexFrog: the engine drops spaces around the name (`{fig.pdf }` compiles); kept, the space
+	// hid the extension and made every probe miss. Resolution only: the node's src stays verbatim.
+	src = src.trim();
 	if (/\.[a-z0-9]+$/i.test(src)) {
 		const isPdf = /\.pdf$/i.test(src);
 		const urls = urlsFor(src);
