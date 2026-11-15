@@ -49,7 +49,7 @@
 				<!-- Dev Tools used to ride this line; it lives in the command palette now (search
 				     "dev"), so the menu every writer opens carries no debugger furniture -->
 				<div class="text-muted px-2.5 py-1 text-xs">{m.menubar_version_footer({ version: appVersion })}</div>
-				<div class="text-muted max-w-56 px-2.5 pb-1 text-xs">{m.about_credits()}</div>
+				<div class="text-muted max-w-60 px-2.5 pb-1 text-xs whitespace-pre-line">{m.about_credits()}</div>
 			</Menu.Content>
 		</Menu.Positioner>
 	</Portal>

@@ -190,10 +190,13 @@
 				</div>
 			{/if}
 
-			<p class="text-muted mt-8 px-2 text-center text-xs">{m.about_credits()}</p>
-			<!-- release notes belong next to the version, not competing with the actions above -->
-			<div class="border-surface-200-800 text-muted mt-8 flex items-center justify-between gap-2 border-t px-2 pt-3 text-xs">
-				<span>{m.menubar_version_footer({ version: appVersion })}</span>
+			<!-- the version heads the credits, the way the Help menu shows them -->
+			<div class="text-muted mt-8 px-2 text-center text-xs">
+				<p>{m.menubar_version_footer({ version: appVersion })}</p>
+				<p class="whitespace-pre-line">{m.about_credits()}</p>
+			</div>
+			<!-- release notes get their own line under the credits, not competing with the actions above -->
+			<div class="border-surface-200-800 text-muted mt-8 flex items-center justify-end gap-2 border-t px-2 pt-3 text-xs">
 				<button class="hover:text-surface-950-50 inline-flex items-center gap-1.5" onclick={() => (whatsNewOpen.current = true)}>
 					{m.whatsnew_menu_label()}
 					{#if hasUnseenWhatsNew.current}<span class="bg-primary-500 size-1.5 shrink-0 rounded-full"></span>{/if}

@@ -52,8 +52,9 @@ You need Node, Rust (`cargo build --release -p lv-sidecar`) and a TeX distributi
 
 ## Credits and license
 
-- LatexFrog is derived from [Texpile](https://github.com/texpile/texpile) and is not published or endorsed by the Texpile project. "Texpile" and its logo are trademarks of that project; see [TRADEMARK.md](TRADEMARK.md).
-- The compile engine in `crates/` is by Juan Sbruzzi, under the MIT License ([crates/LICENSE-MIT](crates/LICENSE-MIT)).
+- Designed by Javier Petrucci.
+- Derived from [Texpile](https://github.com/texpile/texpile) (AGPL-3.0). LatexFrog is not published or endorsed by the Texpile project. "Texpile" and its logo are trademarks of that project; see [TRADEMARK.md](TRADEMARK.md).
+- The compile engine in `crates/` is based on Juan Sbruzzi's work (MIT License, [crates/LICENSE-MIT](crates/LICENSE-MIT)).
 - Third-party notices are in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
 
 LatexFrog as a whole is licensed under the [AGPL-3.0](LICENSE).

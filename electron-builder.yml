@@ -1,6 +1,6 @@
 appId: ar.tcii.latexfrog
 productName: LatexFrog
-copyright: Copyright (c) LatexFrog contributors. Derived from Texpile.
+copyright: Designed by Javier Petrucci. Derived from Texpile (AGPL-3.0). Compile engine based on Juan Sbruzzi's work (MIT).
 
 # File associations are declared PER PLATFORM because declaring means different things.
 # Windows (nsis) writes the extension's default handler, so it only gets the two formats

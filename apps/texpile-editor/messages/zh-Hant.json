@@ -625,7 +625,7 @@
 	"menubar_report_problem": "回報問題…",
 	"menubar_check_for_updates": "檢查更新",
 	"session_no_relay": "Set a relay address first. LatexFrog has no hosted relay.",
-	"about_credits": "Derived from Texpile (AGPL-3.0). Compile engine by Juan Sbruzzi (MIT).",
+	"about_credits": "Designed by Javier Petrucci\n\nDerived from Texpile (AGPL-3.0).\nCompile engine based on Juan Sbruzzi's work (MIT)",
 	"menubar_version_footer": "LatexFrog v{version}",
 	"menubar_prompt_cancel": "取消",
 	"menubar_prompt_ok": "確定",

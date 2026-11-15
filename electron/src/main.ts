@@ -208,6 +208,15 @@ if (!app.requestSingleInstanceLock()) {
 
 app.whenReady().then(() => {
 	registerProtocolHandlers();
+	// the native About panel (macOS app menu, Linux); the same text the Help menu shows, kept in English like a licence notice
+	const credits = "Designed by Javier Petrucci\n\nDerived from Texpile (AGPL-3.0).\nCompile engine based on Juan Sbruzzi's work (MIT)";
+	app.setAboutPanelOptions({
+		applicationName: 'LatexFrog',
+		applicationVersion: app.getVersion(),
+		copyright: credits,
+		credits,
+		website: 'https://github.com/TC-II/LatexFrog'
+	});
 	// installed builds only; a dev run registers the electron binary instead, and a portable copy
 	// would register a folder that may move or be deleted
 	if (!portable) app.setAsDefaultProtocolClient('latexfrog');
