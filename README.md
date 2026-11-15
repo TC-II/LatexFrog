@@ -2,7 +2,7 @@
 
 <h1 align="center">LatexFrog</h1>
 
-<p align="center"><b>LaTeX, built for big books.</b><br />A fast desktop editor for large projects, with a Rust compile engine inside.</p>
+<p align="center"><b>LaTeX, built for real projects.</b><br />A fast desktop editor for large projects, with a Rust compile engine inside.</p>
 
 <p align="center">
   <a href="https://tc-ii.github.io/LatexFrog/"><b>Home page</b></a> ·
