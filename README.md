@@ -32,6 +32,14 @@ A fast desktop LaTeX editor for large projects: books with many chapters, heavy 
 
 LatexFrog adds a Rust compile engine to a visual and source editor: compile profiles and partial builds, a figure cache, instant SyncTeX, exports with the printed numbering, and project diagnostics. See [docs/plan.md](docs/plan.md) for the current state.
 
+## Download for Windows
+
+1. Download `LatexFrog-Setup-<version>.exe` from the [latest release](https://github.com/TC-II/LatexFrog/releases/latest) and run it.
+2. Install a TeX distribution if you have none: [MiKTeX](https://miktex.org/download) or [TeX Live](https://tug.org/texlive/windows.html). LatexFrog finds it by itself.
+3. Open a folder with your LaTeX project.
+
+The installer is not code-signed yet, so Windows SmartScreen may warn about an unknown publisher: choose **More info**, then **Run anyway**. Each release lists the installer's SHA-256 so you can check the file. Updates are manual for now: install the newer version over the old one.
+
 ## Build from source
 
 ```bash

@@ -250,7 +250,7 @@ footer a { color: var(--ink); }
 			<h1>LaTeX, built<br /><em>for big books.</em></h1>
 			<p class="lede">A desktop editor for projects with dozens of chapters, heavy TikZ figures and builds that should take seconds, not minutes. A Rust compile engine ships inside the app.</p>
 			<div class="cta">
-				<a class="btn primary" href="#start">Get started</a>
+				<a class="btn primary" href="https://github.com/TC-II/LatexFrog/releases/latest">Download for Windows</a>
 				<a class="btn" href="https://github.com/TC-II/LatexFrog">View on GitHub</a>
 			</div>
 			<p class="meta">Free and open source under the AGPL-3.0.</p>
@@ -413,8 +413,16 @@ The transfer function is
 <section id="start">
 	<div class="wrap">
 		<span class="eyebrow">Get started</span>
-		<h2>Build it and open a folder.</h2>
-		<p class="sub-lede">You need Node, Rust and a TeX distribution such as MiKTeX or TeX Live. A prebuilt installer for Windows will come with the first release.</p>
+		<h2>Install it and open a folder.</h2>
+		<p class="sub-lede">Download the Windows installer, run it, and open your LaTeX project. You also need a TeX distribution, MiKTeX or TeX Live, if you have none.</p>
+		<div class="cta" style="justify-content: flex-start">
+			<a class="btn primary" href="https://github.com/TC-II/LatexFrog/releases/latest">Download for Windows</a>
+			<a class="btn" href="https://miktex.org/download">Get MiKTeX</a>
+			<a class="btn" href="https://tug.org/texlive/windows.html">Get TeX Live</a>
+		</div>
+		<p class="note">The installer is not code-signed yet: if Windows SmartScreen warns, choose More info, then Run anyway. Linux builds will follow.</p>
+		<h3 style="margin: 40px 0 0; font-size: 20px">Or build it yourself</h3>
+		<p class="sub-lede" style="font-size: 16px; margin-top: 6px">You need Node, Rust and a TeX distribution.</p>
 <pre class="cmd mono"><span class="c"># the app</span>
 npx --yes pnpm@10.14.0 install --config.engine-strict=false
 pnpm app:build
