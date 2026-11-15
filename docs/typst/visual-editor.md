@@ -7,8 +7,6 @@ order: 1
 
 Edit the document as formatted text. LatexFrog writes the Typst, and untouched parts stay exactly as they were.
 
-![The visual editor on a Typst paper, with three parts marked](../../landing/src/lib/assets/showcase/docs/typst/visual-editor.png)
-
 1. **Visual / Source.** Switch at any time. Undo works across the switch.
 2. **Toolbar.** Headings and text style. The arrow at its end shows lists, math, tables and code. The Insert and Format menus have the rest.
 3. **Set rules.** Each shows as one line. Click it to change it.
@@ -19,15 +17,11 @@ Files over 800 KB open in the source editor.
 
 ## Set rules
 
-![The Page set rule open: Paper, Margins, Columns and Numbers](../../landing/src/lib/assets/showcase/docs/typst/set-rule.png)
-
 The panel has the common settings for the page, text, paragraphs, headings, the document and equations. Anything else the rule sets is kept as written.
 
 ## Add your own function
 
 Insert › Typst Source has the parts missing from the toolbar.
-
-![The Insert menu with its Typst Source submenu: Environment, Typst Code, Inline Typst and Source Comment](../../landing/src/lib/assets/showcase/docs/typst/insert-typst.png)
 
 - **Environment…** wraps content in a function, such as `theorem` or `block`. Functions you define with `#let` are offered first.
 - **Typst Code** and **Inline Typst** add raw Typst as a block or inside a line.

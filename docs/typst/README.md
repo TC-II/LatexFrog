@@ -11,8 +11,6 @@ section: Typst
 
 Write Typst in the visual editor or as source, and watch the preview update as you type.
 
-![A Typst project in LatexFrog: the file tree, the visual editor, the Live button, and the preview](../../landing/src/lib/assets/showcase/docs/typst/overview.png)
-
 1. **Main file.** The star marks the file LatexFrog previews and compiles.
 2. **Visual / Source.** Switch editors at any time. Both edit the same file.
 3. **Live.** The preview is on. Click it to close the preview.

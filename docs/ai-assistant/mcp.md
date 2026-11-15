@@ -13,8 +13,6 @@ Lets an AI assistant such as Claude Code read your editor and leave comments and
 1. Turn on **MCP server** in `Preferences › AI Assistant`. The line under it reads "Listening on 127.0.0.1:7317".
 2. Click **Show Instructions** and paste the message into your assistant.
 
-![The Connect an Assistant dialog, with a message to paste into your assistant](../../landing/src/lib/assets/showcase/app/mcp-modal.png)
-
 To add it by hand, add a server named `texpile` at `http://127.0.0.1:7317` in the assistant's MCP settings. Agents in the [Agent tab](agent-panel.md) get the same tools with the server off.
 
 The assistant changes your text only through [suggestions](../comments/suggesting.md). While the server is on, any program on your computer can connect without a password.

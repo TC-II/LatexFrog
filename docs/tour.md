@@ -10,8 +10,6 @@ section: Get started
 
 A LaTeX project, with the PDF and the bottom panel open.
 
-![The LatexFrog window with nine parts marked](../landing/src/lib/assets/showcase/docs/app/tour-window.png)
-
 1. **Menus.** On macOS they are in the system menu bar, with a LatexFrog menu added.
 2. **Window title.** Click it, or press Ctrl K, for the [command palette](command-palette.md).
 3. **Files.** The project folder. The star marks the main file.
@@ -23,8 +21,6 @@ A LaTeX project, with the PDF and the bottom panel open.
 9. **Layout.** Shows and hides the sidebar, the bottom panel and the PDF, and splits the editor or the PDF. See [Layout](#layout).
 
 ## Editor and PDF bars
-
-![The bars above the editor and the PDF, with five controls marked](../landing/src/lib/assets/showcase/docs/app/tour-bars.png)
 
 1. **Visual / Source.** Switch editors. Each editor has its own switch.
 2. **Word count.** Select text to count the selection. Hover for the whole paper.
@@ -38,21 +34,15 @@ Edits save on their own a moment after you stop typing. Ctrl S (Cmd S on macOS) 
 
 ## Layout
 
-![The Layout menu, with Panels, Editors and Preview](../landing/src/lib/assets/showcase/docs/app/tour-layout.png)
-
 - **Panels** shows and hides the sidebar, the terminal and the PDF.
 - **Editors** shows one editor, two side by side, two stacked, or four in a grid. See [Split view](split-view.md).
 - **Preview** splits the PDF into two views, one above the other, or opens it in a window of its own.
 
 ## Sidebar
 
-![The sidebar header and the file tree](../landing/src/lib/assets/showcase/docs/app/tour-sidebar.png)
-
 The number on the Source Control button is how many files changed. Esc returns from Source Control or Find in Files to the files.
 
 ## Bottom panel
-
-![The bottom panel open on Problems](../landing/src/lib/assets/showcase/docs/app/tour-bottom.png)
 
 The Agent tab is a chat with an AI agent on your computer. It shows while at least one agent is turned on in Preferences › AI Assistant and Disable all AI integrations is off.
 

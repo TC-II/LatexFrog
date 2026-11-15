@@ -12,8 +12,6 @@ Rewrite a selection with an AI agent. The result arrives as a [suggestion](../co
 
 Select text, then right-click › **Refine with {agent}** and pick an action. With **Toolbar on selection** on in `Preferences › Editor`, the selection toolbar also has a Refine button.
 
-![The right-click menu on selected text with the list of Refine actions](../../landing/src/lib/assets/showcase/docs/review/refine-menu.png)
-
 **Match writing style** rewrites the passage to match the text around it. **Write an Instruction** does what you type.
 
 Works in LaTeX, Typst, Markdown, BibTeX and plain text, in a folder open in the desktop app. Refine is off for guests and while you host a shared session. The agent also gets the text around the selection: see [Privacy](../reference/privacy.md).

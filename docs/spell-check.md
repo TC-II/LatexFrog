@@ -10,8 +10,6 @@ section: Editor tips
 
 LatexFrog underlines spelling problems in English, German, French, Spanish, Italian, Dutch, Portuguese (Brazil and Portugal) and Polish, and grammar problems in English. Math, code, commands and `.bib` files are skipped. Turn it on in File › Preferences… › Spelling.
 
-![A suggestion box under the word diferently, offering differently, Add to Dictionary, and Ignore](../landing/src/lib/assets/showcase/docs/writing/spell-suggestion-box.png)
-
 Click an underlined word for suggestions. F8 and Shift F8 jump to the next and previous problem.
 
 For a grammar problem, the box swaps Add to Dictionary for **Turn Off Rule**, which stops that rule in every file. Preferences › Spelling turns it back on, and holds the English variant and your dictionary.

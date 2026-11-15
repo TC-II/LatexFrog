@@ -9,8 +9,6 @@ Press **Compile**, or Ctrl Alt Enter, to build the PDF from the main file. Latex
 
 ## Problems
 
-![The Problems panel listing warnings, each with a plain-words hint](../../landing/src/lib/assets/showcase/docs/latex/problems.png)
-
 The Problems panel lists the errors and warnings from the log, with the file and line. Click a row to jump there. The count also shows next to Compile.
 
 1. **Hints.** Common messages get a plain-words hint, such as the `\usepackage` line an unknown command needs.
@@ -24,14 +22,10 @@ The arrow on the divider between the editor and the PDF shows the cursor's place
 
 Open the menu next to Compile.
 
-![The Compile menu: Recompile from Scratch, Clean Auxiliary Files, Show Output in Folder and Configure Compile Command](../../landing/src/lib/assets/showcase/docs/latex/compile-menu.png)
-
 1. The menu.
 2. **Recompile from Scratch** deletes the build files and compiles again. Use it when an error stays after you fixed it. **Clean Auxiliary Files** deletes the build files and keeps the PDF.
 
 **Configure Compile Command…** opens the settings:
-
-![The Compile Command dialog with the Engine choices and the command](../../landing/src/lib/assets/showcase/docs/latex/compile-command.png)
 
 1. **Engine.** pdflatex, lualatex or xelatex. With **use latexmk** on, the compile repeats until the references and citations settle.
 2. **Command.** Write your own. `{main}` stands for the main file. **Use Default** puts the default back.

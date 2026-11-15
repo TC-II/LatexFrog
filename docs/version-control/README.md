@@ -13,8 +13,6 @@ section: Workflow
 
 > [!REQUIRES] [git](../installation/git.md), for Source Control
 
-![The Source Control panel with changed files, the message box, Commit and the Graph](../../landing/src/lib/assets/showcase/docs/review/source-control-panel.png)
-
 `Ctrl Shift G` opens Source Control (Ctrl on macOS too).
 
 ## Commit

@@ -12,8 +12,6 @@ An empty folder offers templates on its **LaTeX** and **Typst** tabs. Picking on
 
 Set the main file, then **File › Save as Template…**. The template appears under **Your Templates** on the tab that matches the main file. Desktop app only.
 
-![The Save as Template dialog with a name, a description, and the count of files copied](../../landing/src/lib/assets/showcase/docs/app/save-as-template.png)
-
 The template leaves out the compiled PDF, files the build makes such as `.aux` and `.log`, build and `_draft` folders, and hidden folders such as `.git` and `.texpile`.
 
 If the project is on GitHub or another Git server, **Save** offers **Git Remote**. That template stores the address alone, and each project made from it downloads only the newest version of the files.

@@ -14,15 +14,11 @@ Different from many online LaTeX or Typst editors, LatexFrog requires you to ope
 
 Click **Open Folder…** on the start screen. If you have no existing projects, create an empty folder in your system's file explorer (Finder) first and then open it.
 
-![The start screen](../landing/src/lib/assets/showcase/docs/app/start-screen-open.png)
-
 LatexFrog reopens your folders at the next launch, each on its last file.
 
 ## Start a document
 
 In an empty folder, **Start a New Document** offers LaTeX and Typst templates. Click one and LatexFrog copies its files into the folder.
-
-![Start a New Document with the LaTeX templates](../landing/src/lib/assets/showcase/docs/app/starter-latex.png)
 
 **Browse Typst Templates…** adds community templates from Typst Universe. File › Save as Template… turns a folder of your own into a template under **Your Templates**.
 

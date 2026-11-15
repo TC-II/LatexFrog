@@ -7,8 +7,6 @@ order: 2
 
 Type math as you would in LaTeX and see it typeset as you go.
 
-![An equation being edited, with the math toolbar and the symbol search open](../../landing/src/lib/assets/showcase/docs/latex/math-toolbar.png)
-
 1. **Math toolbar.** Shows while the cursor is in an equation: Greek letters, operators, arrows, brackets, matrices and environments.
 2. **Symbol search.** Press Tab or Ctrl Space in an equation and type a name or what the symbol means, such as `not eq` or `arrow right`. With an empty slot ahead, such as a fraction's denominator, Tab moves to that slot first.
 
@@ -22,16 +20,12 @@ If a symbol needs a package missing from your preamble, the source editor underl
 
 ## Number and label
 
-![The settings of a display equation, with Numbered turned on](../../landing/src/lib/assets/showcase/docs/latex/equation-settings.png)
-
 1. Hover a display equation and click its settings icon.
 2. Turn on **Numbered**.
 
 Type @ anywhere to reference the equation. Its label is under **Advanced Options**: rename it and every reference follows. In an equation of several lines, each line has its own label.
 
 ## Change the formula type
-
-![The equation's right-click menu with the Formula Type submenu](../../landing/src/lib/assets/showcase/docs/latex/formula-type.png)
 
 Right-click an equation for **Formula Type**: Single Line (`equation`), Aligned Lines (`align`), Centered Lines (`gather`) or Split Long Formula (`multline`).
 

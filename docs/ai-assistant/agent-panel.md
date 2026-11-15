@@ -10,8 +10,6 @@ Chat with an AI agent that reads and edits files in the open folder and runs com
 
 > [!REQUIRES] an [AI agent](README.md#set-up-an-agent) installed outside LatexFrog
 
-![The Agent tab before an agent is chosen, with Open Preferences, Disable All AI and the agent menu open](../../landing/src/lib/assets/showcase/docs/review/agent-tab-choose.png)
-
 - The open file, or the selected lines, go with each message. Click **Leave out of the message** to send your text alone.
 - Paste or drop an image (PNG, JPEG, GIF or WebP) if the agent takes images.
 - Type `/` at the start of the box for the agent's own commands. A command runs when it is the whole message.

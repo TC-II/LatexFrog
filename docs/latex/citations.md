@@ -7,13 +7,9 @@ order: 5
 
 Type @ to cite a work or to reference a figure, table, equation or section.
 
-![Typing @ lists the bibliography entries and the labeled figure, table and equation](../../landing/src/lib/assets/showcase/docs/latex/at-picker.png)
-
 The list holds the entries of your `.bib` files and every labeled figure, table, numbered equation and section. Type part of a key, author, title or year to narrow it.
 
 ## Edit a citation
-
-![A citation and its panel: the cited work, page numbers and Advanced Options](../../landing/src/lib/assets/showcase/docs/latex/citation-panel.png)
 
 Click a citation to change the work or add page numbers. **Advanced Options** adds a prefix such as "see" and changes the citation style: `\parencite` and `\textcite` with biblatex, `\citep` and `\citet` with natbib.
 
@@ -36,8 +32,6 @@ Click a `\ref` or `\eqref` to jump to what it points to.
 ## Your bibliography
 
 Open a `.bib` file to edit it as a list of entries.
-
-![A .bib file open as a list of entries, with New Reference and Paste BibTeX](../../landing/src/lib/assets/showcase/docs/latex/bib-manager.png)
 
 1. **New Reference** adds an entry with a form.
 2. **Paste BibTeX** imports entries copied from a publisher's site or Google Scholar.

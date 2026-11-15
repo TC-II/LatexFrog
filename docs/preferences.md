@@ -11,8 +11,6 @@ section: Customize
 
 Preferences holds the settings for the whole app. Open it with Ctrl , (Cmd , on macOS) or File › Preferences… (LatexFrog › Preferences… on macOS).
 
-![The Appearance tab of Preferences, with the list of tabs on the left](../landing/src/lib/assets/showcase/docs/app/preferences-appearance.png)
-
 | Setting                                                  | Note                                                                                                                                 |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Appearance › Language                                    | Changes the interface only. Spell check follows each document's own language.                                                        |

@@ -10,6 +10,4 @@ section: Customize
 
 Preferences › Appearance has 25 color themes, each in light and dark.
 
-![The Appearance tab in dark mode with the Dracula theme chosen, showing the Mode choice and the Theme grid](../landing/src/lib/assets/showcase/docs/app/preferences-appearance-dark.png)
-
 **Transparent window** blurs the desktop behind LatexFrog. Windows 11 and macOS only.

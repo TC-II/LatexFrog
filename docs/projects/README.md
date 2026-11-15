@@ -10,13 +10,9 @@ section: Workflow
 
 A project is a folder, and opening the folder is all the setup it needs. A folder opens in one window at a time.
 
-![The sidebar with the file tree and Contents, and the word count tooltip showing words, characters, and words per file](../../landing/src/lib/assets/showcase/docs/app/contents-word-count.png)
-
 ## The main file
 
 The main file is the one LatexFrog compiles and the preview follows. Right-click a `.tex` or `.typ` file in the file tree › **Set as Main File**. With several documents and none set, the first compile asks you to choose one.
-
-![The menu on a file, with Unset Main File, Copy, Show in Folder, Version History, Rename, and Delete](../../landing/src/lib/assets/showcase/docs/app/file-tree-context-menu.png 'The menu on the main file.')
 
 LatexFrog saves the choice, the build settings and the comments in a hidden `.texpile` folder inside the project, so they travel with the folder, Git included. The folder's [snippets](../snippets.md) live there too.
 
@@ -55,7 +51,5 @@ On macOS use Cmd, except for Ctrl Tab. A tab in italics is temporary: the next f
 ## Find in files
 
 `Ctrl Shift F` searches every file in the folder. The arrow at the left of the search box shows Replace.
-
-![Find in Files showing six results for heat in one file, with the match highlighted in each line](../../landing/src/lib/assets/showcase/docs/app/find-in-files.png)
 
 The search skips files over 2 MB, folders whose names start with a dot, and `_draft`, `build`, `dist`, `out` and `output` folders. Undo a replace with **Undo** in the "Replaced…" message, or `Ctrl Z` in the file tree.

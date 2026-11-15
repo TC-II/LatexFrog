@@ -7,8 +7,6 @@ order: 5
 
 Type @ to cite a work or to reference a figure, table, equation or heading.
 
-![Typing @ lists the bibliography entries and the labeled table, figure and equation](../../landing/src/lib/assets/showcase/docs/typst/at-picker.png)
-
 The list holds the entries of the `.bib` or `.yml` file your `#bibliography` names, and everything with a label. Type part of a key, author, title or year to narrow it.
 
 ## Edit a citation

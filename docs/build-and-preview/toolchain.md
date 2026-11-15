@@ -7,8 +7,6 @@ order: 1
 
 **File › Preferences… › Toolchain** shows which programs LatexFrog found and where it looks for them.
 
-![The Toolchain tab of Preferences with Check Again, Folders, and the LaTeX programs marked Found or Not found](../../landing/src/lib/assets/showcase/docs/app/preferences-toolchain.png)
-
 LatexFrog needs only the programs your commands call. The default compile command needs latexmk and lualatex. Live preview needs lualatex, **Format Document** needs latexindent, and jumping between the text and the PDF needs synctex.
 
 LatexFrog reads your PATH once, when it starts: restart it after you change PATH. Folders you add here apply at once.
@@ -16,8 +14,6 @@ LatexFrog reads your PATH once, when it starts: restart it after you change PATH
 ## The Set Up dialog
 
 **Set Up LaTeX** or **Set Up Typst** opens when a compile, a jump, Format Document or the live preview needs a program that is missing.
-
-![The Set Up LaTeX dialog saying latexindent is not found, with Installed elsewhere, More in Preferences, Close, and How to install one](../../landing/src/lib/assets/showcase/docs/app/set-up-latex-dialog.png)
 
 - **Installed elsewhere? Add its folder** adds the folder to **Folders**.
 - **How to install one** opens the [TeX install guide](../installation/latex/README.md).
@@ -32,8 +28,6 @@ With more than one TeX Live or MiKTeX installed, pick one under **Distribution**
 ## Install tinymist for Typst
 
 **Install tinymist** is in the Typst section, the **Set Up Typst** dialog, and the "tinymist is not installed." bar above a `.typ` file.
-
-![The lower part of the Toolchain tab with tinymist Not found, the LatexFrog's copy row with an Install tinymist button, and git Found](../../landing/src/lib/assets/showcase/docs/app/toolchain-typst-git.png)
 
 A tinymist on PATH or in **Folders** comes first. To use LatexFrog's copy, pick **LatexFrog's copy** under **Distribution**.
 

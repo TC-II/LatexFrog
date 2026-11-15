@@ -16,8 +16,6 @@ Keep Zotero running and set a main file. Each reference needs a citation key.
 
 Right-click in the editor › **Insert Citation from Zotero**, tick one or more references, and click **Insert**. LatexFrog inserts `\cite{key1,key2}` or `@key1 @key2` and copies the references into your bibliography.
 
-![The right-click menu with the two citation actions](../../landing/src/lib/assets/showcase/docs/review/comment-context-menu.png)
-
 LatexFrog searches the Zotero library on your computer. A group library shows once it has synced.
 
 ## Which .bib file

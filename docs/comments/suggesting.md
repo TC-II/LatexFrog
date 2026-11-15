@@ -7,8 +7,6 @@ description: Switch to Suggesting mode so your edits become suggestions, and how
 
 Suggesting mode works as in Google Docs: your edits become suggestions that someone accepts or rejects. Switch with the pencil button at the top of the PDF, or in the title bar while the PDF is closed. LatexFrog remembers the mode per project.
 
-![The Editing and Suggesting menu](../../landing/src/lib/assets/showcase/docs/review/mode-picker.png 'The button turns blue in Suggesting mode.')
-
 ## Suggestions in source files
 
 Your file already holds the suggested text, so the PDF shows every suggestion as if accepted. The old words are kept in the hidden `.texpile` folder until someone accepts or rejects them. Commit `.texpile` with the file.
@@ -18,8 +16,6 @@ In the source editor, spaces and line breaks are suggested like any other text. 
 ## Accept or reject
 
 Accept or reject suggestions one at a time, each on its own card.
-
-![A Delete card and a Replace card, each with Accept and Reject](../../landing/src/lib/assets/showcase/docs/review/suggestion-card-delete-replace.png)
 
 - Suggestions cover whole words. Fixing a typo replaces the word.
 - In Editing mode, typing inside a suggestion splits it around your words, and replacing all of it closes it as **Closed by an edit**.

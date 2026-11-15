@@ -16,8 +16,6 @@ Edit a folder with other people at the same time. Guests join with only a code, 
 
 Open a folder in the desktop app, choose `File › Shared Session`, click **Start Session**, and send guests the link or the code. Only the desktop app hosts, and only with a whole folder open.
 
-![The Shared Session dialog before a session starts](../../landing/src/lib/assets/showcase/docs/review/share-dialog.png)
-
 - Click the guest avatars in the title bar to reopen the dialog. **End Session** stops the code for everyone. Closing the folder or window, or reloading, also ends it.
 - Change the **Relay Server** address only when someone gives you another one. Guests then enter the same address and join with the code instead of the link.
 - Only you compile, with the programs on your computer. Guests see the PDF and the problems.
@@ -27,8 +25,6 @@ Open a folder in the desktop app, choose `File › Shared Session`, click **Star
 ## Join a session
 
 On the start screen, click **Join Session** and enter the code (or the whole link) and your name. A link opened in a browser offers **Open in the LatexFrog App**, or **Join Here** to join in the browser with nothing to install.
-
-![The Join a Shared Session form with Session code and Your name](../../landing/src/lib/assets/showcase/docs/review/join-session-dialog.png)
 
 Session links open the installed version of LatexFrog. In the portable version, enter the code on its start screen.
 

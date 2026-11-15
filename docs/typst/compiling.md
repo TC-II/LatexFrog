@@ -11,8 +11,6 @@ A Typst project shows a [live preview](live-preview.md) in place of a compile. *
 
 Open the menu next to **Preview** and choose **Configure Compile Command…**.
 
-![The Compile Command dialog for Typst, with the Preview switch](../../landing/src/lib/assets/showcase/docs/typst/compile-command.png)
-
 1. Turn off **Preview**.
 
 The button then reads **Compile**, and it saves the PDF in an `output` folder and shows it beside the editor. Only the preview jumps back to the source when clicked.

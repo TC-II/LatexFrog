@@ -14,8 +14,6 @@ order: 2
 2. Open the .typ file.
 3. Click **Set Up Typst** in the bar above it.
 
-![The bar over a Typst file saying tinymist is not installed, with a Set Up Typst button](../../../landing/src/lib/assets/showcase/docs/app/typst-missing-bar.png)
-
 ## Install Typst yourself
 
 On [Windows](windows.md), [macOS](macos.md), or [Linux](linux.md).

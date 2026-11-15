@@ -11,8 +11,6 @@ section: LaTeX
 
 Write LaTeX in the visual editor or as source, and compile it to a PDF.
 
-![A LaTeX project in LatexFrog: the file tree, the visual editor, the Compile button, and the compiled PDF](../../landing/src/lib/assets/showcase/docs/latex/overview.png)
-
 1. **Main file.** The star marks the file LatexFrog compiles.
 2. **Visual / Source.** Switch editors at any time. Both edit the same file.
 3. **Compile.** Builds the PDF.

@@ -7,8 +7,6 @@ order: 6
 
 Edit the Typst directly. Functions, labels, citation keys and file paths complete from your whole project.
 
-![The source editor with labels and citation keys completing after @](../../landing/src/lib/assets/showcase/docs/typst/source-editor.png)
-
 1. **Source.** Switch to the source editor.
 2. **Completion.** Opens as you type. Ctrl Space opens it any time.
 

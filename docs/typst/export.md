@@ -10,8 +10,6 @@ order: 9
 
 Save the main document as a file: File › Export…, or **Export as PDF, PNG, SVG, or HTML…** in the preview's "…" menu.
 
-![The Export dialog: Format, Pages, Standard, PDF/UA-1 and Tagged PDF](../../landing/src/lib/assets/showcase/docs/typst/export.png)
-
 | Format | Options                                                                                                                  |
 | ------ | ------------------------------------------------------------------------------------------------------------------------ |
 | PDF    | Pages, a standard such as PDF/A-2b, PDF/UA-1 for accessibility, and Tagged PDF.                                          |

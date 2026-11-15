@@ -10,8 +10,6 @@ order: 3
 
 Install git to use Source Control and to clone projects.
 
-![The Source Control view in the sidebar saying Git not found, with How to install Git and Check Again](../../landing/src/lib/assets/showcase/docs/app/git-not-found.png)
-
 | System         | Command                                          |
 | -------------- | ------------------------------------------------ |
 | Windows        | `winget install --id Git.Git -e --source winget` |

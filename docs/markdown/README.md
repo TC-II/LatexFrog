@@ -11,8 +11,6 @@ section: Markdown
 
 LatexFrog edits `.md` files visually or as source, and saves them as plain Markdown. The visual editor is the preview, in place of a PDF.
 
-![A Markdown file in the visual editor, with three parts marked](../../landing/src/lib/assets/showcase/docs/markdown/overview.png)
-
 1. **Visual / Source.** Switch editors at any time.
 2. **Toolbar.** Adds strikethrough and task lists, and leaves out underline, color, superscript and subscript, which Markdown lacks.
 3. **Contents.** The headings of the file. Click one to go there.

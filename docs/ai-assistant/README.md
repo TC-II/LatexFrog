@@ -15,8 +15,6 @@ LatexFrog includes no AI. It works with an agent you install and sign in to your
 
 Install the agent and sign in outside LatexFrog, then pick it in `Preferences › AI Assistant`. The Agent tab and Refine each have their own choice.
 
-![Preferences, AI Assistant, with Disable all AI integrations at the top and the Refine with and Agent tab choices](../../landing/src/lib/assets/showcase/docs/review/prefs-ai-assistant.png)
-
 | Agent           | Agent tab | Refine | Sign in from a terminal |
 | --------------- | --------- | ------ | ----------------------- |
 | Codex           | Yes       | Yes    | `codex login`           |

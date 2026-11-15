@@ -10,13 +10,9 @@ section: Editor tips
 
 Layout in the title bar arranges the editors and the PDF.
 
-![The Layout menu, with Panels, Editors and Preview](../landing/src/lib/assets/showcase/docs/app/tour-layout.png)
-
 ## Editors
 
 Layout › **Editors** shows one editor, two side by side, two stacked, or four in a grid.
-
-![Two editors side by side, the paper in the visual editor and its bibliography in the source editor](../landing/src/lib/assets/showcase/docs/app/split-editor.png)
 
 - Each editor has its own tabs and its own Visual / Source switch.
 - The file tree and the command palette open files in the editor you last clicked.
@@ -32,8 +28,6 @@ Drag a tab out of the window, or right-click it › **Move into New Window**, to
 ## The PDF in two views
 
 Layout › **Split the preview** shows the PDF twice, one view above the other, each with its own bar. Drag the line between them to resize.
-
-![Two editors stacked beside the PDF split in two views](../landing/src/lib/assets/showcase/docs/app/pdf-split.png)
 
 - With two editors stacked, each one's jumps to the PDF go to the view beside it.
 - Only a compiled PDF splits. Live mode and the Typst preview show one view.

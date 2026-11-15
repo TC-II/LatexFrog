@@ -24,8 +24,6 @@ A snippet is a macro that automatically fills in text based on a trigger. For in
 
 Folder snippets are stored in the `.texpile` folder and are shared with collaborators through Git and real-time collaboration. Global snippets store your own snippets, which are not shared with anyone. If there are conflicts, LatexFrog follows the order of folder > global > built-in snippets. If you are a guest, you can turn off snippets via Preferences › Snippets.
 
-![Preferences, Snippets, with a switch and an Edit button for this folder's snippets and for snippets for every folder](../landing/src/lib/assets/showcase/docs/app/preferences-snippets.png)
-
 ## An example of a snippet file
 
 ```json

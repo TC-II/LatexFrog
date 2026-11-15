@@ -7,8 +7,6 @@ order: 6
 
 Edit the LaTeX directly. Commands, labels, citation keys and file names complete from your whole project.
 
-![The source editor with citation keys completing after \cite{](../../landing/src/lib/assets/showcase/docs/latex/source-editor.png)
-
 1. **Source.** Switch to the source editor.
 2. **Completion.** Opens as you type. Ctrl Space opens it any time.
 
@@ -31,8 +29,6 @@ F2 on a label, a citation key or a glossary entry asks for a new name. LatexFrog
 Comments and commented-out code follow the rename. Text in `verbatim`, `lstlisting` or `minted` and in `\verb` or `\lstinline` keeps its words. In a shared session only the host renames a name that other files use.
 
 ## Math preview
-
-![The typeset equation shown above the line being edited](../../landing/src/lib/assets/showcase/docs/latex/math-preview.png)
 
 The equation under the cursor shows typeset above it. Esc hides it.
 

@@ -12,8 +12,6 @@ Find a paper online and add it to your bibliography, with the citation in place.
 
 Right-click in the editor › **Insert Citation by Title or DOI**, then type a title or paste an ID.
 
-![The box for citing by title or ID](../../landing/src/lib/assets/showcase/docs/review/cite-by-doi-dialog.png)
-
 - IDs: a DOI, arXiv ID, ISBN or PubMed ID (`PMID: 12345`), or a doi.org, publisher, arxiv.org or PubMed link.
 - A title lists up to eight papers. Add an author's surname or a year to narrow it.
 - A paper already in your bibliography is cited by its existing key.

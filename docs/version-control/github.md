@@ -8,8 +8,6 @@ order: 2
 
 Make your first commit, then choose **Publish Branch** in the Source Control header.
 
-![The Publish Branch dialog with Publish to GitHub](../../landing/src/lib/assets/showcase/docs/review/publish-branch-dialog.png)
-
 **Publish to GitHub** creates a new repository and pushes over HTTPS. **Add remote from URL** pushes to an existing empty repository on any host, such as GitLab, Bitbucket or Codeberg.
 
 ## Sign in

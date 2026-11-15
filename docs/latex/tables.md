@@ -7,8 +7,6 @@ order: 3
 
 Insert a table from the toolbar (under the arrow at its end) and edit it like a table in a word processor.
 
-![The table size grid under the toolbar's table button, with Numbered table on](../../landing/src/lib/assets/showcase/docs/latex/table-insert.png)
-
 1. **Insert table.** Move over the grid to pick a size, up to 10 by 10.
 2. **Numbered table.** A numbered table gets a caption and a label you can reference. Decide before inserting: the choice is final.
 
@@ -19,8 +17,6 @@ Tab moves to the next cell. Right-click a cell to add or delete rows and columns
 A range copied from a spreadsheet pastes as a table.
 
 ## Table settings
-
-![A table with its settings open: column alignment, vertical lines, and the notes section](../../landing/src/lib/assets/showcase/docs/latex/table-settings.png)
 
 1. Hover the table and click its settings icon.
 2. Set each column, the lines and the notes.

@@ -7,8 +7,6 @@ order: 4
 
 Drag an image onto the editor, paste one, or use Insert › Image…. PNG, JPEG, GIF and WebP work. A pasted picture is saved in an `images` folder next to the file.
 
-![A figure with its settings open: Size, Show Caption and Numbered](../../landing/src/lib/assets/showcase/docs/latex/figure-settings.png)
-
 1. Select the image and click its settings icon.
 2. Set the **Size**, and turn on **Show Caption** and **Numbered**.
 

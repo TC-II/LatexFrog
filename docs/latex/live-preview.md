@@ -7,8 +7,6 @@ order: 8
 
 The PDF updates as you type. Most edits show in a fraction of a second.
 
-![The live preview beside the visual editor, with the edited sentence already in the PDF](../../landing/src/lib/assets/showcase/docs/latex/live-preview.png)
-
 1. **Live.** Click to pause. **Paused** resumes.
 2. **Status.** What the preview did last, such as an instant update to one page or a full recompile.
 3. **Follow edits.** Scrolls the PDF to where you type.
@@ -19,8 +17,6 @@ Pinch on a trackpad, or scroll with Ctrl held, to zoom around the pointer.
 ## Turn it on
 
 Open the menu next to Compile and choose **Configure Compile Command…**.
-
-![The Compile Command dialog with Live mode on and the Run Preview button](../../landing/src/lib/assets/showcase/docs/latex/live-mode.png)
 
 1. Turn on **Live mode**.
 2. Click **Run Preview**.

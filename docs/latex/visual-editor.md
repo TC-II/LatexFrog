@@ -7,8 +7,6 @@ order: 1
 
 Edit the document as formatted text. LatexFrog writes the LaTeX, and the parts you leave alone stay exactly as they were.
 
-![The visual editor on a LaTeX paper, with three parts marked](../../landing/src/lib/assets/showcase/docs/latex/visual-editor.png)
-
 1. **Visual / Source.** Switch at any time. Undo works across the switch.
 2. **Toolbar.** Headings and text style. The arrow at its end shows lists, math, tables and code. The Insert and Format menus have the rest.
 3. **Block handle.** Drag to move the block. **+** adds a block below it.
@@ -25,11 +23,7 @@ The heading menu has Section, Subsection and Subsubsection, each **Numbered** or
 
 Format › Text Style adds Small Caps, Sans Serif, Slanted, Text Size, Framed, and Kept on One Line.
 
-![The Format menu with its Text Style submenu open](../../landing/src/lib/assets/showcase/docs/latex/text-style.png)
-
 ## Add a block
-
-![The Insert Block menu opened from the plus in the margin](../../landing/src/lib/assets/showcase/docs/latex/insert-block.png)
 
 Besides text, headings and lists, the menu adds an Abstract, a Table, a Math Block, a Code Block, or Raw LaTeX.
 

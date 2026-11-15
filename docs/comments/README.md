@@ -10,8 +10,6 @@ section: Review and collaboration
 
 Comments work as in Google Docs: select text, then right-click › **Comment**. They also work in the source editor.
 
-![The comment box beside selected text, with a note typed in](../../landing/src/lib/assets/showcase/docs/review/comment-composer.png)
-
 Every comment in the project is listed in the **Comments** tab of the bottom panel. Tick **Show resolved** to list resolved threads too.
 
 ## How comments differ
@@ -25,8 +23,6 @@ Every comment in the project is listed in the **Comments** tab of the bottom pan
 ## When a comment loses its place
 
 LatexFrog follows edits made in LatexFrog only. A comment whose words go missing gets a badge in the Comments tab.
-
-![The Comments tab with a File deleted thread and an open Detached thread](../../landing/src/lib/assets/showcase/docs/review/comment-placement-detached.png)
 
 | You see              | Fix                                                                                                                    |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
