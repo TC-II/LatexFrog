@@ -399,11 +399,12 @@ local function write_manifest()
 		-- had no way to know a page's records were unsafe to paint (RTL, in practice).
 		local unc = p.unc and string.format(',"unc":"%s"', p.unc) or ""
 		local dev = p.dev and string.format(',"dev":%.4f', p.dev) or ""
+		local lay = p.lay and ',"lay":1' or ""
 		-- the shipped vpack's glue state: gsn 1 = the page was stretched to \textheight
 		-- (flushbottom), so a patch must distribute its delta over the page's vg records
 		-- the way a repack would, not shift rigidly
 		t[i] = string.format('{"n":%d,"w":%.4f,"h":%.4f,"ht":%.4f,"gs":%.6f,"gsn":%d,"go":%d%s}',
-			i, p.w, p.h, p.ht, p.gs or 0, p.gsn or 0, p.go or 0, unc .. dev)
+			i, p.w, p.h, p.ht, p.gs or 0, p.gsn or 0, p.go or 0, unc .. dev .. lay)
 	end
 	f:write(string.format(
 		'{"count":%d,"paperW":%.4f,"paperH":%.4f,"colW":%.4f,"textW":%.4f,"footSkip":%.4f,"colSep":%.4f,"blSkip":%.4f,"parSkip":%.4f,"topSkip":%.4f,"lsLimit":%.4f,"hOffset":%.4f,"vOffset":%.4f,"srcFiles":%s,"inputs":%s%s,"pages":[%s]}',
@@ -442,6 +443,52 @@ local function write_manifest()
 	end
 end
 
+-- LatexFrog: the kernel adds the shipout/background, shipout/foreground, firstpage and lastpage material AFTER
+-- shipout/before, so none of it is in the records (eso-pic's \AddToShipoutPictureBG/FG: a page frame, a title page's
+-- band, a watermark). Only the PDF raster shows it. The ink on the box as it is shipped (pre_shipout_filter) against
+-- the ink page_extract walked marks such a page "lay": a patch on it leaves the page without that material until a
+-- pass lands, so the patcher keeps the pass. Ink is what draws: glyphs, rules (images are rules in LuaTeX) and PDF
+-- literals (TikZ); an eso-pic picture that draws nothing adds no ink and marks nothing.
+-- Direct nodes and per-type counts: a walk over every node through the node userdata cost 2.5 ms a page.
+local WHATSIT_ID = node.id("whatsit")
+local LITERAL_SUB = node.subtype and node.subtype("pdf_literal")
+local D = node.direct
+local d_count, d_traverse_id, d_getlist, d_getsubtype = D.count, D.traverse_id, D.getlist, D.getsubtype
+local function ink_d(h)
+	local n = d_count(GLYPH_ID, h) + d_count(RULE_ID, h)
+	for w in d_traverse_id(WHATSIT_ID, h) do
+		if d_getsubtype(w) == LITERAL_SUB then n = n + 1 end
+	end
+	for b in d_traverse_id(HLIST_ID, h) do
+		local l = d_getlist(b)
+		if l then n = n + ink_d(l) end
+	end
+	for b in d_traverse_id(VLIST_ID, h) do
+		local l = d_getlist(b)
+		if l then n = n + ink_d(l) end
+	end
+	return n
+end
+local function ink_of(box)
+	return ink_d(D.todirect(box))
+end
+-- set by page_extract and taken by the filter: a raw shipout (no shipout/before) reaches the filter with none
+local ink_before = nil
+
+if luatexbase and luatexbase.add_to_callback then
+	pcall(luatexbase.add_to_callback, "pre_shipout_filter", function(head)
+		local before = ink_before
+		ink_before = nil
+		local p = pages[pageno]
+		if before and p and not p.lay and ink_of(head) > before then
+			p.lay = true
+			-- a page shipped after \AtEndDocument already rewrote the manifest in page_extract
+			if doc_ended then write_manifest() end
+		end
+		return true
+	end, "latexfrog.shipout_layers")
+end
+
 function page_extract(boxnum)
 	local b = tex.box[boxnum]
 	if not b then return end
@@ -471,6 +518,7 @@ function page_extract(boxnum)
 		-- line width on the worst justified line. Computed since the beginning and never read.
 		dev = ok and stats and stats.maxdev or nil
 	}
+	ink_before = ink_of(b)
 	if ok then
 		local f = io.open(string.format("%spage-%03d.jsonl", OUT, pageno), "w")
 		if f then f:write(table.concat(records, "\n")); f:close() end

@@ -49,6 +49,8 @@ type PatcherHooks = {
 	seams: () => SeamEntry[];
 	/** a right-to-left page paints from the raster only: no carried line may land on it */
 	pageIsRtl: (p: number) => boolean;
+	/** LatexFrog: the shipout hooks drew on this page, which a patched page lacks until a pass lands */
+	pageHasLayers: (p: number) => boolean;
 	/** a paragraph's parameters at its line break, by the serial its lines carry */
 	paraParams: (pi: number) => ParaParams | undefined;
 	followEdit: (page: number, top: number, bottom: number, colL?: number, colR?: number) => void;
@@ -510,7 +512,9 @@ export class DraftPatcher {
 				storeProof(adopted, proofKey({ ...band, to: band.from + plan.bandLen - 1 }, req.text), proof);
 				req.onBaseline?.();
 			}
-			this.scheduleReconcile(req.onRecompile, !adopted);
+			// LatexFrog: a patched page draws from records, which hold nothing the shipout hooks draw (a frame, a
+			// title page's band); with no pass to clear the patch, that material stayed off the page for good
+			this.scheduleReconcile(req.onRecompile, !adopted || h.pageHasLayers(cal.pageNo));
 		} catch (e) {
 			h.emit('error', String(e));
 			// instant path is best-effort; the debounced full recompile always follows

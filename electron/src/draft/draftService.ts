@@ -49,6 +49,8 @@ export type DraftPage = {
 	// width on the worst justified line. Measured 0.0000 on every page of every fixture, so a
 	// nonzero value is an anomaly worth seeing, not a tolerance to tune.
 	dev?: number;
+	// LatexFrog: 1 when the kernel drew on the page after the records were taken (shipout background/foreground)
+	lay?: number;
 	records: string;
 };
 export type DraftResult =
@@ -368,7 +370,18 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 		paperH?: number;
 		colW?: number;
 		bodyLine?: number;
-		pages: { n: number; w: number; h: number; ht?: number; gs?: number; gsn?: number; go?: number; unc?: string; dev?: number }[];
+		pages: {
+			n: number;
+			w: number;
+			h: number;
+			ht?: number;
+			gs?: number;
+			gsn?: number;
+			go?: number;
+			unc?: string;
+			dev?: number;
+			lay?: number;
+		}[];
 	};
 	try {
 		manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -460,7 +473,19 @@ export async function compileDraft(body: DraftBody): Promise<DraftResult> {
 			);
 			records = lines.join('\n');
 		}
-		pages.push({ n, w: meta.w, h: meta.h, ht: meta.ht, gs: meta.gs, gsn: meta.gsn, go: meta.go, unc: meta.unc, dev: meta.dev, records });
+		pages.push({
+			n,
+			w: meta.w,
+			h: meta.h,
+			ht: meta.ht,
+			gs: meta.gs,
+			gsn: meta.gsn,
+			go: meta.go,
+			unc: meta.unc,
+			dev: meta.dev,
+			lay: meta.lay,
+			records
+		});
 	}
 
 	// some classes never set the engine's page-dimension registers, leaving paperW/H = 0 in the

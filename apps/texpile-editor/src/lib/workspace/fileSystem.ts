@@ -40,6 +40,8 @@ export type DraftPage = {
 	// the walker's certification reasons for this page (comma-joined: literal, transform,
 	// escape, dir); absent when every record on it is safe to paint
 	unc?: string;
+	// LatexFrog: 1 when the shipout hooks drew on the page (a frame, a title page's band): only the PDF raster has it
+	lay?: number;
 	records: string; // newline-delimited JSON records for this page
 	// live mode's own page, not the compile's: content the engine says leaves the last page
 	// has to land somewhere, and the page it belongs on does not exist until the next

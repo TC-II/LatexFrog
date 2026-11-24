@@ -150,6 +150,7 @@ export class DraftSession {
 			seams: () => this.seams,
 			paraParams: (pi) => this.paras.get(pi),
 			pageIsRtl: (p) => this.rtlPage(p),
+			pageHasLayers: (p) => !!this.pages[p - 1]?.lay,
 			splitSkeleton: (items, targetPt, mode) => {
 				const nb = nativeBridge();
 				if (!nb?.draftSkeleton) return Promise.resolve({ ok: false as const, error: 'no-bridge' });
